@@ -113,7 +113,7 @@ class Lexer {
 public:
   Lexer() = default;
   explicit Lexer(std::string_view code) { tokenize(code); }
-  // return false if tokenization fails (syntax error)
+  // return false if tokenization fails (lexical/syntax error)
   void tokenize(std::string_view code);
 
   explicit operator bool() const { return _is_good; }

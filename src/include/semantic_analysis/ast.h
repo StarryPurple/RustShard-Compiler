@@ -15,6 +15,8 @@ public:
   virtual void accept(Visitor &visitor) = 0;
 };
 
+// "const"? "fn" IDENTIFIER GenericParams? '(' FunctionParameters? ')'
+// (-> Type)? WhereClause? (BlockExpression | ;)
 class ASTFunction : public ASTNode {
 
 };

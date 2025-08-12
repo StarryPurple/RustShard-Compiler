@@ -30,7 +30,9 @@ void Lexer::tokenize(std::string_view code) {
       if(!tokenize_string_literal()) {
         _is_good = false; break;
       }
-    } else if(ch == '_' || is_alpha(ch)) {
+    } else if(is_alpha(ch) ||
+      (ch == '_' && _pos + 1 < src_len &&
+        (is_alpha(code[_pos + 1]) || is_digit(code[_pos + 1]) || code[_pos + 1] == '_'))) {
       // Keyword / Identifier
       if(!tokenize_keyword_identifier()) { // NOLINT. I know this won't fail.
         _is_good = false; break;
