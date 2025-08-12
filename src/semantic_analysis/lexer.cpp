@@ -8,30 +8,40 @@ bool is_whitespace(char ch) { return ch == '\t' || ch == '\n' || ch == '\r' || c
 bool is_alpha(char ch) { return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z'); }
 bool is_digit(char ch) { return '0' <= ch && ch <= '9'; }
 
-bool Lexer::tokenize(std::string_view code) {
+void Lexer::tokenize(std::string_view code) {
   _src_code = code;
   _tokens.clear();
   _pos = 0; _row = 1; _col = 1;
   std::size_t src_len = code.length();
 
+  _is_valid = true;
   while(_pos < src_len) {
-    if(!advance()) return false;
+    if(!advance()) {
+      _is_valid = false; break;
+    }
     const char &ch = code[_pos];
     if(is_digit(ch)) {
       // Number
-      if(!tokenize_number_literal()) return false;
+      if(!tokenize_number_literal()) {
+        _is_valid = false; break;
+      }
     } else if(ch == '\'' || ch == '\"') {
       // Character / String
-      if(!tokenize_string_literal()) return false;
+      if(!tokenize_string_literal()) {
+        _is_valid = false; break;
+      }
     } else if(ch == '_' || is_alpha(ch)) {
       // Keyword / Identifier
-      if(!tokenize_keyword_identifier()) return false;
+      if(!tokenize_keyword_identifier()) {
+        _is_valid = false; break;
+      }
     } else {
       // Punctuation / Delimiter
-      if(!tokenize_punct_delimeter()) return false;
+      if(!tokenize_punctuation_delimiter()) {
+        _is_valid = false; break;
+      }
     }
   }
-  return true;
 }
 
 bool Lexer::advance() {
@@ -49,18 +59,21 @@ bool Lexer::advance() {
     // multiple line comment
     if(_src_code[_pos] == '/' && _pos + 1 < code_len && _src_code[_pos + 1] == '*') {
       advance_one(); advance_one();
+      std::size_t cnt = 1;
       // not pointing to the first '*'
-      bool flag = false;
-      while(_pos + 1 < code_len) {
+      while(_pos + 1 < code_len && cnt > 0) {
         if(_src_code[_pos] == '*' && _src_code[_pos + 1] == '/') {
           advance_one(); advance_one();
-          flag = true;
-          break;
+          cnt--;
+        } else if(_src_code[_pos] == '/' && _src_code[_pos + 1] == '*') {
+          advance_one(); advance_one();
+          cnt++;
+        } else {
+          advance_one();
         }
-        advance_one();
       }
       // points to EOF or the character after "*/" here
-      if(!flag) return false;
+      if(cnt != 0) return false;
       continue;
     }
     // other whitespaces
@@ -135,7 +148,7 @@ bool Lexer::tokenize_string_literal() {
   return false;
 }
 
-bool Lexer::tokenize_punct_delimeter() {
+bool Lexer::tokenize_punctuation_delimiter() {
   auto start = _pos; char ch = _src_code[_pos];
   auto old_row = _row, old_col = _col;
   TokenType type = TokenType::INVALID;

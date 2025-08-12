@@ -79,8 +79,9 @@ struct Token {
 class Lexer {
   std::string_view _src_code;
   std::vector<Token> _tokens;
-  std::size_t _pos; // points to first unhandled character
-  std::size_t _row, _col; // exact position of _pos
+  std::size_t _pos = 0; // points to first unhandled character
+  std::size_t _row = 1, _col = 1; // exact position of _pos
+  bool _is_valid = false;
 
   // forcefully advance one character
   void advance_one() {
@@ -107,15 +108,17 @@ class Lexer {
   bool tokenize_keyword_identifier();
   bool tokenize_string_literal();
   bool tokenize_number_literal();
-  bool tokenize_punct_delimeter();
+  bool tokenize_punctuation_delimiter();
 
 public:
   Lexer() = default;
   explicit Lexer(std::string_view code) { tokenize(code); }
   // return false if tokenization fails (syntax error)
-  bool tokenize(std::string_view code);
+  void tokenize(std::string_view code);
 
-  const std::vector<Token> tokens() const { return _tokens; }
+  explicit operator bool() const { return _is_valid; }
+  [[nodiscard]] bool is_good() const { return _is_valid; }
+  [[nodiscard]] std::vector<Token> tokens() const { return _tokens; }
 };
 
 }
