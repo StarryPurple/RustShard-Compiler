@@ -14,7 +14,6 @@ std::string read_file(const std::string &path) {
 int main() {
   std::string path = "../testcases/semantic-1/basic28/basic28.rx";
   std::string source_code = read_file(path);
-  source_code = " /* we can /* nest /* deeply */ nested */ \n comments */ \n fn main() { exit(0); }";
   insomnia::Lexer lexer(source_code);
   if(!lexer) {
     std::cout << "Compile error" << std::endl;

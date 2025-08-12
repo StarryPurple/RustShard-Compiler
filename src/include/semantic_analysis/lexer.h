@@ -81,7 +81,7 @@ class Lexer {
   std::vector<Token> _tokens;
   std::size_t _pos = 0; // points to first unhandled character
   std::size_t _row = 1, _col = 1; // exact position of _pos
-  bool _is_valid = false;
+  bool _is_good = false;
 
   // forcefully advance one character
   void advance_one() {
@@ -116,9 +116,14 @@ public:
   // return false if tokenization fails (syntax error)
   void tokenize(std::string_view code);
 
-  explicit operator bool() const { return _is_valid; }
-  [[nodiscard]] bool is_good() const { return _is_valid; }
-  [[nodiscard]] std::vector<Token> tokens() const { return _tokens; }
+  explicit operator bool() const { return _is_good; }
+  [[nodiscard]] bool is_good() const { return _is_good; }
+  [[nodiscard]] const std::vector<Token>& tokens() const { return _tokens; }
+  [[nodiscard]] std::vector<Token> release() {
+    _is_good = false;
+    _pos = 0; _row = 1; _col = 1;
+    return std::move(_tokens);
+  }
 };
 
 }

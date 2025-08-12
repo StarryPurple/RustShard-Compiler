@@ -14,31 +14,31 @@ void Lexer::tokenize(std::string_view code) {
   _pos = 0; _row = 1; _col = 1;
   std::size_t src_len = code.length();
 
-  _is_valid = true;
+  _is_good = true;
   while(_pos < src_len) {
     if(!advance()) {
-      _is_valid = false; break;
+      _is_good = false; break;
     }
     const char &ch = code[_pos];
     if(is_digit(ch)) {
       // Number
       if(!tokenize_number_literal()) {
-        _is_valid = false; break;
+        _is_good = false; break;
       }
-    } else if(ch == '\'' || ch == '\"') {
+    } else if(ch == '\'' || ch == '\"') { // TODO: C / Raw String
       // Character / String
       if(!tokenize_string_literal()) {
-        _is_valid = false; break;
+        _is_good = false; break;
       }
     } else if(ch == '_' || is_alpha(ch)) {
       // Keyword / Identifier
-      if(!tokenize_keyword_identifier()) {
-        _is_valid = false; break;
+      if(!tokenize_keyword_identifier()) { // NOLINT. I know this won't fail.
+        _is_good = false; break;
       }
     } else {
       // Punctuation / Delimiter
       if(!tokenize_punctuation_delimiter()) {
-        _is_valid = false; break;
+        _is_good = false; break;
       }
     }
   }
