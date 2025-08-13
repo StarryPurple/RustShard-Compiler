@@ -6,6 +6,8 @@ Usage of '#': The rest of the line is taken as comments, unless another '#' emer
 
 Feels like a "/*" with both "*/" and '\n' as escapes.
 
+The super grammar module is `Crate`.
+
 ```
 
 Crate -> 
@@ -32,6 +34,12 @@ Function ->
 FunctionParameters ->
       SelfParam ','? 
     | (SelfParam ',')? FunctionParam (',' FunctionParam)* ','?
+    
+FunctionParam ->
+    FunctionParamPattern | "..." | Type
+
+FunctionParamPattern ->
+    PatternNoTopAlt ':' (Type | "...")
     
 SelfParam ->
     '&'? "mut"? "self" (':' Type)?
@@ -186,7 +194,7 @@ PathExpression ->
    #| QualifiedPathInExpression
     
 PathInExpression ->
-    "::"? PathExprSegment ("::" PathExpSegment)*
+    "::"? PathExprSegment ("::" PathExprSegment)*
     
 PathExprSegment ->
     PathIdentSegment #("::" GenericArgs)?#
@@ -322,11 +330,14 @@ ExpressionWithBlock ->
 
 BlockExpression -> '{' Statements? '}'
 
+# I modified it.
+# Statements ->
+#      Statement+
+#    | ExpressionWithoutBlock
+#    | Statement+ ExpressionWithoutBlock
 Statements ->
-      Statement+
-    | ExpressionWithoutBlock
-    | Statement+ ExpressionWithoutBlock
-    
+    Statement* ExpressionWithoutBlock?
+   
 Statement ->
       ';'
     | Item
@@ -354,19 +365,19 @@ PredicateLoopExpression ->
     "while" Conditions BlockExpression
     
 # IteratorLoopExpression ->
-#     "for" Pattern "in" Expression(except StructExpression)
+#     "for" Pattern "in" Expression #except StructExpression#
 #      BlockExpression
 
 IfExpression ->
     "if" Conditions BlockExpression
-    ("else: (BlockExpression | IfExpression))?
+    ("else": (BlockExpression | IfExpression))?
     
 # No LetChain
 Conditions ->
-    Expression(except StructExpression)
+    Expression #except StructExpression#
 
 MatchExpression ->
-    "match" Expression(expectStructExpression)
+    "match" Expression #expect StructExpression#
     '{' MatchArms? '}'
 
 MatchArms ->
