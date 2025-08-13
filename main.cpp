@@ -12,11 +12,11 @@ std::string read_file(const std::string &path) {
 }
 
 int main() {
-  std::string path = "../testcases/semantic-1/basic28/basic28.rx";
+  std::string path = "../testcases/semantic-1/basic18/basic18.rx";
   std::string source_code = read_file(path);
   insomnia::Lexer lexer(source_code);
   if(!lexer) {
-    std::cout << "Compile error" << std::endl;
+    std::cout << lexer.error_msg() << std::endl;
     return 0;
   }
   for(auto &item: lexer.tokens()) {

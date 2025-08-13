@@ -81,7 +81,10 @@ class Lexer {
   std::vector<Token> _tokens;
   std::size_t _pos = 0; // points to first unhandled character
   std::size_t _row = 1, _col = 1; // exact position of _pos
-  bool _is_good = false;
+  enum class Error : uint8_t {
+    SUCCESS, WHITESPACE_COMMENT, NUMBER, STRING, KW_ID, PUNC_DELIM,
+  };
+  Error _error_code = Error::SUCCESS;
 
   // forcefully advance one character
   void advance_one() {
@@ -116,13 +119,28 @@ public:
   // return false if tokenization fails (lexical/syntax error)
   void tokenize(std::string_view code);
 
-  explicit operator bool() const { return _is_good; }
-  [[nodiscard]] bool is_good() const { return _is_good; }
+  explicit operator bool() const { return _error_code == Error::SUCCESS; }
+  [[nodiscard]] bool is_good() const { return _error_code == Error::SUCCESS; }
   [[nodiscard]] const std::vector<Token>& tokens() const { return _tokens; }
   [[nodiscard]] std::vector<Token> release() {
-    _is_good = false;
+    _error_code = Error::SUCCESS;
     _pos = 0; _row = 1; _col = 1;
     return std::move(_tokens);
+  }
+  [[nodiscard]] std::string error_msg() const {
+    std::string spec_msg;
+    switch(_error_code) {
+    case Error::SUCCESS: return "Compilation succeeded / not started";
+    case Error::KW_ID: spec_msg = "Keyword/Identifier tokenization failure."; break;
+    case Error::NUMBER: spec_msg = "Number resolution failure."; break;
+    case Error::STRING: spec_msg = "String resolution failure."; break;
+    case Error::WHITESPACE_COMMENT: spec_msg = "Whitespace/Comment resolution failure."; break;
+    case Error::PUNC_DELIM: spec_msg = "Punctuation/Delimiter resolution failure."; break;
+    default: throw std::runtime_error("Lexer: Unexpected error type.");
+    }
+    std::string common_msg = "Compile Error: Something unresolvable emerges at " +
+      std::to_string(_row) + ':' + std::to_string(_col);
+    return common_msg + ": " + spec_msg;
   }
 };
 

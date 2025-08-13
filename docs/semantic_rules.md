@@ -1,5 +1,10 @@
 Single file, no modules, no crates.
-No generics/templates/where clauses, no lifetimes.
+
+No generics/templates/where clauses, no lifetimes, no labels.
+
+Usage of '#': The rest of the line is taken as comments, unless another '#' emerges to stop it.
+
+Feels like a "/*" with both "*/" and '\n' as escapes.
 
 ```
 
@@ -140,22 +145,310 @@ TypePathFn ->
 TypePathFnInputs -> 
     Type (',' Type)* ','?
 
-BlockExpression ->
-    '{' Statements? '}'
-    
-Statements ->
-      Statement+
-    | ExpressionWithoutBlock
-    | Statement+ ExpressionWithoutBlock
-
+```
+---
+Take a breath.
+Expression part
+```
 Expression ->
       ExpressionWithoutBlock
     | ExpressionWithBlock
     
 ExpressionWithoutBlock ->
-    ...
+      LiteralExpression         # termination. Remember to record the basic types.
+    | PathExpression            # Field::Field... no generics temporarily
+    | OperatorExpression        # operator+-*/%=...
+    | GroupedExpression         # (Expr) in priority parentheses.
+    | ArrayExpression           # T[N] / {t1, t2, t3, ...}
+    | IndexExpression           # operator[]
+    | TupleExpression           # {a1, b2, c3, ...}. Don't forget unit type "()".
+    | TupleIndexingExpression   # tuple.get<N>
+    | StructExpression          # Struct constructor
+    | CallExpression            # func() | Normal function call
+    | MethodCallExpression      # obj.method() | Method function call
+    | FieldExpression           # obj.field | Field reference
+    | ContinueExpression        # "continue"
+    | BreakExpression           # "break"
+    | RangeExpression           # "a..b"/"a..=b"
+    | ReturnExpression          # "return"
+    | UnderscoreExpression      # "_" discarded values
     
+LiteralExpression ->
+      CHAR_LITERAL
+    | STRING_LITERAL
+    | INTEGER_LITERAL
+    | FLOAT_LITERAL
+    | "true"
+    | "false"
+
+PathExpression ->
+      PathInExpression
+   #| QualifiedPathInExpression
+    
+PathInExpression ->
+    "::"? PathExprSegment ("::" PathExpSegment)*
+    
+PathExprSegment ->
+    PathIdentSegment #("::" GenericArgs)?#
+    
+OperatorExpression ->
+      BorrowExpression
+    | DereferenceExpression
+    | NegationExpression
+    | ArithmeticOrLogicalExpression
+    | ComparisonExpression
+    | LazyBooleanExpression
+    | TypeCastExpression
+    | AssignmentExpression
+    | CompoundAssignmentExpression
+
+BorrowExpression ->
+    ('&' | "&&") "mut"? Expression
+    
+DereferenceExpression ->
+    '*' DereferenceExpression
+
+NegationExpression ->
+    ('-' | '!') Expression
+
+ArithmeticOrLogicalExpression ->
+    Expression ('+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | "<<" | ">>") Expression
+    
+ComparisonExpression ->
+    Expression ("==" | "!=" | '>' | '<' | ">=" | "<=") Expression
+    
+LazyBooleanExpression ->
+    Expression ("||" | "&&") Expression
+      
+TypeCastExpression ->
+    Expression "as" TypeNoBounds
+    
+AssignmentExpression ->
+    Expression '=' Expression
+
+CompoundAssignmentExpression ->
+    Expression ("+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=") Expression
+
+GroupedExpression ->
+    '(' Expression ')'
+
+ArrayExpression ->
+    '[' ArrayElements? ']'
+
+ArrayElements →
+      Expression (',' Expression)* ','?
+    | Expression ; Expression
+    
+IndexExpression ->
+    Expression '[' Expression ']'
+    
+TupleExpression ->
+    '(' TupleElements? ')'
+
+TupleElements ->
+    (Expression ',')+ Expression?
+    
+TupleIndexingExpression ->
+    Expression '.' INTEGER_LITERAL
+    
+StructExpression ->
+    PathInExpression '{' (StructExprFields | StructBase)? '}'
+
+StructExprFields ->
+    StructExprField (',' StructExprField)* (',' StructBase | ','?)
+
+StructExprfield ->
+    IDENTIFIER | (IDENTIFIER | INTEGER_LITERAL) ':' Expression
+
+StructBase ->
+    ".." Expression
+    
+CallExpression ->
+    Expression '( CallParams? ')'
+
+CallParams ->
+    Expression (',' Expression)* ','?
+
+MethodCallExpression ->
+    Expression '.' PathExprSegment '(' CallParams? ')'
+
+FieldExpression ->
+    Expression '.' IDENTIFIER
+
+ContinueExpression ->
+    "continue"
+    
+BreakExpression ->
+    "break" Expression?
+    
+RangeExpression ->
+      RangeExpr
+    | RangeFromExpr
+    | RangeToExpr
+    | RangeFullExpr
+    | RangeInclusiveExpr
+    | RangeToInclusiveExpr
+
+RangeExpr -> 
+    Expression ".." Expression
+
+RangeFromExpr ->
+    Expression ".."
+
+RangeToExpr ->
+    ".." Expression
+
+RangeFullExpr ->
+    ".."
+
+RangeInclusiveExpr ->
+    Expression "..=" Expression
+
+RangeToInclusiveExpr ->
+    "..=" Expression
+    
+ReturnExpression ->
+    "return" Expression?
+
+UnderscoreExpression ->
+    '_'
+
 ExpressionWithBlock ->
-    ...
+      BlockExpression           # '{' something '}'
+   #| ConstBlockExpression#     # "const" + BlockExpression. I defy it.
+    | LoopExpression            # "loop", "while", "for"
+    | IfExpression              # "if" "else"
+    | MatchExpression           # "match" ... implement later
+
+BlockExpression -> '{' Statements? '}'
+
+Statements ->
+      Statement+
+    | ExpressionWithoutBlock
+    | Statement+ ExpressionWithoutBlock
     
+Statement ->
+      ';'
+    | Item
+    | LetStatement
+    | ExpressionStatement
+    
+# No bind-failure else expression
+LetStatement ->
+    "let" PatternNoTopAlt (':' Type)?
+    ('=' Expression)? 
+    
+ExpressionStatement ->
+      ExpressionWithoutBlock ';'
+    | ExpressionWithBlock ';'?
+
+LoopExpression ->
+      InfiniteLoopExpression
+    | PredicateLoopExpression
+   #| IteratorLoopExpression
+
+InfiniteLoopExpression ->
+    "loop" BlockExpression
+
+PredicateLoopExpression ->
+    "while" Conditions BlockExpression
+    
+# IteratorLoopExpression ->
+#     "for" Pattern "in" Expression(except StructExpression)
+#      BlockExpression
+
+IfExpression ->
+    "if" Conditions BlockExpression
+    ("else: (BlockExpression | IfExpression))?
+    
+# No LetChain
+Conditions ->
+    Expression(except StructExpression)
+
+MatchExpression ->
+    "match" Expression(expectStructExpression)
+    '{' MatchArms? '}'
+
+MatchArms ->
+    (MatchArm "=>" (ExpressionWithoutBlock ',' | ExpressionWithBlock ','?))*
+    MatchArm "=>" Expression ','?
+    
+MatchArm ->
+    Pattern MatchArmGuard?
+
+MatchArmGuard ->
+    "if" Expression
+    
+Pattern ->
+    '|'? PatternNoTopAlt ('|' PatternNoTopAlt)*
+
+# No RangePattern
+PatternNoTopAlt ->
+    PatternWithoutRange
+
+PatternWithoutRange ->
+      LiteralPattern
+    | IdentifierPattern
+    | WildcardPattern
+    | RestPattern
+    | ReferencePattern
+    | StructPattern
+    | TuplePattern
+    | GroupedPattern
+    | SlicePattern
+    | PathPattern
+    
+LiteralPattern ->
+    '-'? LiteralExpression
+
+IdentifierPattern ->
+    "ref"? "mut"? IDENTIFIER ('@' PatternNoTopAlt)?
+    
+WildcardPattern ->
+    '_'
+    
+RestPattern ->
+    ".."
+    
+ReferencePattern ->
+    ('&' || "&&") "mut"? PatternWithoutRange
+
+StructPattern ->
+    PathInExpression '{' StructPatternElements? '}'
+
+StructPatternElements -> 
+      StructPatternFields (',' | ',' StructPatternEtCetera)?
+    | StructPatternEtCetera
+        
+StructPatternEtCetera ->
+    ".."
+
+StructPatternFields ->
+    StructPatternField (',' StructPatternField)*
+
+StructPatternField ->
+      INTEGER_LITERAL ':' Pattern
+    | IDENTIFIER ':' Pattern
+    | "ref"? "mut"? IDENTIFIER
+
+TuplePattern ->
+    '(' TuplePatternItems? ')'
+    
+TuplePatternItems ->
+      Pattern ','
+    | RestPattern
+    | Pattern (',' Pattern)+ ','?
+
+GroupedPattern ->
+    '(' Pattern ')'
+
+SlicePattern ->
+    '[' SlicePatternItems? ']'
+
+SlicePatternItems ->
+    Pattern (',' Pattern)* ','?
+
+PathPattern ->
+    PathExpression
+
 ```

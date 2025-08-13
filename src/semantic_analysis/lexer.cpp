@@ -14,33 +14,34 @@ void Lexer::tokenize(std::string_view code) {
   _pos = 0; _row = 1; _col = 1;
   std::size_t src_len = code.length();
 
-  _is_good = true;
-  while(_pos < src_len) {
+  _error_code = Error::SUCCESS;
+  while(true) {
     if(!advance()) {
-      _is_good = false; break;
+      _error_code = Error::WHITESPACE_COMMENT; break;
     }
+    if(_pos >= src_len) break;
     const char &ch = code[_pos];
     if(is_digit(ch)) {
       // Number
       if(!tokenize_number_literal()) {
-        _is_good = false; break;
+        _error_code = Error::NUMBER; break;
       }
     } else if(ch == '\'' || ch == '\"') { // TODO: C / Raw String
       // Character / String
       if(!tokenize_string_literal()) {
-        _is_good = false; break;
+        _error_code = Error::STRING; break;
       }
     } else if(is_alpha(ch) ||
       (ch == '_' && _pos + 1 < src_len &&
         (is_alpha(code[_pos + 1]) || is_digit(code[_pos + 1]) || code[_pos + 1] == '_'))) {
       // Keyword / Identifier
       if(!tokenize_keyword_identifier()) { // NOLINT. I know this won't fail.
-        _is_good = false; break;
+        _error_code = Error::KW_ID; break;
       }
     } else {
       // Punctuation / Delimiter
       if(!tokenize_punctuation_delimiter()) {
-        _is_good = false; break;
+        _error_code = Error::PUNC_DELIM; break;
       }
     }
   }
@@ -48,6 +49,7 @@ void Lexer::tokenize(std::string_view code) {
 
 bool Lexer::advance() {
   auto code_len = _src_code.length();
+  auto start = _pos, old_row = _row, old_col = _col;
   while(_pos < code_len) {
     // single line comment
     if(_src_code[_pos] == '/' && _pos + 1 < code_len && _src_code[_pos + 1] == '/') {
@@ -75,7 +77,10 @@ bool Lexer::advance() {
         }
       }
       // points to EOF or the character after "*/" here
-      if(cnt != 0) return false;
+      if(cnt != 0) {
+        _pos = start; _row = old_row; _col = old_col;
+        return false;
+      }
       continue;
     }
     // other whitespaces
@@ -91,7 +96,7 @@ bool Lexer::tokenize_number_literal() {
   static const std::regex oct_pattern("^0o[0-7_]*[0-7][0-7_]*");
   static const std::regex bin_pattern("^0b[0-1_]*[0-1][0-1_]*");
   static const std::regex dec_pattern("^[0-9][0-9_]*");
-  static const std::regex integer_suffix_pattern("^(_(u|i)(8|16|32|64|size))?");
+  static const std::regex integer_suffix_pattern("^((u|i)(8|16|32|64|size))?");
   static const std::regex float_pattern("^[0-9][0-9_]*.([^a-zA-Z._]|[0-9][0-9_]*(f32|f64)?)");
   std::string_view str = _src_code.substr(_pos);
   std::cmatch match;
@@ -132,11 +137,14 @@ bool Lexer::tokenize_number_literal() {
 bool is_escape(char ch) { return ch == '\n' || ch == '\r' || ch == '\t' || ch == '\\' || ch == '\0'; }
 
 bool Lexer::tokenize_string_literal() {
-  auto start = _pos;
+  auto start = _pos, old_row = _row, old_col = _col;
   char c = _src_code[_pos]; advance_one();
   while(_pos < _src_code.length()) {
     if(_src_code[_pos] == '\\') {
-      if(_pos + 2 >= _src_code.length()) return false;
+      if(_pos + 2 >= _src_code.length()) {
+        _pos = start; _row = old_row; _col = old_col;
+        return false;
+      }
       advance_one(); advance_one();
       continue;
     }
@@ -147,6 +155,7 @@ bool Lexer::tokenize_string_literal() {
     }
     advance_one();
   }
+  _pos = start; _row = old_row; _col = old_col;
   return false;
 }
 
@@ -326,7 +335,7 @@ bool Lexer::tokenize_punctuation_delimiter() {
   case ']': type = TokenType::R_SQUARE_BRACKET; advance_one(); break;
   case '{': type = TokenType::L_CURLY_BRACE; advance_one(); break;
   case '}': type = TokenType::R_CURLY_BRACE; advance_one(); break;
-    default: return false;
+  default: _pos = start; _row = old_row; _col = old_col; return false;
   }
   _tokens.emplace_back(type, _src_code.substr(start, _pos - start), old_row, old_col);
   return true;
@@ -402,7 +411,7 @@ std::string_view token_type_to_string(TokenType type) {
     {TokenType::L_SQUARE_BRACKET, "L_SQUARE_BRACKET"}, {TokenType::R_SQUARE_BRACKET, "R_SQUARE_BRACKET"},
     {TokenType::L_PARENTHESIS, "L_PARENTHESIS"}, {TokenType::R_PARENTHESIS, "R_PARENTHESIS"},
   };
-  if (auto it = token_names.find(type); it != token_names.end()) {
+  if(const auto it = token_names.find(type); it != token_names.end()) {
     return it->second;
   }
   return "UNKNOWN_TOKEN";
