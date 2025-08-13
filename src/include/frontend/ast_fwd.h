@@ -1,0 +1,123 @@
+#ifndef INSOMNIA_AST_FWD_H
+#define INSOMNIA_AST_FWD_H
+
+namespace insomnia::ast {
+
+class Visitor;
+
+class NodeBase;
+
+class Crate;
+class Item;
+class VisItem;
+class Function;
+class FunctionParameters;
+class FunctionParam;
+class FunctionParamPattern;
+class SelfParam;
+class Type;
+class TypeNoBounds;
+class ParenthesizedType;
+class TupleType;
+class ReferenceType;
+class ArrayType;
+class SliceType;
+class Struct;
+class StructStruct;
+class StructFields;
+class StructField;
+class Enumeration;
+class EnumItems;
+class EnumItem;
+class EnumItemDiscriminant;
+class ConstantItem;
+class Trait;
+class AssociatedItem;
+class Implementation;
+class InherentImpl;
+class TraitImpl;
+class TypePath;
+class TypePathSegment;
+class PathIdentSegment;
+
+class Expression;
+class ExpressionWithoutBlock;
+class LiteralExpression;
+class PathExpression;
+class PathInExpression;
+class PathExprSegment;
+class OperatorExpression;
+class BorrowExpression;
+class DereferenceExpression;
+class NegationExpression;
+class ArithmeticOrLogicalExpression;
+class ComparisonExpression;
+class LazyBooleanExpression;
+class TypeCastExpression;
+class AssignmentExpression;
+class CompoundAssignmentExpression;
+class GroupedExpression;
+class ArrayExpression;
+class ArrayElements;
+class IndexExpression;
+class TupleExpression;
+class TupleElements;
+class TupleIndexingExpression;
+class StructExpression;
+class StructExprFields;
+class StructExprField;
+class StructBase;
+class CallExpression;
+class CallParams;
+class MethodCallExpression;
+class FieldExpression;
+class ContinueExpression;
+class BreakExpression;
+class RangeExpression;
+class RangeExpr;
+class RangFromExpr;
+class RangeToExpr;
+class RangeFullExpr;
+class RangeInclusiveExpr;
+class RangeToInclusiveExpr;
+class ReturnExpression;
+class UnderscoreExpression;
+class ExpressionWithBlock;
+class BlockExpression;
+class Statements;
+class Statement;
+class LetStatement;
+class ExpressionStatement;
+class LoopExpression;
+class InfiniteLoopExpression;
+class PredicateLoopExpression;
+class IfExpression;
+class Conditions;
+class MatchExpression;
+class MatchArms;
+class MatchArm;
+class MatchArmGuard;
+
+class Pattern;
+class PatternNoTopAlt;
+class PatternWithoutRange;
+class LiteralPattern;
+class IdentifierPattern;
+class WildcardPattern;
+class RestPattern;
+class ReferencePatter;
+class StructPattern;
+class StructPatternElements;
+class StructPatternEtCetera;
+class StructPatternFields;
+class StructPatternField;
+class TuplePattern;
+class TuplePatternItems;
+class GroupedPattern;
+class SlicePattern;
+class SlicePatternItems;
+class PathPattern;
+
+}
+
+#endif // INSOMNIA_AST_FWD_H

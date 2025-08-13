@@ -1,15 +1,15 @@
-#include "semantic_analysis/parser.h"
+#include "frontend/parser.h"
 
-namespace insomnia {
+namespace insomnia::ast {
 
-class Parser::ASTContext {
-  friend Parser::ASTBacktracker;
+class Parser::Context {
+  friend Backtracker;
   std::vector<Token> _tokens;
   std::size_t _pos = 0;
 public:
-  ASTContext() = default;
+  Context() = default;
   template <class T>
-  explicit ASTContext(T &&tokens, std::size_t pos = 0)
+  explicit Context(T &&tokens, std::size_t pos = 0)
     : _tokens(std::forward<T>(tokens)), _pos(pos) {}
 
   const Token& peek(std::size_t diff = 1) const {
@@ -34,67 +34,67 @@ public:
   void reset() { _pos = 0; }
 };
 
-class Parser::ASTBacktracker {
-  ASTContext &_ast_ctx;
+class Parser::Backtracker {
+  Context &_ast_ctx;
   std::size_t _pos;
   bool _commited;
 public:
-  ASTBacktracker(ASTContext &ast_ctx)
+  Backtracker(Context &ast_ctx)
   : _ast_ctx(ast_ctx), _pos(ast_ctx._pos), _commited(false) {}
-  ~ASTBacktracker() {
+  ~Backtracker() {
     if(!_commited) _ast_ctx._pos = _pos;
   }
   void commit() { _commited = true; }
 };
 
 void Parser::parse(Lexer &lexer) {
-  _ast_ctx = std::make_unique<ASTContext>(lexer.release());
+  _ast_ctx = std::make_unique<Context>(lexer.release());
   _crate = parse_crate();
   _is_good = static_cast<bool>(_crate);
 }
 
-std::unique_ptr<ASTCrate> Parser::parse_crate() {
-  std::vector<std::unique_ptr<ASTItem>> vec;
+std::unique_ptr<Crate> Parser::parse_crate() {
+  std::vector<std::unique_ptr<Item>> vec;
   while(!_ast_ctx->empty()) {
     auto item = parse_item();
     if(!item) return nullptr;
     vec.push_back(std::move(item));
   }
-  return std::make_unique<ASTCrate>(std::move(vec));
+  return std::make_unique<Crate>(std::move(vec));
 }
 
-std::unique_ptr<ASTItem> Parser::parse_item() {
+std::unique_ptr<Item> Parser::parse_item() {
   auto vis_item = parse_vis_item();
   if(!vis_item) return nullptr;
-  return std::make_unique<ASTItem>(std::move(vis_item));
+  return std::make_unique<Item>(std::move(vis_item));
 }
 
 
-std::unique_ptr<ASTVisItem> Parser::parse_vis_item() {
-  ASTBacktracker tracker(*_ast_ctx);
+std::unique_ptr<VisItem> Parser::parse_vis_item() {
+  Backtracker tracker(*_ast_ctx);
   if(auto f = parse_function(); f) {
     tracker.commit();
-    return std::make_unique<ASTVisItem>(std::move(f));
+    return std::make_unique<VisItem>(std::move(f));
   }
   if(auto s = parse_struct(); s) {
     tracker.commit();
-    return std::make_unique<ASTVisItem>(std::move(s));
+    return std::make_unique<VisItem>(std::move(s));
   }
   if(auto e = parse_enumeration(); e) {
     tracker.commit();
-    return std::make_unique<ASTVisItem>(std::move(e));
+    return std::make_unique<VisItem>(std::move(e));
   }
   if(auto c = parse_constant_item(); c) {
     tracker.commit();
-    return std::make_unique<ASTVisItem>(std::move(c));
+    return std::make_unique<VisItem>(std::move(c));
   }
   if(auto t = parse_trait(); t) {
     tracker.commit();
-    return std::make_unique<ASTVisItem>(std::move(t));
+    return std::make_unique<VisItem>(std::move(t));
   }
   if(auto i = parse_implementation(); i) {
     tracker.commit();
-    return std::make_unique<ASTVisItem>(std::move(i));
+    return std::make_unique<VisItem>(std::move(i));
   }
   return nullptr;
 }

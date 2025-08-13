@@ -1,6 +1,6 @@
 Single file, no modules, no crates.
 
-No generics/templates/where clauses, no lifetimes, no labels.
+No generics/templates/where clauses, no lifetimes, no labels, no closures.
 
 Usage of '#': The rest of the line is taken as comments, unless another '#' emerges to stop it.
 
@@ -135,23 +135,24 @@ InherentImpl ->
 TraitImpl ->
     "impl" #GenericParams?# '!'? TypePath "for" Type #WhereClause?#
     '{' AssociatedItem* '}'
-    
+
+# Simplified: No closures / generics
 TypePath ->
     "::"? TypePathSegment ("::" TypePathsegment)*
 
 # No Generic Args
 TypePathSegment -> 
-    PathIdentSegment ("::"? TypePathFn)?
+    PathIdentSegment #("::"? TypePathFn)?#
 
 # Not every possibility can be used    
 PathIdentSegment ->
     IDENTIFIER | "super" | "self" | "Self" | "crate" | "$crate"
 
-TypePathFn ->
-    '(' TypePathFnInputs? ')' ("->" TypeNoBounds)?
+# TypePathFn ->
+#     '(' TypePathFnInputs? ')' ("->" TypeNoBounds)?
 
-TypePathFnInputs -> 
-    Type (',' Type)* ','?
+# TypePathFnInputs -> 
+#     Type (',' Type)* ','?
 
 ```
 ---

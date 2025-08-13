@@ -1,4 +1,4 @@
-#include "semantic_analysis/lexer.h"
+#include "frontend/lexer.h"
 #include <regex>
 #include <unordered_map>
 
