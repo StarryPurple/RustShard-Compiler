@@ -1,7 +1,7 @@
 name: CI Before Push and Pull Request
 on: [push, pull_request]
 jobs:
-  build_and_test:
+  ci_pretest:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -18,7 +18,7 @@ jobs:
       - name: Build project
         run: cmake --build build
 
-      - name: Run Gtest tests
+      - name: Run Ctest tests
         run: |
           cd build
-          ./test/lexer/lexer_gtest
+          ctest --output-on-failure
