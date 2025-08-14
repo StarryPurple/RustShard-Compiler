@@ -112,7 +112,7 @@ class Parser {
   std::unique_ptr<IdentifierPattern> parse_identifier_pattern();
   std::unique_ptr<WildcardPattern> parse_wildcard_pattern();
   std::unique_ptr<RestPattern> parse_rest_pattern();
-  std::unique_ptr<ReferencePatter> parse_reference_patter();
+  std::unique_ptr<ReferencePattern> parse_reference_patter();
   std::unique_ptr<StructPattern> parse_struct_pattern();
   std::unique_ptr<StructPatternElements> parse_struct_pattern_elements();
   std::unique_ptr<StructPatternEtCetera> parse_struct_pattern_et_cetera();

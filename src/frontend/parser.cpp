@@ -39,7 +39,7 @@ class Parser::Backtracker {
   std::size_t _pos;
   bool _commited;
 public:
-  Backtracker(Context &ast_ctx)
+  explicit Backtracker(Context &ast_ctx)
   : _ast_ctx(ast_ctx), _pos(ast_ctx._pos), _commited(false) {}
   ~Backtracker() {
     if(!_commited) _ast_ctx._pos = _pos;

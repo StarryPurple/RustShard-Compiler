@@ -3,9 +3,9 @@
 
 namespace insomnia::ast {
 
-class Visitor;
+class BaseVisitor;
 
-class NodeBase;
+class BaseNode;
 
 class Crate;
 class Item;
@@ -105,7 +105,7 @@ class LiteralPattern;
 class IdentifierPattern;
 class WildcardPattern;
 class RestPattern;
-class ReferencePatter;
+class ReferencePattern;
 class StructPattern;
 class StructPatternElements;
 class StructPatternEtCetera;

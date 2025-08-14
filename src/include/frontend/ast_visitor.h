@@ -5,227 +5,227 @@
 
 namespace insomnia::ast {
 
-class Visitor {
+class BaseVisitor {
 public:
-  virtual ~Visitor() = default;
-  virtual void traverse(const Crate &node);
-  virtual void traverse(const Item &node);
-  virtual void traverse(const VisItem &node);
-  virtual void traverse(const Function &node);
-  virtual void traverse(const FunctionParameters &node);
-  virtual void traverse(const FunctionParam &node);
-  virtual void traverse(const FunctionParamPattern &node);
-  virtual void traverse(const SelfParam &node);
-  virtual void traverse(const Type &node);
-  virtual void traverse(const TypeNoBounds &node);
-  virtual void traverse(const ParenthesizedType &node);
-  virtual void traverse(const TupleType &node);
-  virtual void traverse(const ReferenceType &node);
-  virtual void traverse(const ArrayType &node);
-  virtual void traverse(const SliceType &node);
-  virtual void traverse(const Struct &node);
-  virtual void traverse(const StructStruct &node);
-  virtual void traverse(const StructFields &node);
-  virtual void traverse(const StructField &node);
-  virtual void traverse(const Enumeration &node);
-  virtual void traverse(const EnumItems &node);
-  virtual void traverse(const EnumItem &node);
-  virtual void traverse(const EnumItemDiscriminant &node);
-  virtual void traverse(const ConstantItem &node);
-  virtual void traverse(const Trait &node);
-  virtual void traverse(const AssociatedItem &node);
-  virtual void traverse(const Implementation &node);
-  virtual void traverse(const InherentImpl &node);
-  virtual void traverse(const TraitImpl &node);
-  virtual void traverse(const TypePath &node);
-  virtual void traverse(const TypePathSegment &node);
-  virtual void traverse(const PathIdentSegment &node);
-  virtual void traverse(const Expression &node);
-  virtual void traverse(const ExpressionWithoutBlock &node);
-  virtual void traverse(const LiteralExpression &node);
-  virtual void traverse(const PathExpression &node);
-  virtual void traverse(const PathInExpression &node);
-  virtual void traverse(const PathExprSegment &node);
-  virtual void traverse(const OperatorExpression &node);
-  virtual void traverse(const BorrowExpression &node);
-  virtual void traverse(const DereferenceExpression &node);
-  virtual void traverse(const NegationExpression &node);
-  virtual void traverse(const ArithmeticOrLogicalExpression &node);
-  virtual void traverse(const ComparisonExpression &node);
-  virtual void traverse(const LazyBooleanExpression &node);
-  virtual void traverse(const TypeCastExpression &node);
-  virtual void traverse(const AssignmentExpression &node);
-  virtual void traverse(const CompoundAssignmentExpression &node);
-  virtual void traverse(const GroupedExpression &node);
-  virtual void traverse(const ArrayExpression &node);
-  virtual void traverse(const ArrayElements &node);
-  virtual void traverse(const IndexExpression &node);
-  virtual void traverse(const TupleExpression &node);
-  virtual void traverse(const TupleElements &node);
-  virtual void traverse(const TupleIndexingExpression &node);
-  virtual void traverse(const StructExpression &node);
-  virtual void traverse(const StructExprFields &node);
-  virtual void traverse(const StructExprField &node);
-  virtual void traverse(const StructBase &node);
-  virtual void traverse(const CallExpression &node);
-  virtual void traverse(const CallParams &node);
-  virtual void traverse(const MethodCallExpression &node);
-  virtual void traverse(const FieldExpression &node);
-  virtual void traverse(const ContinueExpression &node);
-  virtual void traverse(const BreakExpression &node);
-  virtual void traverse(const RangeExpression &node);
-  virtual void traverse(const RangeExpr &node);
-  virtual void traverse(const RangFromExpr &node);
-  virtual void traverse(const RangeToExpr &node);
-  virtual void traverse(const RangeFullExpr &node);
-  virtual void traverse(const RangeInclusiveExpr &node);
-  virtual void traverse(const RangeToInclusiveExpr &node);
-  virtual void traverse(const ReturnExpression &node);
-  virtual void traverse(const UnderscoreExpression &node);
-  virtual void traverse(const ExpressionWithBlock &node);
-  virtual void traverse(const BlockExpression &node);
-  virtual void traverse(const Statements &node);
-  virtual void traverse(const Statement &node);
-  virtual void traverse(const LetStatement &node);
-  virtual void traverse(const ExpressionStatement &node);
-  virtual void traverse(const LoopExpression &node);
-  virtual void traverse(const InfiniteLoopExpression &node);
-  virtual void traverse(const PredicateLoopExpression &node);
-  virtual void traverse(const IfExpression &node);
-  virtual void traverse(const Conditions &node);
-  virtual void traverse(const MatchExpression &node);
-  virtual void traverse(const MatchArms &node);
-  virtual void traverse(const MatchArm &node);
-  virtual void traverse(const MatchArmGuard &node);
-  virtual void traverse(const Pattern &node);
-  virtual void traverse(const PatternNoTopAlt &node);
-  virtual void traverse(const PatternWithoutRange &node);
-  virtual void traverse(const LiteralPattern &node);
-  virtual void traverse(const IdentifierPattern &node);
-  virtual void traverse(const WildcardPattern &node);
-  virtual void traverse(const RestPattern &node);
-  virtual void traverse(const ReferencePatter &node);
-  virtual void traverse(const StructPattern &node);
-  virtual void traverse(const StructPatternElements &node);
-  virtual void traverse(const StructPatternEtCetera &node);
-  virtual void traverse(const StructPatternFields &node);
-  virtual void traverse(const StructPatternField &node);
-  virtual void traverse(const TuplePattern &node);
-  virtual void traverse(const TuplePatternItems &node);
-  virtual void traverse(const GroupedPattern &node);
-  virtual void traverse(const SlicePattern &node);
-  virtual void traverse(const SlicePatternItems &node);
-  virtual void traverse(const PathPattern &node);
-
-  virtual void visit(Crate &node);
-  virtual void visit(Item &node);
-  virtual void visit(VisItem &node);
-  virtual void visit(Function &node);
-  virtual void visit(FunctionParameters &node);
-  virtual void visit(FunctionParam &node);
-  virtual void visit(FunctionParamPattern &node);
-  virtual void visit(SelfParam &node);
-  virtual void visit(Type &node);
-  virtual void visit(TypeNoBounds &node);
-  virtual void visit(ParenthesizedType &node);
-  virtual void visit(TupleType &node);
-  virtual void visit(ReferenceType &node);
-  virtual void visit(ArrayType &node);
-  virtual void visit(SliceType &node);
-  virtual void visit(Struct &node);
-  virtual void visit(StructStruct &node);
-  virtual void visit(StructFields &node);
-  virtual void visit(StructField &node);
-  virtual void visit(Enumeration &node);
-  virtual void visit(EnumItems &node);
-  virtual void visit(EnumItem &node);
-  virtual void visit(EnumItemDiscriminant &node);
-  virtual void visit(ConstantItem &node);
-  virtual void visit(Trait &node);
-  virtual void visit(AssociatedItem &node);
-  virtual void visit(Implementation &node);
-  virtual void visit(InherentImpl &node);
-  virtual void visit(TraitImpl &node);
-  virtual void visit(TypePath &node);
-  virtual void visit(TypePathSegment &node);
-  virtual void visit(PathIdentSegment &node);
-  virtual void visit(Expression &node);
-  virtual void visit(ExpressionWithoutBlock &node);
-  virtual void visit(LiteralExpression &node);
-  virtual void visit(PathExpression &node);
-  virtual void visit(PathInExpression &node);
-  virtual void visit(PathExprSegment &node);
-  virtual void visit(OperatorExpression &node);
-  virtual void visit(BorrowExpression &node);
-  virtual void visit(DereferenceExpression &node);
-  virtual void visit(NegationExpression &node);
-  virtual void visit(ArithmeticOrLogicalExpression &node);
-  virtual void visit(ComparisonExpression &node);
-  virtual void visit(LazyBooleanExpression &node);
-  virtual void visit(TypeCastExpression &node);
-  virtual void visit(AssignmentExpression &node);
-  virtual void visit(CompoundAssignmentExpression &node);
-  virtual void visit(GroupedExpression &node);
-  virtual void visit(ArrayExpression &node);
-  virtual void visit(ArrayElements &node);
-  virtual void visit(IndexExpression &node);
-  virtual void visit(TupleExpression &node);
-  virtual void visit(TupleElements &node);
-  virtual void visit(TupleIndexingExpression &node);
-  virtual void visit(StructExpression &node);
-  virtual void visit(StructExprFields &node);
-  virtual void visit(StructExprField &node);
-  virtual void visit(StructBase &node);
-  virtual void visit(CallExpression &node);
-  virtual void visit(CallParams &node);
-  virtual void visit(MethodCallExpression &node);
-  virtual void visit(FieldExpression &node);
-  virtual void visit(ContinueExpression &node);
-  virtual void visit(BreakExpression &node);
-  virtual void visit(RangeExpression &node);
-  virtual void visit(RangeExpr &node);
-  virtual void visit(RangFromExpr &node);
-  virtual void visit(RangeToExpr &node);
-  virtual void visit(RangeFullExpr &node);
-  virtual void visit(RangeInclusiveExpr &node);
-  virtual void visit(RangeToInclusiveExpr &node);
-  virtual void visit(ReturnExpression &node);
-  virtual void visit(UnderscoreExpression &node);
-  virtual void visit(ExpressionWithBlock &node);
-  virtual void visit(BlockExpression &node);
-  virtual void visit(Statements &node);
-  virtual void visit(Statement &node);
-  virtual void visit(LetStatement &node);
-  virtual void visit(ExpressionStatement &node);
-  virtual void visit(LoopExpression &node);
-  virtual void visit(InfiniteLoopExpression &node);
-  virtual void visit(PredicateLoopExpression &node);
-  virtual void visit(IfExpression &node);
-  virtual void visit(Conditions &node);
-  virtual void visit(MatchExpression &node);
-  virtual void visit(MatchArms &node);
-  virtual void visit(MatchArm &node);
-  virtual void visit(MatchArmGuard &node);
-  virtual void visit(Pattern &node);
-  virtual void visit(PatternNoTopAlt &node);
-  virtual void visit(PatternWithoutRange &node);
-  virtual void visit(LiteralPattern &node);
-  virtual void visit(IdentifierPattern &node);
-  virtual void visit(WildcardPattern &node);
-  virtual void visit(RestPattern &node);
-  virtual void visit(ReferencePatter &node);
-  virtual void visit(StructPattern &node);
-  virtual void visit(StructPatternElements &node);
-  virtual void visit(StructPatternEtCetera &node);
-  virtual void visit(StructPatternFields &node);
-  virtual void visit(StructPatternField &node);
-  virtual void visit(TuplePattern &node);
-  virtual void visit(TuplePatternItems &node);
-  virtual void visit(GroupedPattern &node);
-  virtual void visit(SlicePattern &node);
-  virtual void visit(SlicePatternItems &node);
-  virtual void visit(PathPattern &node);
+  virtual ~BaseVisitor() = default;
+  virtual void pre_visit(Crate &node) {}
+  virtual void pre_visit(Item &node) {}
+  virtual void pre_visit(VisItem &node) {}
+  virtual void pre_visit(Function &node) {}
+  virtual void pre_visit(FunctionParameters &node) {}
+  virtual void pre_visit(FunctionParam &node) {}
+  virtual void pre_visit(FunctionParamPattern &node) {}
+  virtual void pre_visit(SelfParam &node) {}
+  virtual void pre_visit(Type &node) {}
+  virtual void pre_visit(TypeNoBounds &node) {}
+  virtual void pre_visit(ParenthesizedType &node) {}
+  virtual void pre_visit(TupleType &node) {}
+  virtual void pre_visit(ReferenceType &node) {}
+  virtual void pre_visit(ArrayType &node) {}
+  virtual void pre_visit(SliceType &node) {}
+  virtual void pre_visit(Struct &node) {}
+  virtual void pre_visit(StructStruct &node) {}
+  virtual void pre_visit(StructFields &node) {}
+  virtual void pre_visit(StructField &node) {}
+  virtual void pre_visit(Enumeration &node) {}
+  virtual void pre_visit(EnumItems &node) {}
+  virtual void pre_visit(EnumItem &node) {}
+  virtual void pre_visit(EnumItemDiscriminant &node) {}
+  virtual void pre_visit(ConstantItem &node) {}
+  virtual void pre_visit(Trait &node) {}
+  virtual void pre_visit(AssociatedItem &node) {}
+  virtual void pre_visit(Implementation &node) {}
+  virtual void pre_visit(InherentImpl &node) {}
+  virtual void pre_visit(TraitImpl &node) {}
+  virtual void pre_visit(TypePath &node) {}
+  virtual void pre_visit(TypePathSegment &node) {}
+  virtual void pre_visit(PathIdentSegment &node) {}
+  virtual void pre_visit(Expression &node) {}
+  virtual void pre_visit(ExpressionWithoutBlock &node) {}
+  virtual void pre_visit(LiteralExpression &node) {}
+  virtual void pre_visit(PathExpression &node) {}
+  virtual void pre_visit(PathInExpression &node) {}
+  virtual void pre_visit(PathExprSegment &node) {}
+  virtual void pre_visit(OperatorExpression &node) {}
+  virtual void pre_visit(BorrowExpression &node) {}
+  virtual void pre_visit(DereferenceExpression &node) {}
+  virtual void pre_visit(NegationExpression &node) {}
+  virtual void pre_visit(ArithmeticOrLogicalExpression &node) {}
+  virtual void pre_visit(ComparisonExpression &node) {}
+  virtual void pre_visit(LazyBooleanExpression &node) {}
+  virtual void pre_visit(TypeCastExpression &node) {}
+  virtual void pre_visit(AssignmentExpression &node) {}
+  virtual void pre_visit(CompoundAssignmentExpression &node) {}
+  virtual void pre_visit(GroupedExpression &node) {}
+  virtual void pre_visit(ArrayExpression &node) {}
+  virtual void pre_visit(ArrayElements &node) {}
+  virtual void pre_visit(IndexExpression &node) {}
+  virtual void pre_visit(TupleExpression &node) {}
+  virtual void pre_visit(TupleElements &node) {}
+  virtual void pre_visit(TupleIndexingExpression &node) {}
+  virtual void pre_visit(StructExpression &node) {}
+  virtual void pre_visit(StructExprFields &node) {}
+  virtual void pre_visit(StructExprField &node) {}
+  virtual void pre_visit(StructBase &node) {}
+  virtual void pre_visit(CallExpression &node) {}
+  virtual void pre_visit(CallParams &node) {}
+  virtual void pre_visit(MethodCallExpression &node) {}
+  virtual void pre_visit(FieldExpression &node) {}
+  virtual void pre_visit(ContinueExpression &node) {}
+  virtual void pre_visit(BreakExpression &node) {}
+  virtual void pre_visit(RangeExpression &node) {}
+  virtual void pre_visit(RangeExpr &node) {}
+  virtual void pre_visit(RangFromExpr &node) {}
+  virtual void pre_visit(RangeToExpr &node) {}
+  virtual void pre_visit(RangeFullExpr &node) {}
+  virtual void pre_visit(RangeInclusiveExpr &node) {}
+  virtual void pre_visit(RangeToInclusiveExpr &node) {}
+  virtual void pre_visit(ReturnExpression &node) {}
+  virtual void pre_visit(UnderscoreExpression &node) {}
+  virtual void pre_visit(ExpressionWithBlock &node) {}
+  virtual void pre_visit(BlockExpression &node) {}
+  virtual void pre_visit(Statements &node) {}
+  virtual void pre_visit(Statement &node) {}
+  virtual void pre_visit(LetStatement &node) {}
+  virtual void pre_visit(ExpressionStatement &node) {}
+  virtual void pre_visit(LoopExpression &node) {}
+  virtual void pre_visit(InfiniteLoopExpression &node) {}
+  virtual void pre_visit(PredicateLoopExpression &node) {}
+  virtual void pre_visit(IfExpression &node) {}
+  virtual void pre_visit(Conditions &node) {}
+  virtual void pre_visit(MatchExpression &node) {}
+  virtual void pre_visit(MatchArms &node) {}
+  virtual void pre_visit(MatchArm &node) {}
+  virtual void pre_visit(MatchArmGuard &node) {}
+  virtual void pre_visit(Pattern &node) {}
+  virtual void pre_visit(PatternNoTopAlt &node) {}
+  virtual void pre_visit(PatternWithoutRange &node) {}
+  virtual void pre_visit(LiteralPattern &node) {}
+  virtual void pre_visit(IdentifierPattern &node) {}
+  virtual void pre_visit(WildcardPattern &node) {}
+  virtual void pre_visit(RestPattern &node) {}
+  virtual void pre_visit(ReferencePattern &node) {}
+  virtual void pre_visit(StructPattern &node) {}
+  virtual void pre_visit(StructPatternElements &node) {}
+  virtual void pre_visit(StructPatternEtCetera &node) {}
+  virtual void pre_visit(StructPatternFields &node) {}
+  virtual void pre_visit(StructPatternField &node) {}
+  virtual void pre_visit(TuplePattern &node) {}
+  virtual void pre_visit(TuplePatternItems &node) {}
+  virtual void pre_visit(GroupedPattern &node) {}
+  virtual void pre_visit(SlicePattern &node) {}
+  virtual void pre_visit(SlicePatternItems &node) {}
+  virtual void pre_visit(PathPattern &node) {}
+  virtual void post_visit(Crate &node) {}
+  virtual void post_visit(Item &node) {}
+  virtual void post_visit(VisItem &node) {}
+  virtual void post_visit(Function &node) {}
+  virtual void post_visit(FunctionParameters &node) {}
+  virtual void post_visit(FunctionParam &node) {}
+  virtual void post_visit(FunctionParamPattern &node) {}
+  virtual void post_visit(SelfParam &node) {}
+  virtual void post_visit(Type &node) {}
+  virtual void post_visit(TypeNoBounds &node) {}
+  virtual void post_visit(ParenthesizedType &node) {}
+  virtual void post_visit(TupleType &node) {}
+  virtual void post_visit(ReferenceType &node) {}
+  virtual void post_visit(ArrayType &node) {}
+  virtual void post_visit(SliceType &node) {}
+  virtual void post_visit(Struct &node) {}
+  virtual void post_visit(StructStruct &node) {}
+  virtual void post_visit(StructFields &node) {}
+  virtual void post_visit(StructField &node) {}
+  virtual void post_visit(Enumeration &node) {}
+  virtual void post_visit(EnumItems &node) {}
+  virtual void post_visit(EnumItem &node) {}
+  virtual void post_visit(EnumItemDiscriminant &node) {}
+  virtual void post_visit(ConstantItem &node) {}
+  virtual void post_visit(Trait &node) {}
+  virtual void post_visit(AssociatedItem &node) {}
+  virtual void post_visit(Implementation &node) {}
+  virtual void post_visit(InherentImpl &node) {}
+  virtual void post_visit(TraitImpl &node) {}
+  virtual void post_visit(TypePath &node) {}
+  virtual void post_visit(TypePathSegment &node) {}
+  virtual void post_visit(PathIdentSegment &node) {}
+  virtual void post_visit(Expression &node) {}
+  virtual void post_visit(ExpressionWithoutBlock &node) {}
+  virtual void post_visit(LiteralExpression &node) {}
+  virtual void post_visit(PathExpression &node) {}
+  virtual void post_visit(PathInExpression &node) {}
+  virtual void post_visit(PathExprSegment &node) {}
+  virtual void post_visit(OperatorExpression &node) {}
+  virtual void post_visit(BorrowExpression &node) {}
+  virtual void post_visit(DereferenceExpression &node) {}
+  virtual void post_visit(NegationExpression &node) {}
+  virtual void post_visit(ArithmeticOrLogicalExpression &node) {}
+  virtual void post_visit(ComparisonExpression &node) {}
+  virtual void post_visit(LazyBooleanExpression &node) {}
+  virtual void post_visit(TypeCastExpression &node) {}
+  virtual void post_visit(AssignmentExpression &node) {}
+  virtual void post_visit(CompoundAssignmentExpression &node) {}
+  virtual void post_visit(GroupedExpression &node) {}
+  virtual void post_visit(ArrayExpression &node) {}
+  virtual void post_visit(ArrayElements &node) {}
+  virtual void post_visit(IndexExpression &node) {}
+  virtual void post_visit(TupleExpression &node) {}
+  virtual void post_visit(TupleElements &node) {}
+  virtual void post_visit(TupleIndexingExpression &node) {}
+  virtual void post_visit(StructExpression &node) {}
+  virtual void post_visit(StructExprFields &node) {}
+  virtual void post_visit(StructExprField &node) {}
+  virtual void post_visit(StructBase &node) {}
+  virtual void post_visit(CallExpression &node) {}
+  virtual void post_visit(CallParams &node) {}
+  virtual void post_visit(MethodCallExpression &node) {}
+  virtual void post_visit(FieldExpression &node) {}
+  virtual void post_visit(ContinueExpression &node) {}
+  virtual void post_visit(BreakExpression &node) {}
+  virtual void post_visit(RangeExpression &node) {}
+  virtual void post_visit(RangeExpr &node) {}
+  virtual void post_visit(RangFromExpr &node) {}
+  virtual void post_visit(RangeToExpr &node) {}
+  virtual void post_visit(RangeFullExpr &node) {}
+  virtual void post_visit(RangeInclusiveExpr &node) {}
+  virtual void post_visit(RangeToInclusiveExpr &node) {}
+  virtual void post_visit(ReturnExpression &node) {}
+  virtual void post_visit(UnderscoreExpression &node) {}
+  virtual void post_visit(ExpressionWithBlock &node) {}
+  virtual void post_visit(BlockExpression &node) {}
+  virtual void post_visit(Statements &node) {}
+  virtual void post_visit(Statement &node) {}
+  virtual void post_visit(LetStatement &node) {}
+  virtual void post_visit(ExpressionStatement &node) {}
+  virtual void post_visit(LoopExpression &node) {}
+  virtual void post_visit(InfiniteLoopExpression &node) {}
+  virtual void post_visit(PredicateLoopExpression &node) {}
+  virtual void post_visit(IfExpression &node) {}
+  virtual void post_visit(Conditions &node) {}
+  virtual void post_visit(MatchExpression &node) {}
+  virtual void post_visit(MatchArms &node) {}
+  virtual void post_visit(MatchArm &node) {}
+  virtual void post_visit(MatchArmGuard &node) {}
+  virtual void post_visit(Pattern &node) {}
+  virtual void post_visit(PatternNoTopAlt &node) {}
+  virtual void post_visit(PatternWithoutRange &node) {}
+  virtual void post_visit(LiteralPattern &node) {}
+  virtual void post_visit(IdentifierPattern &node) {}
+  virtual void post_visit(WildcardPattern &node) {}
+  virtual void post_visit(RestPattern &node) {}
+  virtual void post_visit(ReferencePattern &node) {}
+  virtual void post_visit(StructPattern &node) {}
+  virtual void post_visit(StructPatternElements &node) {}
+  virtual void post_visit(StructPatternEtCetera &node) {}
+  virtual void post_visit(StructPatternFields &node) {}
+  virtual void post_visit(StructPatternField &node) {}
+  virtual void post_visit(TuplePattern &node) {}
+  virtual void post_visit(TuplePatternItems &node) {}
+  virtual void post_visit(GroupedPattern &node) {}
+  virtual void post_visit(SlicePattern &node) {}
+  virtual void post_visit(SlicePatternItems &node) {}
+  virtual void post_visit(PathPattern &node) {}
 };
+
 
 }
 

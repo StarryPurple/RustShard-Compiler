@@ -35,11 +35,13 @@ FunctionParameters ->
       SelfParam ','? 
     | (SelfParam ',')? FunctionParam (',' FunctionParam)* ','?
     
+# No unsafe "..."
 FunctionParam ->
-    FunctionParamPattern | "..." | Type
+    FunctionParamPattern | Type
 
+# No unsafe "..."
 FunctionParamPattern ->
-    PatternNoTopAlt ':' (Type | "...")
+    PatternNoTopAlt ':' Type
     
 SelfParam ->
     '&'? "mut"? "self" (':' Type)?
@@ -110,7 +112,7 @@ EnumItem ->
 
 EnumItemDiscriminant ->
     '=' Expression
-    
+
 ConstantItem ->
     "const" (IDENTIFIER | '_') ':' Type ('=' Expression)? ';'
 
@@ -132,13 +134,14 @@ InherentImpl ->
     "impl" #GenericParams?# Type #WhereClause?#
     '{' AssociatedItem* '}'
     
+# deleted negative implementation sign due to not supplying unsafe properties
 TraitImpl ->
-    "impl" #GenericParams?# '!'? TypePath "for" Type #WhereClause?#
+    "impl" #GenericParams?# #'!'?# TypePath "for" Type #WhereClause?#
     '{' AssociatedItem* '}'
 
-# Simplified: No closures / generics
+# Simplified: No closures / generics, no mods / use crates
 TypePath ->
-    "::"? TypePathSegment ("::" TypePathsegment)*
+    #"::"?# TypePathSegment ("::" TypePathSegment)*
 
 # No Generic Args
 TypePathSegment -> 
