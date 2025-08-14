@@ -1,0 +1,22 @@
+fn horner(coeff: &[i64; 8], x: i64) -> i64 {
+    let mut result = coeff[7];
+    let mut idx = 6i32;
+    while idx >= 0 {
+        result = result * x + coeff[idx as usize];
+        idx -= 1;
+    }
+    result
+}
+fn derivative(coeff: &[i64; 8], out: &mut [i64; 7]) {
+    let mut i = 1usize;
+    while i < 8 {
+        out[i - 1] = coeff[i] * i as i64;
+        i += 1;
+    }
+}
+fn main() {
+    let poly: [i64; 8] = [3, -2, 5, 0, 1, 4, -1, 2];
+    let deriv: &mut [i64; 7] = &mut [0; 7];
+    derivative(&poly, deriv);
+    let _value_at_two = horner(&poly, 2);
+}

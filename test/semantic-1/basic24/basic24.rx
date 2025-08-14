@@ -1,0 +1,39 @@
+const N: usize = 6;
+type Graph = [[u8; N]; N];
+fn bfs(g: &Graph, root: usize, visited: &mut [bool; N], order: &mut [usize; N]) {
+    let mut queue: [usize; N] = [0; N];
+    let mut head = 0usize;
+    let mut tail = 0usize;
+    queue[tail] = root;
+    tail += 1;
+    visited[root] = true;
+    let mut pos = 0usize;
+    while head < tail {
+        let v = queue[head];
+        order[pos] = v;
+        pos += 1;
+        head += 1;
+        let mut i = 0usize;
+        while i < N {
+            if g[v][i] != 0 && !visited[i] {
+                queue[tail] = i;
+                tail += 1;
+                visited[i] = true;
+            }
+            i += 1;
+        }
+    }
+}
+fn main() {
+    let graph: Graph = [
+        [0, 1, 1, 0, 0, 0],
+        [1, 0, 0, 1, 0, 0],
+        [1, 0, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1, 1],
+        [0, 0, 1, 1, 0, 1],
+        [0, 0, 0, 1, 1, 0],
+    ];
+    let mut visited = [false; N];
+    let mut order = [0usize; N];
+    bfs(&graph, 0, &mut visited, &mut order);
+}

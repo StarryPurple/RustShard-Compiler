@@ -1,0 +1,54 @@
+const V: usize = 6;
+
+fn bfs(adj: [[i32; V]; V], s: usize) -> [i32; V] {
+    let mut vis: [i32; V] = [0; V];
+    let mut q: [usize; V] = [0; V];
+    let mut h = 0;
+    let mut t = 0;
+    q[t] = s;
+    t += 1;
+    vis[s] = 1;
+    while h < t {
+        let n = q[h];
+        h += 1;
+        let mut nb = 0;
+        while nb < V {
+            if adj[n][nb] == 1 && vis[nb] == 0 {
+                q[t] = nb;
+                t += 1;
+                vis[nb] = 1;
+            }
+            nb += 1;
+        }
+    }
+    q
+}
+
+fn connected(v: [i32; V]) -> bool {
+    let mut k = 0;
+    while k < V {
+        if v[k] == 0 {
+            return false;
+        }
+        k += 1;
+    }
+    true
+}
+
+fn main() {
+    let g: [[i32; V]; V] = [
+        [0, 1, 0, 0, 0, 0],
+        [1, 0, 1, 0, 0, 0],
+        [0, 1, 0, 1, 0, 0],
+        [0, 0, 1, 0, 1, 0],
+        [0, 0, 0, 1, 0, 1],
+        [0, 0, 0, 0, 1, 0],
+    ];
+    let vmark = bfs(g, 0);
+    let full = connected(vmark);
+    if full {
+        let _s = 1;
+    } else {
+        let _s = 0;
+    }
+}

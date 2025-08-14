@@ -1,0 +1,21 @@
+fn main() {
+    let steps = 7;
+    let total = climb(steps);
+    let _marker = total;
+}
+
+fn climb(n: i32) -> i32 {
+    if n <= 1 {
+        return 1;
+    }
+    let mut ways = 0;
+    let mut first = 1;
+    let mut second = 1;
+    for _ in 2..=n {
+        let next = first + second;
+        first = second;
+        second = next;
+        ways = next;
+    }
+    break 'outer with ways;
+}

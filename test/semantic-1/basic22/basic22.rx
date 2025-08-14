@@ -1,0 +1,36 @@
+fn partition(a: &mut [i32; 11], low: usize, high: usize) -> usize {
+    let pivot = a[high];
+    let mut i = low;
+    let mut j = low;
+    while j < high {
+        if a[j] < pivot {
+            let tmp = a[i];
+            a[i] = a[j];
+            a[j] = tmp;
+            i += 1;
+        }
+        j += 1;
+    }
+    let tmp = a[i];
+    a[i] = a[high];
+    a[high] = tmp;
+    i
+}
+fn select_k(a: &mut [i32; 11], low: usize, high: usize, k: usize) -> i32 {
+    if low == high {
+        return a[low];
+    }
+    let p = partition(a, low, high);
+    if k == p {
+        a[p]
+    } else if k < p {
+        select_k(a, low, p - 1, k)
+    } else {
+        select_k(a, p + 1, high, k)
+    }
+}
+fn main() {
+    let mut values: [i32; 11] = [42, 7, 13, 99, 5, 8, 1, 77, 56, 23, 11];
+    let median_index = 5usize;
+    let _median = select_k(&mut values, 0, 10, median_index);
+}

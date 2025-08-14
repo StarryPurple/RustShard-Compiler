@@ -1,0 +1,5 @@
+fn main() {
+    let a = 4;
+    let b = if a > 3 { a * 2 } else { a / 2 };
+    let _ = b;
+}

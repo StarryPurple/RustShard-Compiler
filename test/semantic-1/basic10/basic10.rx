@@ -1,0 +1,43 @@
+fn main() {
+    let mut bag = Bag::new();
+    for n in 1..=5 {
+        bag.insert(n * n);
+    }
+    let check = bag.contains(9);
+    let _dummy = check;
+}
+
+trait Storage {
+    fn insert(&mut self, value: i32);
+    fn contains(&self, value: i32) -> bool;
+    fn size(&self) -> usize;
+}
+
+struct Bag {
+    items: [i32; 16],
+    count: usize,
+}
+
+impl Bag {
+    fn new() -> Self {
+        Bag { items: [0; 16], count: 0 }
+    }
+}
+
+impl Storage for Bag {
+    fn insert(&mut self, value: i32) {
+        self.items[self.count] = value;
+        self.count += 1;
+    }
+
+    fn contains(&self, value: i32) -> bool {
+        let mut idx = 0usize;
+        while idx < self.count {
+            if self.items[idx] == value {
+                return true;
+            }
+            idx += 1;
+        }
+        false
+    }
+}

@@ -92,12 +92,12 @@ bool Lexer::advance() {
 
 
 bool Lexer::tokenize_number_literal() {
-  static const std::regex hex_pattern("^0x[0-9a-fA-F_]*[0-9a-fA-F][0-9a-fA-F_]*");
+  static const std::regex hex_pattern(R"(^0x[\da-fA-F_]*[\da-fA-F][\da-fA-F_]*)");
   static const std::regex oct_pattern("^0o[0-7_]*[0-7][0-7_]*");
   static const std::regex bin_pattern("^0b[0-1_]*[0-1][0-1_]*");
-  static const std::regex dec_pattern("^[0-9][0-9_]*");
-  static const std::regex integer_suffix_pattern("^((u|i)(8|16|32|64|size))?");
-  static const std::regex float_pattern("^[0-9][0-9_]*.([^a-zA-Z._]|[0-9][0-9_]*(f32|f64)?)");
+  static const std::regex dec_pattern(R"(^[\d][\d_]*)");
+  static const std::regex integer_suffix_pattern("^(u|i)(8|16|32|64|size)");
+  static const std::regex float_pattern(R"(^[\d][\d_]*(\.[^\w\.]|\.[\d][\d_]*|(\.[\d][\d_]*)?(f32|f64)))");
   std::string_view str = _src_code.substr(_pos);
   std::cmatch match;
   if(std::regex_search(str.begin(), str.end(), match, hex_pattern) ||
@@ -109,7 +109,7 @@ bool Lexer::tokenize_number_literal() {
     auto nxt_pos = _pos + match.length();
     if(nxt_pos < _src_code.length()) {
       char nxt_ch  = _src_code[nxt_pos];
-      if(nxt_ch == '.' || nxt_ch == 'e' || nxt_ch == 'E') {
+      if(nxt_ch == '.') {
         if(std::regex_search(str.begin(), str.end(), match, float_pattern)) {
           matched = str.substr(0, match.length());
           _tokens.emplace_back(TokenType::FLOAT_LITERAL, matched, _row, _col);

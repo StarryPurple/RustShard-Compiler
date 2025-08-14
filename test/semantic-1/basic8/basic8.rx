@@ -1,0 +1,19 @@
+fn main() {
+    let size = 5;
+    let table = make_table(size);
+    let _unused = table;
+}
+
+fn make_table(n: usize) -> [[i32; n]; n] {
+    let mut arr = [[0; n]; n];
+    let mut row = 0usize;
+    while row < n {
+        let mut col = 0usize;
+        while col < n {
+            arr[row][col] = (row * col) as i32;
+            col += 1;
+        }
+        row += 1;
+    }
+    arr
+}

@@ -1,0 +1,42 @@
+fn partition(arr: &mut [i32]) -> usize {
+    let len = arr.len();
+    let pivot = arr[len - 1];
+    let mut i = 0usize;
+    let mut j = 0usize;
+    while j + 1 < len {
+        if arr[j] < pivot {
+            arr.swap(i, j);
+            i += 1;
+        }
+        j += 1;
+    }
+    arr.swap(i, len - 1);
+    i
+}
+fn quicksort(arr: &mut [i32]) {
+    let len = arr.len();
+    if len <= 1 {
+        return;
+    }
+    let p = partition(arr);
+    let (left, right) = arr.split_at_mut(p);
+    quicksort(left);
+    quicksort(&mut right[1..]);
+}
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+    let mut n = 0i32;
+    while n < 20 {
+        let value = (n * n + 11) % 97;
+        v.push(value);
+        n += 1;
+    }
+    quicksort(&mut v);
+    let mut xor = 0i32;
+    let mut idx = 0usize;
+    while idx < v.len() {
+        xor ^= v[idx] * (idx as i32 + 3);
+        idx += 1;
+    }
+    let _hold = xor;
+}

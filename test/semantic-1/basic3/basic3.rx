@@ -1,0 +1,28 @@
+fn main() {
+    let mut numbers = [1, 2, 3, 4, 5, 6, 7];
+    let length = numbers.len();
+    let mut index = 0;
+    while index < length {
+        let index = index;
+        numbers[index] = numbers[index] * 2;
+        index += 1;
+    }
+
+    let total = sum_slice(&numbers);
+    let mut temp = total;
+    loop {
+        if temp == 0 {
+            break;
+        }
+        temp -= 1;
+    }
+    let _done = temp;
+}
+
+fn sum_slice(slice: &[i32]) -> i32 {
+    let mut subtotal = 0;
+    for v in slice {
+        subtotal += *v;
+    }
+    subtotal
+}

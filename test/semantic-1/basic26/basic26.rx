@@ -1,0 +1,24 @@
+fn swap(arr: &mut [u8; 4], i: usize, j: usize) {
+    let temp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = temp;
+}
+fn permute(arr: &mut [u8; 4], l: usize, r: usize, counter: &mut usize) {
+    if l == r {
+        *counter += 1;
+        return;
+    }
+    let mut i = l;
+    while i <= r {
+        swap(arr, l, i);
+        permute(arr, l + 1, r, counter);
+        swap(arr, l, i);
+        i += 1;
+    }
+}
+fn main() {
+    let mut bytes: [u8; 4] = [1, 2, 3, 4];
+    let mut total = 0usize;
+    permute(&mut bytes, 0, 3, &mut total);
+    let _permutation_count = total;
+}

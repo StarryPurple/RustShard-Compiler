@@ -1,0 +1,8 @@
+fn main() {
+    let mut i = 0u32;
+    while i < 3 {
+        let _ = i;
+        i += 1;
+    }
+    break;
+}

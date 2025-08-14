@@ -1,0 +1,6 @@
+fn main() {
+    let mut n = 5;
+    if { n -= 1; n } > 3 {
+        n = 0;
+    }
+}

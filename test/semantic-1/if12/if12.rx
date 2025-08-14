@@ -1,0 +1,10 @@
+fn main() {
+    let mut data = 4;
+    if data > 2 {
+        let data = data + 1;
+        let _ = data;
+    } else {
+        data += 1;
+    }
+    data = data + value;
+}

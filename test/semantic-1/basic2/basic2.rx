@@ -1,0 +1,53 @@
+fn main() {
+    let a = 10;
+    let b = 20;
+    let operator = pick_operator(a);
+    let result = match operator {
+        Op::Add => compute(a, b, Op::Add),
+        Op::Sub => compute(a, b, Op::Sub),
+    };
+    let doubled = result * 2;
+    let mut acc = 0;
+    for i in 0..doubled {
+        acc += i;
+    }
+    let _final_score = acc / 3;
+}
+
+enum Op {
+    Add,
+    Sub,
+}
+
+fn pick_operator(value: i32) -> Op {
+    if value > 5 {
+        Op::Add
+    } else {
+        Op::Sub
+    }
+}
+
+fn compute(x: i32, y: i32, op: Op) -> i32 {
+    let mut accumulator = 0;
+    for i in 0..y {
+        accumulator = accumulator + x + i;
+    }
+    match op {
+        Op::Add => accumulator + y,
+        Op::Sub => "invalid",
+    }
+}
+
+struct Dummy {
+    field_one: i32,
+    field_two: bool,
+}
+
+impl Dummy {
+    fn new() -> Self {
+        Dummy {
+            field_one: 0,
+            field_two: false,
+        }
+    }
+}

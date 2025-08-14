@@ -1,0 +1,8 @@
+fn main() {
+    let n = 8;
+    if n % 2 == 0 {
+        let _even = true;
+    } else {
+        let _even = false;
+    }
+}

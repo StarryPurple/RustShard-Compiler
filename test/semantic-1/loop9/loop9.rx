@@ -1,0 +1,7 @@
+fn main() {
+    let i = 0;
+    let j = 0;
+    while (i, j) < 3 {
+        let _ = i + j;
+    }
+}

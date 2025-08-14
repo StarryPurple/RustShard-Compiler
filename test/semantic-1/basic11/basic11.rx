@@ -1,0 +1,18 @@
+fn main() {
+    let fib10 = fib(10);
+    let _poster = fib10;
+}
+
+fn fib(n: i32) -> i32 {
+    if n <= 1 { return n as i32; }
+    let mut prev = 0i32;
+    let mut curr = 1i32;
+    let mut idx = 2;
+    while idx <= n {
+        let next = prev + curr;
+        prev = curr;
+        curr = next;
+        idx += 1;
+    }
+    return curr;
+}

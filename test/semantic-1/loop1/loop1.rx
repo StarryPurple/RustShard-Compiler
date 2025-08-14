@@ -1,0 +1,13 @@
+fn main() {
+    let mut total = 0u32;
+    let mut n = 0u32;
+    while n < 20 {
+        if n % 2 == 0 {
+            n += 1;
+            continue;
+        }
+        total += n;
+        n += 1;
+    }
+    let _ = total;
+}

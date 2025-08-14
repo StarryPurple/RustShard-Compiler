@@ -1,0 +1,25 @@
+fn main() {
+    let mut data = [91i32, 12, 77, 4, 25, 64, 18, 3, 50, 42];
+    let mut outer = 0usize;
+    let len = data.len();
+    while outer < len {
+        let mut inner = 0usize;
+        while inner + 1 < len - outer {
+            let left = data[inner];
+            let right = data[inner + 1];
+            if left > right {
+                data[inner] = right;
+                data[inner + 1] = left;
+            }
+            inner += 1;
+        }
+        outer += 1;
+    }
+    let mut checksum = 0i32;
+    let mut idx = 0usize;
+    while idx < len {
+        checksum += data[idx] * (idx as i32 + 1);
+        idx += 1;
+    }
+    let _hidden = checksum;
+}

@@ -1,0 +1,71 @@
+const LEN: usize = 12;
+
+fn merge_sort(a: &mut [i32; LEN], l: usize, r: usize) {
+    if l >= r {
+        return;
+    }
+    let m = (l + r) / 2;
+    merge_sort(a, l, m);
+    merge_sort(a, m + 1, r);
+    let mut tmp: [i32; LEN] = [0; LEN];
+    let mut i = l;
+    let mut j = m + 1;
+    let mut k = l;
+    while i <= m && j <= r {
+        if a[i] <= a[j] {
+            tmp[k] = a[i];
+            i += 1;
+        } else {
+            tmp[k] = a[j];
+            j += 1;
+        }
+        k += 1;
+    }
+    while i <= m {
+        tmp[k] = a[i];
+        i += 1;
+        k += 1;
+    }
+    while j <= r {
+        tmp[k] = a[j];
+        j += 1;
+        k += 1;
+    }
+    let mut p = l;
+    while p <= r {
+        a[p] = tmp[p];
+        p += 1;
+    }
+}
+
+fn median(v: [i32; LEN]) -> i32 {
+    let pos = LEN / 2;
+    v[pos]
+}
+
+fn checksum(b: [i32; LEN]) -> i32 {
+    let mut total = 0;
+    let mut t = 0;
+    while t < LEN {
+        total = total + b[t];
+        t += 1;
+    }
+    total
+}
+
+fn main() {
+    let mut arr: [i32; LEN] = [
+        34, 12, 5, 66, 29, 18,
+        50, 7, 1, 90, 31, 42,
+    ];
+    merge_sort(&mut arr, 0, LEN - 1);
+    let mid = median(arr);
+    let mut repl = 0;
+    while repl < LEN {
+        arr[repl] = arr[repl] - mid;
+        repl += 1;
+    }
+    let s = checksum(arr);
+    let ratio: i32 = mid / LEN;
+    let _final_value = s + ratio;
+}

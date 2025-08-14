@@ -1,0 +1,41 @@
+fn main() {
+    let mut stack = Stack::new();
+    for i in 0..10 {
+        stack.push(i);
+    }
+    while !stack.empty() {
+        stack.pop();
+    }
+}
+
+trait Container {
+    fn push(&mut self, value: i32);
+    fn pop(&mut self) -> Option<i32>;
+    fn empty(&self) -> bool;
+}
+
+struct Stack {
+    data: [i32; 16],
+    top: usize,
+}
+
+impl Stack {
+    fn new() -> Self {
+        Stack { data: [0; 16], top: 0 }
+    }
+}
+
+impl Container for Stack {
+    fn push(&mut self, value: i32) {
+        self.data[self.top] = value;
+        self.top += 1;
+    }
+
+    fn pop(&mut self) -> Option<i32> {
+        if self.top == 0 {
+            return None;
+        }
+        self.top -= 1;
+        Some(self.data[self.top])
+    }
+}

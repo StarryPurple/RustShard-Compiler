@@ -1,0 +1,59 @@
+const WIDTH: usize = 5;
+const SQ: usize = WIDTH * WIDTH;
+
+fn moves() -> [[i32; 2]; 8] {
+    [
+        [2, 1], [1, 2], [-1, 2], [-2, 1],
+        [-2,-1], [-1,-2], [1,-2], [2,-1],
+    ]
+}
+
+fn in_board(x: i32, y: i32) -> bool {
+    x >= 0 && x < WIDTH as i32 && y >= 0 && y < WIDTH as i32
+}
+
+fn tour(board: &mut [[i32; WIDTH]; WIDTH], x: i32, y: i32, step: i32) -> bool {
+    if step == SQ as i32 {
+        return true;
+    }
+    let mv = moves();
+    let mut m = 0;
+    while m < 8 {
+        let nx = x + mv[m][0];
+        let ny = y + mv[m][1];
+        if in_board(nx, ny) && board[nx as usize][ny as usize] == 0 {
+            board[nx as usize][ny as usize] = step + 1;
+            if tour(board, nx, ny, step + 1) {
+                return true;
+            }
+            board[nx as usize][ny as usize] = 0;
+        }
+        m += 1;
+    }
+    false
+}
+
+fn count_unvisited(b: [[i32; WIDTH]; WIDTH]) -> i32 {
+    let mut tot = 0;
+    let mut r = 0;
+    while r < WIDTH {
+        let mut c = 0;
+        while c < WIDTH {
+            if b[r][c] == 0 {
+                tot += 1;
+            }
+            c += 1;
+        }
+        r += 1;
+    }
+    tot
+}
+
+fn main() {
+    let mut fld: [[i32; WIDTH]; WIDTH] = [[0; WIDTH]; WIDTH];
+    fld[0][0] = 1;
+    let ok = tour(&mut fld, 0, 0, 1);
+    let rest = count_unvisited(fld);
+    let _score = if ok { 100 - rest } else { 0 };
+    _score
+}

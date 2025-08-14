@@ -1,0 +1,72 @@
+fn binary_search(arr: &[i32; 20], target: i32) -> i32 {
+    let mut low = 0usize;
+    let mut high = 19usize;
+    let mut comparisons = 0;
+    let mut result = -1;
+    while low <= high {
+        comparisons += 1;
+        let mid = (low + high) / 2;
+        if arr[mid] == target {
+            result = mid as i32;
+            break;
+        } else if arr[mid] < target {
+            low = mid + 1;
+        } else {
+            if mid == 0 {
+                break;
+            }
+            high = mid - 1;
+        }
+    }
+    result
+}
+
+fn count_occurrences(arr: &[i32; 20], target: i32) -> i32 {
+    let mut cnt = 0;
+    let mut i = 0usize;
+    while i < 20 {
+        if arr[i] == target {
+            cnt += 1;
+        }
+        i += 1;
+    }
+    cnt
+}
+
+fn accumulate_array(arr: &[i32; 20]) -> i32 {
+    let mut sum = 0;
+    let mut i = 0usize;
+    while i < 20 {
+        sum += arr[i];
+        i += 1;
+    }
+    sum
+}
+
+fn difference_sum(arr: &[i32; 20], avg: i32) -> i32 {
+    let mut diff_sum = 0;
+    let mut i = 0usize;
+    while i < 20 {
+        let diff = if arr[i] > avg { arr[i] - avg } else { avg - arr[i] };
+        diff_sum += diff;
+        i += 1;
+    }
+    diff_sum
+}
+
+fn main() {
+    let sorted: [i32; 20] = [1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+    let res = binary_search(&sorted, 4);
+    let count = count_occurrences(&sorted, 4);
+    let sum = accumulate_array(&sorted);
+    let avg = sum / 20;
+    let diff = difference_sum(&sorted, avg);
+    let _dummy = res + count + avg + diff;
+    let mut extra = 0;
+    let mut j = 0;
+    while j < 20 {
+        extra += sorted[j] % 3;
+        j += 1;
+    }
+    let _final = extra;
+}

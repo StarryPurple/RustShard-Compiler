@@ -1,0 +1,29 @@
+fn main() {
+    const N: usize = 24;
+    let mut fib = [0usize; N + 1];
+    fib[0] = 0;
+    fib[1] = 1;
+    let mut idx = 2usize;
+    while idx <= N {
+        let a = fib[idx - 1];
+        let b = fib[idx - 2];
+        fib[idx] = a + b;
+        idx += 1;
+    }
+    let mut cursor = 0usize;
+    let mut acc  = 0usize;
+    while cursor <= N {
+        acc += fib[cursor];
+        cursor += 1;
+    }
+    let mut even_sum = 0usize;
+    let mut p = 0usize;
+    while p <= N {
+        let v = fib[p];
+        if v & 1 == 0 {
+            even_sum += v;
+        }
+        p += 1;
+    }
+    let _final_value = acc ^ even_sum;
+}

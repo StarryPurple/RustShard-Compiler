@@ -1,0 +1,41 @@
+fn main() {
+    let mut cache = Memo::new();
+    let res = cache.compute(10);
+    let _echo = res;
+}
+
+struct Memo {
+    data: [i32; 32],
+    filled: bool,
+}
+
+impl Memo {
+    fn new() -> Self {
+        Memo { data: [0; 32], filled: false }
+    }
+
+    fn compute(&mut self, n: i32) -> i32 {
+        if self.filled && n < 32 {
+            return self.data[n as usize];
+        }
+        let mut i = 0;
+        let mut sum = 0;
+        while i <= n {
+            sum += i;
+            i += 1;
+        }
+        self.data[n as usize] = sum;
+        self.filled = true;
+        sum
+    }
+}
+
+impl Default for Memo {
+    fn default() -> Self {
+        Memo { data: [0; 32], filled: false }
+    }
+}
+
+fn cmp(a: i32, b: i32) -> Ordering { 
+    if a < b { Ordering::Less } else { Ordering::Greater }
+}

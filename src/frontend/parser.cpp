@@ -71,6 +71,7 @@ std::unique_ptr<Item> Parser::parse_item() {
 
 
 std::unique_ptr<VisItem> Parser::parse_vis_item() {
+  /*
   Backtracker tracker(*_ast_ctx);
   if(auto f = parse_function(); f) {
     tracker.commit();
@@ -96,6 +97,7 @@ std::unique_ptr<VisItem> Parser::parse_vis_item() {
     tracker.commit();
     return std::make_unique<VisItem>(std::move(i));
   }
+  */
   return nullptr;
 }
 

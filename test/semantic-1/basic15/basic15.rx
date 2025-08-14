@@ -1,0 +1,51 @@
+fn main() {
+    let mut game = Board::fresh();
+    for step in 0..9 {
+        game.place(step / 3, step % 3, step as i32);
+    }
+    let winner = game.evaluate();
+    let _outcome = winner;
+}
+
+struct Board {
+    grid: [[i32; 3]; 3],
+    moves: usize,
+}
+
+impl Board {
+    fn fresh() -> Self {
+        Board { grid: [
+            [0,0,0],
+            [0,0,0],
+            [0,0,0]
+        ], moves: 0 }
+    }
+
+    fn place(&mut self, r: usize, c: usize, v: i32) {
+        self.grid[r][c] = v;
+        self.moves += 1
+    }
+
+    fn evaluate(&self) -> Option<i32> {
+        for i in 0..3 {
+            if self.grid[i][0] == self.grid[i][1] && self.grid[i][1] == self.grid[i][2] {
+                return Some(self.grid[i][0])
+            }
+        }
+        None
+    }
+}
+
+trait Render {
+    fn draw(&self) -> String;
+    fn clear(&mut self);
+}
+
+impl Render for Board {
+    fn draw(&self) -> String { self.moves }
+}
+
+fn analysis(b: &Board) {
+    let x = b.grid[3][3];
+    let _ = x;
+}

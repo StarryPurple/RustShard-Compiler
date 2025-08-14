@@ -1,0 +1,26 @@
+fn main() {
+    const LIMIT: usize = 120;
+    let mut is_prime = [true; LIMIT + 1];
+    is_prime[0] = false;
+    is_prime[1] = false;
+    let mut p = 2usize;
+    while p * p <= LIMIT {
+        if is_prime[p] {
+            let mut k = p * p;
+            while k <= LIMIT {
+                is_prime[k] = false;
+                k += p;
+            }
+        }
+        p += 1;
+    }
+    let mut total = 0usize;
+    let mut n = 2usize;
+    while n <= LIMIT {
+        if is_prime[n] {
+            total += n;
+        }
+        n += 1;
+    }
+    let _prime_sum = total;
+}

@@ -1,0 +1,25 @@
+fn main() {
+    let mut count = 0;
+    let mut i = 0u32;
+    let mut should_break = false;
+    loop {
+        if i >= 5 { break; }
+        let mut j = 0u32;
+        loop {
+            if j >= 5 { break; }
+            if i == j { 
+                j += 1;
+                continue; 
+            }
+            if i + j > 6 { 
+                should_break = true;
+                break; 
+            }
+            count += 1;
+            j += 1;
+        }
+        if should_break { break; }
+        i += 1;
+    }
+    let _ = count;
+}

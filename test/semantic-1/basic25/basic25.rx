@@ -1,0 +1,21 @@
+fn gcd(mut a: i32, mut b: i32) -> i32 {
+    while b != 0 {
+        let temp = b;
+        b = a % b;
+        a = temp;
+    }
+    a
+}
+fn compute_all(pairs: &[(i32, i32); 6], out: &mut [i32; 6]) {
+    let mut idx = 0;
+    while idx < 6 {
+        let (x, y) = pairs[idx];
+        out[idx] = gcd(x, y);
+        idx += 1;
+    }
+}
+fn main() {
+    let pairs: [(i32, i32); 6] = [(15, 5), (14, 21), (27, 9), (100, 25), (81, 54), (35, 49)];
+    let mut results: [i32; 6] = [0; 6];
+    compute_all(&pairs, &mut results);
+}

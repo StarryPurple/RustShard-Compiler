@@ -1,0 +1,35 @@
+const N: usize = 3;
+type Mat = [[i32; N]; N];
+fn mul(a: &Mat, b: &Mat) -> Mat {
+    let mut out = [[0i32; N]; N];
+    let mut i = 0usize;
+    while i < N {
+        let mut j = 0usize;
+        while j < N {
+            let mut k = 0usize;
+            let mut cell = 0i32;
+            while k < N {
+                cell += a[i][k] * b[k][j];
+                k += 1;
+            }
+            out[i][j] = cell;
+            j += 1;
+        }
+        i += 1;
+    }
+    out
+}
+fn main() {
+    let a: Mat = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+    let b: Mat = [[9, 8, 7], [6, 5, 4], [3, 2, 1]];
+    let c  = mul(&a, &b);
+    let d  = mul(&c, &a);
+    let e  = mul(&d, &b);
+    let mut trace = 0i32;
+    let mut idx = 0usize;
+    while idx < N {
+        trace += e[idx][idx];
+        idx += 1;
+    }
+    let _result = trace;
+}

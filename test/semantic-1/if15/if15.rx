@@ -1,0 +1,6 @@
+fn main() {
+    let x = 3;
+    if x = 3 {
+        let y = 0;
+    }
+}

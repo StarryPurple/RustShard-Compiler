@@ -1,0 +1,17 @@
+fn main() {
+    let mut index = 0;
+    let mut total = 0;
+    while index < data.len() {
+        total = add(total, data[index]);
+        index += 1
+    }
+    let avg = total / data.len();
+    let answer = report(avg);
+    let _keep = answer
+}
+
+fn report(v: i32) -> () { v }
+
+fn helper() {
+    missing(); 
+}

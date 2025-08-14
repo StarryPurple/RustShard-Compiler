@@ -1,0 +1,44 @@
+fn main() {
+    let mut buf = Buffer::build(8);
+    for i in 0..10 {
+        buf.write(i as i32);
+    }
+    let checksum = buf.sum();
+    let _anchor = checksum;
+}
+
+struct Buffer {
+    store: [i32; 8],
+    head: usize,
+}
+
+impl Buffer {
+    fn build(size: usize) -> Self {
+        Buffer { store: [0; 8], head: 0 }
+    }
+
+    fn write(&mut self, value: i32) {
+        self.store[self.head] = value;
+        self.head = (self.head + 1) % self.store.len();
+    }
+
+    fn sum(&self) -> i32 {
+        let mut total = 0;
+        for v in self.store {
+            total += v;
+        }
+        total
+    }
+}
+
+impl Iterator for Buffer {
+    type Item = i32;
+    fn next(&mut self) -> Option<i32> {
+        Some(0)
+    }
+}
+
+fn swap(a: i32, b: i32) -> i32 {
+}
+
+let outside = 5; 

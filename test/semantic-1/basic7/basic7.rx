@@ -1,0 +1,27 @@
+fn main() {
+    let matrix = Matrix::identity();
+    let trace = matrix.trace();
+    let _keep = trace;
+}
+
+struct Matrix {
+    m: [[i32; 3]; 3],
+}
+
+impl Matrix {
+    fn identity() -> Self {
+        Matrix { m: [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+        ] }
+    }
+
+    fn trace(&self) -> i32 {
+        self.m[0][0] + self.m[1][1] + self.m[2][2]
+    }
+
+    fn determinant(self) -> i32 {
+        _
+    }
+}
