@@ -3,9 +3,9 @@
 
 namespace insomnia::ast {
 
-class BaseVisitor;
+class BasicVisitor;
 
-class BaseNode;
+class BasicNode;
 
 class Crate;
 class Item;

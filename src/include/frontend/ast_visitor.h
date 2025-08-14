@@ -5,9 +5,9 @@
 
 namespace insomnia::ast {
 
-class BaseVisitor {
+class BasicVisitor {
 public:
-  virtual ~BaseVisitor() = default;
+  virtual ~BasicVisitor() = default;
   virtual void pre_visit(Crate &node) {}
   virtual void pre_visit(Item &node) {}
   virtual void pre_visit(VisItem &node) {}

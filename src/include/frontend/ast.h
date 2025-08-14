@@ -27,35 +27,33 @@
 
 namespace insomnia::ast {
 
-class BaseNode {
+class BasicNode {
 public:
-  virtual ~BaseNode() = default;
-  virtual void accept(BaseVisitor &visitor) = 0;
+  virtual ~BasicNode() = default;
+  virtual void accept(BasicVisitor &visitor) = 0;
 };
 
-class Crate : public BaseNode {
+class Crate : public BasicNode {
 public:
-  template <class T>
-  explicit Crate(T &&items) : _items(std::forward<T>(items)) {}
-  void accept(BaseVisitor &visitor) override;
+  explicit Crate(std::vector<std::unique_ptr<Item>> &&items) : _items(std::move(items)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
   std::vector<std::unique_ptr<Item>> _items;
 };
 
-class Item : public BaseNode {
+class Item : public BasicNode {
 public:
-  template <class T>
-  explicit Item(T &&vis_item) : _vis_item(std::forward<T>(vis_item)) {}
-  void accept(BaseVisitor &visitor) override;
+  explicit Item(std::unique_ptr<VisItem> vis_item) : _vis_item(std::move(vis_item)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<VisItem> _vis_item;
 };
 
-class VisItem : public BaseNode {
+class VisItem : public BasicNode {
 public:
   template <class T>
   explicit VisItem(T &&spec_item) : _spec_item(std::forward<T>(spec_item)) {}
-  void accept(BaseVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
     std::unique_ptr<Function>,
@@ -67,45 +65,44 @@ private:
   > _spec_item;
 };
 
-class Function : public BaseNode {
+class Function : public BasicNode {
 public:
   Function(
     bool is_const,
     std::string_view fn_name,
     std::unique_ptr<FunctionParameters> params,
-    std::unique_ptr<Type> type,
+    std::unique_ptr<Type> res_type,
     std::unique_ptr<BlockExpression> block_expr
     ) :
-  _is_const(is_const), _fn_name(fn_name), _params(std::move(params)),
-  _type(std::move(type)), _block_expr(std::move(block_expr)) {}
-  void accept(BaseVisitor &visitor) override;
+  _is_const(is_const), _fn_name(fn_name), _params_opt(std::move(params)),
+  _res_type_opt(std::move(res_type)), _block_expr_opt(std::move(block_expr)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
   bool _is_const;
   std::string_view _fn_name;
-  std::unique_ptr<FunctionParameters> _params;
-  std::unique_ptr<Type> _type;
-  std::unique_ptr<BlockExpression> _block_expr;
+  std::unique_ptr<FunctionParameters> _params_opt;
+  std::unique_ptr<Type> _res_type_opt;
+  std::unique_ptr<BlockExpression> _block_expr_opt;
 };
 
-class FunctionParameters : public BaseNode {
+class FunctionParameters : public BasicNode {
 public:
-  template <class T>
   FunctionParameters(
     std::unique_ptr<SelfParam> self_param,
-    T &&func_params
+    std::vector<std::unique_ptr<FunctionParam>> &&func_params
   ) :
-  _self_param(std::move(self_param)), _func_params(std::forward<T>(func_params)) {}
-  void accept(BaseVisitor &visitor) override;
+  _self_param_opt(std::move(self_param)), _func_params(std::move(func_params)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-  std::unique_ptr<SelfParam> _self_param;
+  std::unique_ptr<SelfParam> _self_param_opt;
   std::vector<std::unique_ptr<FunctionParam>> _func_params;
 };
 
-class FunctionParam : public BaseNode {
+class FunctionParam : public BasicNode {
 public:
   template <class T>
-  FunctionParam(T &&spec) : _spec(std::forward<T>(spec)) {}
-  void accept(BaseVisitor &visitor) override;
+  explicit FunctionParam(T &&spec) : _spec(std::forward<T>(spec)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
     std::unique_ptr<FunctionParamPattern>,
@@ -113,727 +110,763 @@ private:
   > _spec;
 };
 
-class FunctionParamPattern : public BaseNode {
+class FunctionParamPattern : public BasicNode {
 public:
   FunctionParamPattern(
     std::unique_ptr<PatternNoTopAlt> pattern,
     std::unique_ptr<Type> type
   ) :
   _pattern(std::move(pattern)), _type(std::move(type)) {}
-  void accept(BaseVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<PatternNoTopAlt> _pattern;
   std::unique_ptr<Type> _type;
 };
 
-class SelfParam : public BaseNode {
+class SelfParam : public BasicNode {
 public:
   SelfParam(
     bool is_ref, bool is_mut,
     std::unique_ptr<Type> type
   ) :
   _is_ref(is_ref), _is_mut(is_mut), _type(std::move(type)) {}
-  void accept(BaseVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override;
 private:
   bool _is_ref;
   bool _is_mut;
   std::unique_ptr<Type> _type;
 };
 
-class Type : public BaseNode {
+class Type : public BasicNode {
 public:
-
+  Type(
+    std::unique_ptr<TypeNoBounds> type_no_bounds
+  ) :
+  _type_no_bounds(std::move(type_no_bounds)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<TypeNoBounds> _type_no_bounds;
 };
 
-class TypeNoBounds : public BaseNode {
+class TypeNoBounds : public BasicNode {
 public:
-
+  template <class T>
+  explicit TypeNoBounds(T &&spec) : _spec(std::forward<T>(spec)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::variant<
+    std::unique_ptr<ParenthesizedType>,
+    std::unique_ptr<TupleType>,
+    std::unique_ptr<ReferenceType>,
+    std::unique_ptr<ArrayType>,
+    std::unique_ptr<SliceType>
+  > _spec;
 };
 
-class ParenthesizedType : public BaseNode {
+class ParenthesizedType : public BasicNode {
 public:
-
+  ParenthesizedType(
+    std::unique_ptr<Type> type
+  ) :
+  _type(std::move(type)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<Type> _type;
 };
 
-class TupleType : public BaseNode {
+class TupleType : public BasicNode {
 public:
-
+  TupleType(
+    std::vector<std::unique_ptr<Type>> &&types
+  ) :
+  _types(std::move(types)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::vector<std::unique_ptr<Type>> _types;
 };
 
-class ReferenceType : public BaseNode {
+class ReferenceType : public BasicNode {
 public:
-
+  ReferenceType(
+    bool is_mut,
+    std::unique_ptr<TypeNoBounds> type_no_bounds
+  ) :
+  _is_mut(is_mut), _type_no_bounds(std::move(type_no_bounds)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  bool _is_mut;
+  std::unique_ptr<TypeNoBounds> _type_no_bounds;
 };
 
-class ArrayType : public BaseNode {
+class ArrayType : public BasicNode {
 public:
-
+  ArrayType(
+    std::unique_ptr<Type> type,
+    std::unique_ptr<Expression> expr
+  ) :
+  _type(std::move(type)), _expr(std::move(expr)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<Type> _type;
+  std::unique_ptr<Expression> _expr;
 };
 
-class SliceType : public BaseNode {
+class SliceType : public BasicNode {
 public:
-
+  SliceType(
+    std::unique_ptr<Type> type
+  ) :
+  _type(std::move(type)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<Type> _type;
 };
 
-class Struct : public BaseNode {
+class Struct : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructStruct : public BaseNode {
+class StructStruct : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructFields : public BaseNode {
+class StructFields : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructField : public BaseNode {
+class StructField : public BasicNode {
 public:
 
 private:
 
 };
 
-class Enumeration : public BaseNode {
+class Enumeration : public BasicNode {
 public:
 
 private:
 
 };
 
-class EnumItems : public BaseNode {
+class EnumItems : public BasicNode {
 public:
 
 private:
 
 };
 
-class EnumItem : public BaseNode {
+class EnumItem : public BasicNode {
 public:
 
 private:
 
 };
 
-class EnumItemDiscriminant : public BaseNode {
+class EnumItemDiscriminant : public BasicNode {
 public:
 
 private:
 
 };
 
-class ConstantItem : public BaseNode {
+class ConstantItem : public BasicNode {
 public:
 
 private:
 
 };
 
-class Trait : public BaseNode {
+class Trait : public BasicNode {
 public:
 
 private:
 
 };
 
-class AssociatedItem : public BaseNode {
+class AssociatedItem : public BasicNode {
 public:
 
 private:
 
 };
 
-class Implementation : public BaseNode {
+class Implementation : public BasicNode {
 public:
 
 private:
 
 };
 
-class InherentImpl : public BaseNode {
+class InherentImpl : public BasicNode {
 public:
 
 private:
 
 };
 
-class TraitImpl : public BaseNode {
+class TraitImpl : public BasicNode {
 public:
 
 private:
 
 };
 
-class TypePath : public BaseNode {
+class TypePath : public BasicNode {
 public:
 
 private:
 
 };
 
-class TypePathSegment : public BaseNode {
+class TypePathSegment : public BasicNode {
 public:
 
 private:
 
 };
 
-class PathIdentSegment : public BaseNode {
+class PathIdentSegment : public BasicNode {
 public:
 
 private:
 
 };
 
-class Expression : public BaseNode {
+class Expression : public BasicNode {
 public:
 
 private:
 
 };
 
-class ExpressionWithoutBlock : public BaseNode {
+class ExpressionWithoutBlock : public BasicNode {
 public:
 
 private:
 
 };
 
-class LiteralExpression : public BaseNode {
+class LiteralExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class PathExpression : public BaseNode {
+class PathExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class PathInExpression : public BaseNode {
+class PathInExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class PathExprSegment : public BaseNode {
+class PathExprSegment : public BasicNode {
 public:
 
 private:
 
 };
 
-class OperatorExpression : public BaseNode {
+class OperatorExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class BorrowExpression : public BaseNode {
+class BorrowExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class DereferenceExpression : public BaseNode {
+class DereferenceExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class NegationExpression : public BaseNode {
+class NegationExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class ArithmeticOrLogicalExpression : public BaseNode {
+class ArithmeticOrLogicalExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class ComparisonExpression : public BaseNode {
+class ComparisonExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class LazyBooleanExpression : public BaseNode {
+class LazyBooleanExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class TypeCastExpression : public BaseNode {
+class TypeCastExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class AssignmentExpression : public BaseNode {
+class AssignmentExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class CompoundAssignmentExpression : public BaseNode {
+class CompoundAssignmentExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class GroupedExpression : public BaseNode {
+class GroupedExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class ArrayExpression : public BaseNode {
+class ArrayExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class ArrayElements : public BaseNode {
+class ArrayElements : public BasicNode {
 public:
 
 private:
 
 };
 
-class IndexExpression : public BaseNode {
+class IndexExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class TupleExpression : public BaseNode {
+class TupleExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class TupleElements : public BaseNode {
+class TupleElements : public BasicNode {
 public:
 
 private:
 
 };
 
-class TupleIndexingExpression : public BaseNode {
+class TupleIndexingExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructExpression : public BaseNode {
+class StructExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructExprFields : public BaseNode {
+class StructExprFields : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructExprField : public BaseNode {
+class StructExprField : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructBase : public BaseNode {
+class StructBase : public BasicNode {
 public:
 
 private:
 
 };
 
-class CallExpression : public BaseNode {
+class CallExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class CallParams : public BaseNode {
+class CallParams : public BasicNode {
 public:
 
 private:
 
 };
 
-class MethodCallExpression : public BaseNode {
+class MethodCallExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class FieldExpression : public BaseNode {
+class FieldExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class ContinueExpression : public BaseNode {
+class ContinueExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class BreakExpression : public BaseNode {
+class BreakExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class RangeExpression : public BaseNode {
+class RangeExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class RangeExpr : public BaseNode {
+class RangeExpr : public BasicNode {
 public:
 
 private:
 
 };
 
-class RangFromExpr : public BaseNode {
+class RangFromExpr : public BasicNode {
 public:
 
 private:
 
 };
 
-class RangeToExpr : public BaseNode {
+class RangeToExpr : public BasicNode {
 public:
 
 private:
 
 };
 
-class RangeFullExpr : public BaseNode {
+class RangeFullExpr : public BasicNode {
 public:
 
 private:
 
 };
 
-class RangeInclusiveExpr : public BaseNode {
+class RangeInclusiveExpr : public BasicNode {
 public:
 
 private:
 
 };
 
-class RangeToInclusiveExpr : public BaseNode {
+class RangeToInclusiveExpr : public BasicNode {
 public:
 
 private:
 
 };
 
-class ReturnExpression : public BaseNode {
+class ReturnExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class UnderscoreExpression : public BaseNode {
+class UnderscoreExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class ExpressionWithBlock : public BaseNode {
+class ExpressionWithBlock : public BasicNode {
 public:
 
 private:
 
 };
 
-class BlockExpression : public BaseNode {
+class BlockExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class Statements : public BaseNode {
+class Statements : public BasicNode {
 public:
 
 private:
 
 };
 
-class Statement : public BaseNode {
+class Statement : public BasicNode {
 public:
 
 private:
 
 };
 
-class LetStatement : public BaseNode {
+class LetStatement : public BasicNode {
 public:
 
 private:
 
 };
 
-class ExpressionStatement : public BaseNode {
+class ExpressionStatement : public BasicNode {
 public:
 
 private:
 
 };
 
-class LoopExpression : public BaseNode {
+class LoopExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class InfiniteLoopExpression : public BaseNode {
+class InfiniteLoopExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class PredicateLoopExpression : public BaseNode {
+class PredicateLoopExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class IfExpression : public BaseNode {
+class IfExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class Conditions : public BaseNode {
+class Conditions : public BasicNode {
 public:
 
 private:
 
 };
 
-class MatchExpression : public BaseNode {
+class MatchExpression : public BasicNode {
 public:
 
 private:
 
 };
 
-class MatchArms : public BaseNode {
+class MatchArms : public BasicNode {
 public:
 
 private:
 
 };
 
-class MatchArm : public BaseNode {
+class MatchArm : public BasicNode {
 public:
 
 private:
 
 };
 
-class MatchArmGuard : public BaseNode {
+class MatchArmGuard : public BasicNode {
 public:
 
 private:
 
 };
 
-class Pattern : public BaseNode {
+class Pattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class PatternNoTopAlt : public BaseNode {
+class PatternNoTopAlt : public BasicNode {
 public:
 
 private:
 
 };
 
-class PatternWithoutRange : public BaseNode {
+class PatternWithoutRange : public BasicNode {
 public:
 
 private:
 
 };
 
-class LiteralPattern : public BaseNode {
+class LiteralPattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class IdentifierPattern : public BaseNode {
+class IdentifierPattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class WildcardPattern : public BaseNode {
+class WildcardPattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class RestPattern : public BaseNode {
+class RestPattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class ReferencePattern : public BaseNode {
+class ReferencePattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructPattern : public BaseNode {
+class StructPattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructPatternElements : public BaseNode {
+class StructPatternElements : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructPatternEtCetera : public BaseNode {
+class StructPatternEtCetera : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructPatternFields : public BaseNode {
+class StructPatternFields : public BasicNode {
 public:
 
 private:
 
 };
 
-class StructPatternField : public BaseNode {
+class StructPatternField : public BasicNode {
 public:
 
 private:
 
 };
 
-class TuplePattern : public BaseNode {
+class TuplePattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class TuplePatternItems : public BaseNode {
+class TuplePatternItems : public BasicNode {
 public:
 
 private:
 
 };
 
-class GroupedPattern : public BaseNode {
+class GroupedPattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class SlicePattern : public BaseNode {
+class SlicePattern : public BasicNode {
 public:
 
 private:
 
 };
 
-class SlicePatternItems : public BaseNode {
+class SlicePatternItems : public BasicNode {
 public:
 
 private:
 
 };
 
-class PathPattern : public BaseNode {
+class PathPattern : public BasicNode {
 public:
 
 private:
