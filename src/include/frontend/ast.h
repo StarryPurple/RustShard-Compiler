@@ -52,7 +52,7 @@ private:
 class VisItem : public BasicNode {
 public:
   template <class T>
-  explicit VisItem(T &&spec_item) : _spec_item(std::forward<T>(spec_item)) {}
+  explicit VisItem(T &&spec_item): _spec_item(std::forward<T>(spec_item)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
@@ -99,7 +99,7 @@ private:
 class FunctionParam : public BasicNode {
 public:
   template <class T>
-  explicit FunctionParam(T &&spec) : _spec(std::forward<T>(spec)) {}
+  explicit FunctionParam(T &&spec): _spec(std::forward<T>(spec)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
@@ -146,7 +146,7 @@ private:
 class TypeNoBounds : public BasicNode {
 public:
   template <class T>
-  explicit TypeNoBounds(T &&spec) : _spec(std::forward<T>(spec)) {}
+  explicit TypeNoBounds(T &&spec): _spec(std::forward<T>(spec)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
@@ -302,26 +302,40 @@ private:
 
 class ConstantItem : public BasicNode {
 public:
-
+  ConstantItem(
+    std::string_view item_name,
+    std::unique_ptr<Type> type,
+    std::unique_ptr<Expression> const_expr_opt
+  ): _item_name(item_name), _type(std::move(type)), _const_expr_opt(std::move(const_expr_opt)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-
+  std::string_view _item_name; // might be underscore.
+  std::unique_ptr<Type> _type;
+  std::unique_ptr<Expression> _const_expr_opt;
 };
 
 class Trait : public BasicNode {
 public:
-
+  Trait(
+    std::string_view trait_name,
+    std::vector<std::unique_ptr<AssociatedItem>> &&asso_items
+  ): _trait_name(trait_name), _asso_items(std::move(asso_items)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-
+  std::string_view _trait_name;
+  std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
 };
 
 class AssociatedItem : public BasicNode {
 public:
-
+  template <class T>
+  explicit AssociatedItem(T &&spec): _spec(std::forward<T>(spec)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-
+  std::variant<
+    std::unique_ptr<ConstantItem>,
+    std::unique_ptr<Function>
+  > _spec;
 };
 
 class Implementation : public BasicNode {

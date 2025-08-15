@@ -69,6 +69,7 @@ TupleType ->
 ReferenceType ->
     '&' "mut"? TypeNoBounds
 
+# Expression here shall be constant
 ArrayType ->
     '[' Type ';' Expression ']'
     
@@ -111,9 +112,11 @@ EnumItem ->
 
 # EnumItemStruct -> ...
 
+# Expression here shall be constant
 EnumItemDiscriminant ->
     '=' Expression
 
+# Expression here shall be constant
 ConstantItem ->
     "const" (IDENTIFIER | '_') ':' Type ('=' Expression)? ';'
 

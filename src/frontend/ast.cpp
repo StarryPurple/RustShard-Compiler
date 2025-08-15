@@ -16,7 +16,7 @@ void Item::accept(BasicVisitor &visitor) {
 
 void VisItem::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  std::visit([&](auto &item) { item->accept(visitor); }, _spec_item);
+  std::visit([&](auto &item){ item->accept(visitor); }, _spec_item);
   visitor.post_visit(*this);
 }
 
@@ -37,7 +37,7 @@ void FunctionParameters::accept(BasicVisitor &visitor) {
 
 void FunctionParam::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  std::visit([&](auto &spec) { spec->accept(visitor); }, _spec);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
@@ -62,7 +62,7 @@ void Type::accept(BasicVisitor &visitor) {
 
 void TypeNoBounds::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  std::visit([&](auto &spec) { spec->accept(visitor); }, _spec);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
@@ -147,16 +147,20 @@ void EnumItemDiscriminant::accept(BasicVisitor &visitor) {
 
 void ConstantItem::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _type->accept(visitor);
+  if(_const_expr_opt) _const_expr_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void Trait::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &asso_item: _asso_items) asso_item->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void AssociatedItem::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
