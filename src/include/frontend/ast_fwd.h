@@ -33,6 +33,7 @@ class EnumItemDiscriminant;
 class ConstantItem;
 class Trait;
 class AssociatedItem;
+class TypeAlias;
 class Implementation;
 class InherentImpl;
 class TraitImpl;

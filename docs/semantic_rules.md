@@ -124,12 +124,15 @@ Trait ->
     "trait" IDENTIFIER #GenericParams?#
     #(':' TypeParamBounds?)?# #WhereClause?#
     '{' AssociatedItem* '}'
-    
-# No type alias supported
-AssociatedItem ->
-    ConstantItem | Function
 
-# TypeAlias -> ...
+AssociatedItem ->
+    TypeAlias | ConstantItem | Function
+
+# Simplified version
+TypeAlias ->
+    "type" IDENTIFIER #GenericParams# #':' TypeParamBounds?#
+    #WhereClause?#
+    ('=' Type #WhereClause?#)? ';'
 
 Implementation ->
     InherentImpl | TraitImpl

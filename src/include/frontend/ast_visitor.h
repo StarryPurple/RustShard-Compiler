@@ -34,6 +34,7 @@ public:
   virtual void pre_visit(ConstantItem &node) {}
   virtual void pre_visit(Trait &node) {}
   virtual void pre_visit(AssociatedItem &node) {}
+  virtual void pre_visit(TypeAlias &node) {}
   virtual void pre_visit(Implementation &node) {}
   virtual void pre_visit(InherentImpl &node) {}
   virtual void pre_visit(TraitImpl &node) {}
@@ -142,6 +143,7 @@ public:
   virtual void post_visit(ConstantItem &node) {}
   virtual void post_visit(Trait &node) {}
   virtual void post_visit(AssociatedItem &node) {}
+  virtual void post_visit(TypeAlias &node) {}
   virtual void post_visit(Implementation &node) {}
   virtual void post_visit(InherentImpl &node) {}
   virtual void post_visit(TraitImpl &node) {}

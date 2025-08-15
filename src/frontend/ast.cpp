@@ -164,33 +164,48 @@ void AssociatedItem::accept(BasicVisitor &visitor) {
   visitor.post_visit(*this);
 }
 
+void TypeAlias::accept(BasicVisitor &visitor) {
+  visitor.pre_visit(*this);
+  if(_type_opt) _type_opt->accept(visitor);
+  visitor.post_visit(*this);
+}
+
 void Implementation::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void InherentImpl::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _type->accept(visitor);
+  for(auto &asso_item: _asso_items) asso_item->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void TraitImpl::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _type_path->accept(visitor);
+  _tar_type->accept(visitor);
+  for(auto &asso_item: _asso_items) asso_item->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void TypePath::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &segment: _segments) segment->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void TypePathSegment::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _ident_segment->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void PathIdentSegment::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  // Intended blank
   visitor.post_visit(*this);
 }
 

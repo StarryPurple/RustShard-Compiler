@@ -43,7 +43,7 @@ private:
 
 class Item : public BasicNode {
 public:
-  explicit Item(std::unique_ptr<VisItem> vis_item) : _vis_item(std::move(vis_item)) {}
+  explicit Item(std::unique_ptr<VisItem> &&vis_item) : _vis_item(std::move(vis_item)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<VisItem> _vis_item;
@@ -51,8 +51,8 @@ private:
 
 class VisItem : public BasicNode {
 public:
-  template <class T>
-  explicit VisItem(T &&spec_item): _spec_item(std::forward<T>(spec_item)) {}
+  template <class Spec>
+  explicit VisItem(Spec &&spec_item): _spec_item(std::forward<Spec>(spec_item)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
@@ -70,9 +70,9 @@ public:
   Function(
     bool is_const,
     std::string_view fn_name,
-    std::unique_ptr<FunctionParameters> params,
-    std::unique_ptr<Type> res_type,
-    std::unique_ptr<BlockExpression> block_expr
+    std::unique_ptr<FunctionParameters> &&params,
+    std::unique_ptr<Type> &&res_type,
+    std::unique_ptr<BlockExpression> &&block_expr
   ): _is_const(is_const), _fn_name(fn_name), _params_opt(std::move(params)),
   _res_type_opt(std::move(res_type)), _block_expr_opt(std::move(block_expr)) {}
   void accept(BasicVisitor &visitor) override;
@@ -87,7 +87,7 @@ private:
 class FunctionParameters : public BasicNode {
 public:
   FunctionParameters(
-    std::unique_ptr<SelfParam> self_param,
+    std::unique_ptr<SelfParam> &&self_param,
     std::vector<std::unique_ptr<FunctionParam>> &&func_params
   ): _self_param_opt(std::move(self_param)), _func_params(std::move(func_params)) {}
   void accept(BasicVisitor &visitor) override;
@@ -98,8 +98,8 @@ private:
 
 class FunctionParam : public BasicNode {
 public:
-  template <class T>
-  explicit FunctionParam(T &&spec): _spec(std::forward<T>(spec)) {}
+  template <class Spec>
+  explicit FunctionParam(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
@@ -111,8 +111,8 @@ private:
 class FunctionParamPattern : public BasicNode {
 public:
   FunctionParamPattern(
-    std::unique_ptr<PatternNoTopAlt> pattern,
-    std::unique_ptr<Type> type
+    std::unique_ptr<PatternNoTopAlt> &&pattern,
+    std::unique_ptr<Type> &&type
   ): _pattern(std::move(pattern)), _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -124,7 +124,7 @@ class SelfParam : public BasicNode {
 public:
   SelfParam(
     bool is_ref, bool is_mut,
-    std::unique_ptr<Type> type
+    std::unique_ptr<Type> &&type
   ): _is_ref(is_ref), _is_mut(is_mut), _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -136,7 +136,7 @@ private:
 class Type : public BasicNode {
 public:
   Type(
-    std::unique_ptr<TypeNoBounds> type_no_bounds
+    std::unique_ptr<TypeNoBounds> &&type_no_bounds
   ): _type_no_bounds(std::move(type_no_bounds)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -145,8 +145,8 @@ private:
 
 class TypeNoBounds : public BasicNode {
 public:
-  template <class T>
-  explicit TypeNoBounds(T &&spec): _spec(std::forward<T>(spec)) {}
+  template <class Spec>
+  explicit TypeNoBounds(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
@@ -161,7 +161,7 @@ private:
 class ParenthesizedType : public BasicNode {
 public:
   ParenthesizedType(
-    std::unique_ptr<Type> type
+    std::unique_ptr<Type> &&type
   ): _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -182,7 +182,7 @@ class ReferenceType : public BasicNode {
 public:
   ReferenceType(
     bool is_mut,
-    std::unique_ptr<TypeNoBounds> type_no_bounds
+    std::unique_ptr<TypeNoBounds> &&type_no_bounds
   ): _is_mut(is_mut), _type_no_bounds(std::move(type_no_bounds)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -193,8 +193,8 @@ private:
 class ArrayType : public BasicNode {
 public:
   ArrayType(
-    std::unique_ptr<Type> type,
-    std::unique_ptr<Expression> const_expr
+    std::unique_ptr<Type> &&type,
+    std::unique_ptr<Expression> &&const_expr
   ): _type(std::move(type)), _const_expr(std::move(const_expr)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -204,8 +204,8 @@ private:
 
 class SliceType : public BasicNode {
 public:
-  SliceType(
-    std::unique_ptr<Type> type
+  explicit SliceType(
+    std::unique_ptr<Type> &&type
   ): _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -214,8 +214,8 @@ private:
 
 class Struct : public BasicNode {
 public:
-  Struct(
-    std::unique_ptr<StructStruct> ss
+  explicit Struct(
+    std::unique_ptr<StructStruct> &&ss
   ): _ss(std::move(ss)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -226,7 +226,7 @@ class StructStruct : public BasicNode {
 public:
   StructStruct(
     std::string_view struct_name,
-    std::unique_ptr<StructFields> fields_opt
+    std::unique_ptr<StructFields> &&fields_opt
   ): _struct_name(struct_name), _fields_opt(std::move(fields_opt)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -248,7 +248,7 @@ class StructField : public BasicNode {
 public:
   StructField(
     std::string_view struct_name,
-    std::unique_ptr<Type> type
+    std::unique_ptr<Type> &&type
   ): _struct_name(struct_name), _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -260,7 +260,7 @@ class Enumeration : public BasicNode {
 public:
   Enumeration(
     std::string_view enum_name,
-    std::unique_ptr<EnumItems> items_opt
+    std::unique_ptr<EnumItems> &&items_opt
   ): _enum_name(enum_name), _items_opt(std::move(items_opt)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -282,7 +282,7 @@ class EnumItem : public BasicNode {
 public:
   EnumItem(
     std::string_view item_name,
-    std::unique_ptr<EnumItemDiscriminant> discr_opt
+    std::unique_ptr<EnumItemDiscriminant> &&discr_opt
   ): _item_name(item_name), _discr_opt(std::move(discr_opt)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -293,7 +293,7 @@ private:
 class EnumItemDiscriminant : public BasicNode {
 public:
   explicit EnumItemDiscriminant(
-    std::unique_ptr<Expression> const_expr
+    std::unique_ptr<Expression> &&const_expr
   ): _const_expr(std::move(const_expr)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -304,12 +304,12 @@ class ConstantItem : public BasicNode {
 public:
   ConstantItem(
     std::string_view item_name,
-    std::unique_ptr<Type> type,
-    std::unique_ptr<Expression> const_expr_opt
+    std::unique_ptr<Type> &&type,
+    std::unique_ptr<Expression> &&const_expr_opt
   ): _item_name(item_name), _type(std::move(type)), _const_expr_opt(std::move(const_expr_opt)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  std::string_view _item_name; // might be underscore.
+  std::string_view _item_name; // might be an underscore.
   std::unique_ptr<Type> _type;
   std::unique_ptr<Expression> _const_expr_opt;
 };
@@ -328,62 +328,96 @@ private:
 
 class AssociatedItem : public BasicNode {
 public:
-  template <class T>
-  explicit AssociatedItem(T &&spec): _spec(std::forward<T>(spec)) {}
+  template <class Spec>
+  explicit AssociatedItem(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::variant<
+    std::unique_ptr<TypeAlias>,
     std::unique_ptr<ConstantItem>,
     std::unique_ptr<Function>
   > _spec;
 };
 
-class Implementation : public BasicNode {
+class TypeAlias : public BasicNode {
 public:
-
+  TypeAlias(
+    std::string_view alias_name,
+    std::unique_ptr<Type> &&type_opt
+  ): _alias_name(alias_name), _type_opt(std::move(type_opt)) {}
   void accept(BasicVisitor &visitor) override;
 private:
+  std::string_view _alias_name;
+  std::unique_ptr<Type> _type_opt;
+};
 
+class Implementation : public BasicNode {
+public:
+  template <class Spec>
+  Implementation(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::variant<
+    std::unique_ptr<InherentImpl>,
+    std::unique_ptr<TraitImpl>
+  > _spec;
 };
 
 class InherentImpl : public BasicNode {
 public:
-
+  InherentImpl(
+    std::unique_ptr<Type> &&type,
+    std::vector<std::unique_ptr<AssociatedItem>> &&asso_items
+  ): _type(std::move(type)), _asso_items(std::move(asso_items)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<Type> _type;
+  std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
 };
 
 class TraitImpl : public BasicNode {
 public:
-
+  TraitImpl(
+    std::unique_ptr<TypePath> &&type_path,
+    std::unique_ptr<Type> &&tar_type,
+    std::vector<std::unique_ptr<AssociatedItem>> &&asso_items
+  ): _type_path(std::move(type_path)), _tar_type(std::move(tar_type)),
+  _asso_items(std::move(asso_items)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<TypePath> _type_path;
+  std::unique_ptr<Type> _tar_type;
+  std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
 };
 
 class TypePath : public BasicNode {
 public:
-
+  explicit TypePath(
+    std::vector<std::unique_ptr<TypePathSegment>> &&segments
+  ): _segments(std::move(segments)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-
+  std::vector<std::unique_ptr<TypePathSegment>> _segments;
 };
 
 class TypePathSegment : public BasicNode {
 public:
-
+  TypePathSegment(
+    std::unique_ptr<PathIdentSegment> &&ident_segment
+  ): _ident_segment(std::move(ident_segment)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<PathIdentSegment> _ident_segment;
 };
 
 class PathIdentSegment : public BasicNode {
 public:
-
+  explicit PathIdentSegment(
+    std::string_view ident
+  ): _ident(ident) {}
   void accept(BasicVisitor &visitor) override;
 private:
-
+  std::string_view _ident; // might be super/self/Self/crate/$crate
 };
 
 class Expression : public BasicNode {
