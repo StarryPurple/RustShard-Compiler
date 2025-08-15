@@ -82,7 +82,8 @@ SliceType ->
 #     Type ':' TypeParamBounds?
     
 Struct ->
-    StructStruct
+      StructStruct
+   #| TupleStruct
     
 StructStruct ->
     "struct" IDENTIFIER #GenericParams?# #WhereClause?#

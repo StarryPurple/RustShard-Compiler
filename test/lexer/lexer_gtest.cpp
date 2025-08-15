@@ -57,6 +57,26 @@ TEST_LEXER_SUCCESS(AllKeywords,
     {TKT::ASYNC, "async"}, {TKT::AWAIT, "await"}, {TKT::DYN, "dyn"}
   }));
 
+TEST_LEXER_SUCCESS(AllPunctuations,
+  "+ - * / % ^ ! & | && || << >> += -= *= /= %= ^= &= |= <<= >>= = == != > < >= <= "
+  "@ _ . ... .. ..= , ; : :: -> => <- # $ ? ~ ( ) [ ] { }",
+  ({
+    {TKT::PLUS, "+"}, {TKT::MINUS, "-"}, {TKT::STAR, "*"}, {TKT::SLASH, "/"},
+    {TKT::PERCENT, "%"}, {TKT::CARET, "^"}, {TKT::NOT, "!"}, {TKT::AND, "&"},
+    {TKT::OR, "|"}, {TKT::AND_AND, "&&"}, {TKT::OR_OR, "||"}, {TKT::SHL, "<<"},
+    {TKT::SHR, ">>"}, {TKT::PLUS_EQ, "+="}, {TKT::MINUS_EQ, "-="}, {TKT::STAR_EQ, "*="},
+    {TKT::SLASH_EQ, "/="}, {TKT::PERCENT_EQ, "%="}, {TKT::CARET_EQ, "^="},
+    {TKT::AND_EQ, "&="}, {TKT::OR_EQ, "|="}, {TKT::SHL_EQ, "<<="}, {TKT::SHR_EQ, ">>="},
+    {TKT::EQ, "="}, {TKT::EQ_EQ, "=="}, {TKT::NE, "!="}, {TKT::GT, ">"}, {TKT::LT, "<"},
+    {TKT::GE, ">="}, {TKT::LE, "<="}, {TKT::AT, "@"}, {TKT::UNDERSCORE, "_"},
+    {TKT::DOT, "."}, {TKT::DOT_DOT_DOT, "..."}, {TKT::DOT_DOT, ".."},
+    {TKT::DOT_DOT_EQ, "..="}, {TKT::COMMA, ","}, {TKT::SEMI, ";"}, {TKT::COLON, ":"},
+    {TKT::PATH_SEP, "::"}, {TKT::R_ARROW, "->"}, {TKT::FAT_ARROW, "=>"},
+    {TKT::L_ARROW, "<-"}, {TKT::POUND, "#"}, {TKT::DOLLAR, "$"}, {TKT::QUESTION, "?"},
+    {TKT::TILDE, "~"}, {TKT::L_PARENTHESIS, "("}, {TKT::R_PARENTHESIS, ")"},
+    {TKT::L_SQUARE_BRACKET, "["}, {TKT::R_SQUARE_BRACKET, "]"}, {TKT::L_CURLY_BRACE, "{"}, {TKT::R_CURLY_BRACE, "}"}
+  }));
+
 // --- Numeric Literals ---
 TEST_LEXER_SUCCESS(DecimalNumbers,
   "let n = 123_456; let f = 1.2345;",

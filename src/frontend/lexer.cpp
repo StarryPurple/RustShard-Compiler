@@ -265,6 +265,9 @@ bool Lexer::tokenize_punctuation_delimiter() {
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
       type = TokenType::LE;
       advance_one(); advance_one();
+    } else if(_pos + 1 < len && _src_code[_pos + 1] == '-') {
+      type = TokenType::L_ARROW;
+      advance_one(); advance_one();
     } else {
       type = TokenType::LT;
       advance_one();

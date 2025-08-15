@@ -73,8 +73,7 @@ public:
     std::unique_ptr<FunctionParameters> params,
     std::unique_ptr<Type> res_type,
     std::unique_ptr<BlockExpression> block_expr
-    ) :
-  _is_const(is_const), _fn_name(fn_name), _params_opt(std::move(params)),
+  ): _is_const(is_const), _fn_name(fn_name), _params_opt(std::move(params)),
   _res_type_opt(std::move(res_type)), _block_expr_opt(std::move(block_expr)) {}
   void accept(BasicVisitor &visitor) override;
 private:
@@ -90,8 +89,7 @@ public:
   FunctionParameters(
     std::unique_ptr<SelfParam> self_param,
     std::vector<std::unique_ptr<FunctionParam>> &&func_params
-  ) :
-  _self_param_opt(std::move(self_param)), _func_params(std::move(func_params)) {}
+  ): _self_param_opt(std::move(self_param)), _func_params(std::move(func_params)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<SelfParam> _self_param_opt;
@@ -115,8 +113,7 @@ public:
   FunctionParamPattern(
     std::unique_ptr<PatternNoTopAlt> pattern,
     std::unique_ptr<Type> type
-  ) :
-  _pattern(std::move(pattern)), _type(std::move(type)) {}
+  ): _pattern(std::move(pattern)), _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<PatternNoTopAlt> _pattern;
@@ -128,8 +125,7 @@ public:
   SelfParam(
     bool is_ref, bool is_mut,
     std::unique_ptr<Type> type
-  ) :
-  _is_ref(is_ref), _is_mut(is_mut), _type(std::move(type)) {}
+  ): _is_ref(is_ref), _is_mut(is_mut), _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   bool _is_ref;
@@ -141,8 +137,7 @@ class Type : public BasicNode {
 public:
   Type(
     std::unique_ptr<TypeNoBounds> type_no_bounds
-  ) :
-  _type_no_bounds(std::move(type_no_bounds)) {}
+  ): _type_no_bounds(std::move(type_no_bounds)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
@@ -167,8 +162,7 @@ class ParenthesizedType : public BasicNode {
 public:
   ParenthesizedType(
     std::unique_ptr<Type> type
-  ) :
-  _type(std::move(type)) {}
+  ): _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<Type> _type;
@@ -178,8 +172,7 @@ class TupleType : public BasicNode {
 public:
   TupleType(
     std::vector<std::unique_ptr<Type>> &&types
-  ) :
-  _types(std::move(types)) {}
+  ): _types(std::move(types)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::vector<std::unique_ptr<Type>> _types;
@@ -190,8 +183,7 @@ public:
   ReferenceType(
     bool is_mut,
     std::unique_ptr<TypeNoBounds> type_no_bounds
-  ) :
-  _is_mut(is_mut), _type_no_bounds(std::move(type_no_bounds)) {}
+  ): _is_mut(is_mut), _type_no_bounds(std::move(type_no_bounds)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   bool _is_mut;
@@ -202,21 +194,19 @@ class ArrayType : public BasicNode {
 public:
   ArrayType(
     std::unique_ptr<Type> type,
-    std::unique_ptr<Expression> expr
-  ) :
-  _type(std::move(type)), _expr(std::move(expr)) {}
+    std::unique_ptr<Expression> const_expr
+  ): _type(std::move(type)), _const_expr(std::move(const_expr)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<Type> _type;
-  std::unique_ptr<Expression> _expr;
+  std::unique_ptr<Expression> _const_expr;
 };
 
 class SliceType : public BasicNode {
 public:
   SliceType(
     std::unique_ptr<Type> type
-  ) :
-  _type(std::move(type)) {}
+  ): _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<Type> _type;
@@ -224,63 +214,96 @@ private:
 
 class Struct : public BasicNode {
 public:
-
+  Struct(
+    std::unique_ptr<StructStruct> ss
+  ): _ss(std::move(ss)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<StructStruct> _ss;
 };
 
 class StructStruct : public BasicNode {
 public:
-
+  StructStruct(
+    std::string_view struct_name,
+    std::unique_ptr<StructFields> fields_opt
+  ): _struct_name(struct_name), _fields_opt(std::move(fields_opt)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::string_view _struct_name;
+  std::unique_ptr<StructFields> _fields_opt;
 };
 
 class StructFields : public BasicNode {
 public:
-
+  explicit StructFields(
+    std::vector<std::unique_ptr<StructField>> &&fields
+  ): _fields(std::move(fields)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::vector<std::unique_ptr<StructField>> _fields;
 };
 
 class StructField : public BasicNode {
 public:
-
+  StructField(
+    std::string_view struct_name,
+    std::unique_ptr<Type> type
+  ): _struct_name(struct_name), _type(std::move(type)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::string_view _struct_name;
+  std::unique_ptr<Type> _type;
 };
 
 class Enumeration : public BasicNode {
 public:
-
+  Enumeration(
+    std::string_view enum_name,
+    std::unique_ptr<EnumItems> items_opt
+  ): _enum_name(enum_name), _items_opt(std::move(items_opt)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::string_view _enum_name;
+  std::unique_ptr<EnumItems> _items_opt;
 };
 
 class EnumItems : public BasicNode {
 public:
-
+  explicit EnumItems(
+    std::vector<std::unique_ptr<EnumItem>> &&item
+  ): _items(std::move(item)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::vector<std::unique_ptr<EnumItem>> _items;
 };
 
 class EnumItem : public BasicNode {
 public:
-
+  EnumItem(
+    std::string_view item_name,
+    std::unique_ptr<EnumItemDiscriminant> discr_opt
+  ): _item_name(item_name), _discr_opt(std::move(discr_opt)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::string_view _item_name;
+  std::unique_ptr<EnumItemDiscriminant> _discr_opt;
 };
 
 class EnumItemDiscriminant : public BasicNode {
 public:
-
+  explicit EnumItemDiscriminant(
+    std::unique_ptr<Expression> const_expr
+  ): _const_expr(std::move(const_expr)) {}
+  void accept(BasicVisitor &visitor) override;
 private:
-
+  std::unique_ptr<Expression> _const_expr;
 };
 
 class ConstantItem : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -288,6 +311,7 @@ private:
 class Trait : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -295,6 +319,7 @@ private:
 class AssociatedItem : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -302,6 +327,7 @@ private:
 class Implementation : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -309,6 +335,7 @@ private:
 class InherentImpl : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -316,6 +343,7 @@ private:
 class TraitImpl : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -323,6 +351,7 @@ private:
 class TypePath : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -330,6 +359,7 @@ private:
 class TypePathSegment : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -337,6 +367,7 @@ private:
 class PathIdentSegment : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -344,6 +375,7 @@ private:
 class Expression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -351,6 +383,7 @@ private:
 class ExpressionWithoutBlock : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -358,6 +391,7 @@ private:
 class LiteralExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -365,6 +399,7 @@ private:
 class PathExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -372,6 +407,7 @@ private:
 class PathInExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -379,6 +415,7 @@ private:
 class PathExprSegment : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -386,6 +423,7 @@ private:
 class OperatorExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -393,6 +431,7 @@ private:
 class BorrowExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -400,6 +439,7 @@ private:
 class DereferenceExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -407,6 +447,7 @@ private:
 class NegationExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -414,6 +455,7 @@ private:
 class ArithmeticOrLogicalExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -421,6 +463,7 @@ private:
 class ComparisonExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -428,6 +471,7 @@ private:
 class LazyBooleanExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -435,6 +479,7 @@ private:
 class TypeCastExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -442,6 +487,7 @@ private:
 class AssignmentExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -449,6 +495,7 @@ private:
 class CompoundAssignmentExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -456,6 +503,7 @@ private:
 class GroupedExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -463,6 +511,7 @@ private:
 class ArrayExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -470,6 +519,7 @@ private:
 class ArrayElements : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -477,6 +527,7 @@ private:
 class IndexExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -484,6 +535,7 @@ private:
 class TupleExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -491,6 +543,7 @@ private:
 class TupleElements : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -498,6 +551,7 @@ private:
 class TupleIndexingExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -505,6 +559,7 @@ private:
 class StructExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -512,6 +567,7 @@ private:
 class StructExprFields : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -519,6 +575,7 @@ private:
 class StructExprField : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -526,6 +583,7 @@ private:
 class StructBase : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -533,6 +591,7 @@ private:
 class CallExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -540,6 +599,7 @@ private:
 class CallParams : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -547,6 +607,7 @@ private:
 class MethodCallExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -554,6 +615,7 @@ private:
 class FieldExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -561,6 +623,7 @@ private:
 class ContinueExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -568,6 +631,7 @@ private:
 class BreakExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -575,6 +639,7 @@ private:
 class RangeExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -582,6 +647,7 @@ private:
 class RangeExpr : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -589,6 +655,7 @@ private:
 class RangFromExpr : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -596,6 +663,7 @@ private:
 class RangeToExpr : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -603,6 +671,7 @@ private:
 class RangeFullExpr : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -610,6 +679,7 @@ private:
 class RangeInclusiveExpr : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -617,6 +687,7 @@ private:
 class RangeToInclusiveExpr : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -624,6 +695,7 @@ private:
 class ReturnExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -631,6 +703,7 @@ private:
 class UnderscoreExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -638,6 +711,7 @@ private:
 class ExpressionWithBlock : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -645,6 +719,7 @@ private:
 class BlockExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -652,6 +727,7 @@ private:
 class Statements : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -659,6 +735,7 @@ private:
 class Statement : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -666,6 +743,7 @@ private:
 class LetStatement : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -673,6 +751,7 @@ private:
 class ExpressionStatement : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -680,6 +759,7 @@ private:
 class LoopExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -687,6 +767,7 @@ private:
 class InfiniteLoopExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -694,6 +775,7 @@ private:
 class PredicateLoopExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -701,6 +783,7 @@ private:
 class IfExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -708,6 +791,7 @@ private:
 class Conditions : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -715,6 +799,7 @@ private:
 class MatchExpression : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -722,6 +807,7 @@ private:
 class MatchArms : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -729,6 +815,7 @@ private:
 class MatchArm : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -736,6 +823,7 @@ private:
 class MatchArmGuard : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -743,6 +831,7 @@ private:
 class Pattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -750,6 +839,7 @@ private:
 class PatternNoTopAlt : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -757,6 +847,7 @@ private:
 class PatternWithoutRange : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -764,6 +855,7 @@ private:
 class LiteralPattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -771,6 +863,7 @@ private:
 class IdentifierPattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -778,6 +871,7 @@ private:
 class WildcardPattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -785,6 +879,7 @@ private:
 class RestPattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -792,6 +887,7 @@ private:
 class ReferencePattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -799,6 +895,7 @@ private:
 class StructPattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -806,6 +903,7 @@ private:
 class StructPatternElements : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -813,6 +911,7 @@ private:
 class StructPatternEtCetera : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -820,6 +919,7 @@ private:
 class StructPatternFields : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -827,6 +927,7 @@ private:
 class StructPatternField : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -834,6 +935,7 @@ private:
 class TuplePattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -841,6 +943,7 @@ private:
 class TuplePatternItems : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -848,6 +951,7 @@ private:
 class GroupedPattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -855,6 +959,7 @@ private:
 class SlicePattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -862,6 +967,7 @@ private:
 class SlicePatternItems : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
@@ -869,6 +975,7 @@ private:
 class PathPattern : public BasicNode {
 public:
 
+  void accept(BasicVisitor &visitor) override;
 private:
 
 };
