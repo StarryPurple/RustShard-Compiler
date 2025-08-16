@@ -225,7 +225,7 @@ BorrowExpression ->
     ('&' | "&&") "mut"? Expression
     
 DereferenceExpression ->
-    '*' DereferenceExpression
+    '*' Expression
 
 NegationExpression ->
     ('-' | '!') Expression
@@ -268,19 +268,19 @@ TupleElements ->
     (Expression ',')+ Expression?
     
 TupleIndexingExpression ->
-    Expression '.' INTEGER_LITERAL
+    Expression '.' TUPLE_INDEX
     
 StructExpression ->
-    PathInExpression '{' (StructExprFields | StructBase)? '}'
+    PathInExpression '{' (StructExprFields | #StructBase#)? '}'
 
 StructExprFields ->
-    StructExprField (',' StructExprField)* (',' StructBase | ','?)
+    StructExprField (',' StructExprField)* ','? #(',' StructBase | ','?)#
 
 StructExprfield ->
-    IDENTIFIER | (IDENTIFIER | INTEGER_LITERAL) ':' Expression
+    IDENTIFIER | (IDENTIFIER | TUPLE_INDEX) ':' Expression
 
-StructBase ->
-    ".." Expression
+# StructBase ->
+#    ".." Expression
     
 CallExpression ->
     Expression '( CallParams? ')'
@@ -346,6 +346,7 @@ BlockExpression -> '{' Statements? '}'
 #      Statement+
 #    | ExpressionWithoutBlock
 #    | Statement+ ExpressionWithoutBlock
+
 Statements ->
     Statement* ExpressionWithoutBlock?
    
@@ -449,7 +450,7 @@ StructPatternFields ->
     StructPatternField (',' StructPatternField)*
 
 StructPatternField ->
-      INTEGER_LITERAL ':' Pattern
+      TUPLE_INDEX ':' Pattern
     | IDENTIFIER ':' Pattern
     | "ref"? "mut"? IDENTIFIER
 

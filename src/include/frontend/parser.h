@@ -24,6 +24,7 @@ class Parser {
   std::unique_ptr<Enumeration> parse_enumeration();
   std::unique_ptr<ConstantItem> parse_constant_item();
   std::unique_ptr<Trait> parse_trait();
+  std::unique_ptr<TypeAlias> parse_type_alias();
   std::unique_ptr<Implementation> parse_implementation();
   std::unique_ptr<FunctionParameters> parse_function_parameters();
   std::unique_ptr<FunctionParam> parse_function_param();
@@ -74,7 +75,6 @@ class Parser {
   std::unique_ptr<StructExpression> parse_struct_expression();
   std::unique_ptr<StructExprFields> parse_struct_expr_fields();
   std::unique_ptr<StructExprField> parse_struct_expr_field();
-  std::unique_ptr<StructBase> parse_struct_base();
   std::unique_ptr<CallExpression> parse_call_expression();
   std::unique_ptr<CallParams> parse_call_params();
   std::unique_ptr<MethodCallExpression> parse_method_call_expression();
@@ -83,7 +83,7 @@ class Parser {
   std::unique_ptr<BreakExpression> parse_break_expression();
   std::unique_ptr<RangeExpression> parse_range_expression();
   std::unique_ptr<RangeExpr> parse_range_expr();
-  std::unique_ptr<RangFromExpr> parse_rang_from_expr();
+  std::unique_ptr<RangeFromExpr> parse_rang_from_expr();
   std::unique_ptr<RangeToExpr> parse_range_to_expr();
   std::unique_ptr<RangeFullExpr> parse_range_full_expr();
   std::unique_ptr<RangeInclusiveExpr> parse_range_inclusive_expr();

@@ -67,7 +67,6 @@ public:
   virtual void pre_visit(StructExpression &node) {}
   virtual void pre_visit(StructExprFields &node) {}
   virtual void pre_visit(StructExprField &node) {}
-  virtual void pre_visit(StructBase &node) {}
   virtual void pre_visit(CallExpression &node) {}
   virtual void pre_visit(CallParams &node) {}
   virtual void pre_visit(MethodCallExpression &node) {}
@@ -76,7 +75,7 @@ public:
   virtual void pre_visit(BreakExpression &node) {}
   virtual void pre_visit(RangeExpression &node) {}
   virtual void pre_visit(RangeExpr &node) {}
-  virtual void pre_visit(RangFromExpr &node) {}
+  virtual void pre_visit(RangeFromExpr &node) {}
   virtual void pre_visit(RangeToExpr &node) {}
   virtual void pre_visit(RangeFullExpr &node) {}
   virtual void pre_visit(RangeInclusiveExpr &node) {}
@@ -176,7 +175,6 @@ public:
   virtual void post_visit(StructExpression &node) {}
   virtual void post_visit(StructExprFields &node) {}
   virtual void post_visit(StructExprField &node) {}
-  virtual void post_visit(StructBase &node) {}
   virtual void post_visit(CallExpression &node) {}
   virtual void post_visit(CallParams &node) {}
   virtual void post_visit(MethodCallExpression &node) {}
@@ -185,7 +183,7 @@ public:
   virtual void post_visit(BreakExpression &node) {}
   virtual void post_visit(RangeExpression &node) {}
   virtual void post_visit(RangeExpr &node) {}
-  virtual void post_visit(RangFromExpr &node) {}
+  virtual void post_visit(RangeFromExpr &node) {}
   virtual void post_visit(RangeToExpr &node) {}
   virtual void post_visit(RangeFullExpr &node) {}
   virtual void post_visit(RangeInclusiveExpr &node) {}

@@ -211,384 +211,513 @@ void PathIdentSegment::accept(BasicVisitor &visitor) {
 
 void Expression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void ExpressionWithoutBlock::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void LiteralExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  // Intended blank
   visitor.post_visit(*this);
 }
 
 void PathExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _path->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void PathInExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto segment: _segments) segment->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void PathExprSegment::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _ident->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void OperatorExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void BorrowExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void DereferenceExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void NegationExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void ArithmeticOrLogicalExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr1->accept(visitor);
+  _expr2->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void ComparisonExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr1->accept(visitor);
+  _expr2->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void LazyBooleanExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr1->accept(visitor);
+  _expr2->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void TypeCastExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
+  _type_no_bounds->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void AssignmentExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr1->accept(visitor);
+  _expr2->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void CompoundAssignmentExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr1->accept(visitor);
+  _expr2->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void GroupedExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void ArrayExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_elements_opt) _elements_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void ArrayElements::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_arr_type == ArrType::EXPLICIT) {
+    for(auto &expr: _expr_list) expr->accept(visitor);
+  } else if(_arr_type == ArrType::IMPLICIT) {
+    if(_rep_expr_opt) _rep_expr_opt->accept(visitor);
+    if(_const_expr_opt) _const_expr_opt->accept(visitor);
+  } else {
+    // should not reach here
+  }
   visitor.post_visit(*this);
 }
 
 void IndexExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr1->accept(visitor);
+  _expr_index->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void TupleExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_elems_opt) _elems_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void TupleElements::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &expr: _expr_list) expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void TupleIndexingExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void StructExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _path->accept(visitor);
+  if(_fields_opt) _fields_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void StructExprFields::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &field: _fields) field->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void StructExprField::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  visitor.post_visit(*this);
-}
-
-void StructBase::accept(BasicVisitor &visitor) {
-  visitor.pre_visit(*this);
+  if(_type == StructType::ID_ONLY) {
+    // Intended blank
+  } else if(_type == StructType::ID_EXPR) {
+    _expr_opt->accept(visitor);
+  } else if(_type == StructType::IDX_EXPR) {
+    _expr_opt->accept(visitor);
+  }
   visitor.post_visit(*this);
 }
 
 void CallExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
+  if(_params_opt) _params_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void CallParams::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &expr: _expr_list) expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void MethodCallExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
+  _segment->accept(visitor);
+  if(_params_opt) _params_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void FieldExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void ContinueExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  // Intended blank
   visitor.post_visit(*this);
 }
 
 void BreakExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_expr_opt) _expr_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void RangeExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void RangeExpr::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr1->accept(visitor);
+  _expr2->accept(visitor);
   visitor.post_visit(*this);
 }
 
-void RangFromExpr::accept(BasicVisitor &visitor) {
+void RangeFromExpr::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void RangeToExpr::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void RangeFullExpr::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  // Intended blank
   visitor.post_visit(*this);
 }
 
 void RangeInclusiveExpr::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr1->accept(visitor);
+  _expr2->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void RangeToInclusiveExpr::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void ReturnExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_expr_opt) _expr_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void UnderscoreExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  // Intended blank
   visitor.post_visit(*this);
 }
 
 void ExpressionWithBlock::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &expr){ expr->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void BlockExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_stmts_opt) _stmts_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void Statements::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &stmt: _stmts) stmt->accept(visitor);
+  if(_expr_no_block_opt) _expr_no_block_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void Statement::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&]<typename Spec>(Spec &spec) {
+    if constexpr(!std::is_same_v<Spec, std::monostate>) {
+      spec->accept(visitor);
+    }
+  }, _spec);
   visitor.post_visit(*this);
 }
 
 void LetStatement::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _pattern->accept(visitor);
+  if(_type_opt) _type_opt->accept(visitor);
+  if(_expr_opt) _expr_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void ExpressionStatement::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void LoopExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void InfiniteLoopExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _block_expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void PredicateLoopExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _cond->accept(visitor);
+  _block_expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void IfExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _cond->accept(visitor);
+  _block_expr->accept(visitor);
+  std::visit([&]<typename ElseSpec>(ElseSpec &else_spec) {
+    if constexpr(!std::is_same_v<ElseSpec, std::monostate>) {
+      else_spec->accept(visitor);
+    }
+  }, _else_spec);
   visitor.post_visit(*this);
 }
 
 void Conditions::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void MatchExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
+  if(_match_arms_opt) _match_arms_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void MatchArms::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &arm: _arms) {
+    arm.first->accept(visitor);
+    arm.second->accept(visitor);
+  }
   visitor.post_visit(*this);
 }
 
 void MatchArm::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _pattern->accept(visitor);
+  if(_guard_opt) _guard_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void MatchArmGuard::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void Pattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &pattern: _pattern_list) pattern->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void PatternNoTopAlt::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _pattern->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void PatternWithoutRange::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
   visitor.post_visit(*this);
 }
 
 void LiteralPattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _expr->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void IdentifierPattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_pattern_opt) _pattern_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void WildcardPattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  // Intended blank
   visitor.post_visit(*this);
 }
 
 void RestPattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  // Intended blank
   visitor.post_visit(*this);
 }
 
 void ReferencePattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _pattern->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void StructPattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _path_in_expr->accept(visitor);
+  if(_elems_opt) _elems_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void StructPatternElements::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_type == Type::NORMAL) {
+    _fields->accept(visitor);
+    if(_etc_opt) _etc_opt->accept(visitor);
+  } else {
+    _etc_opt->accept(visitor); // should exist
+  }
   visitor.post_visit(*this);
 }
 
 void StructPatternEtCetera::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  // Intended blank
   visitor.post_visit(*this);
 }
 
 void StructPatternFields::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &field: _fields) field->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void StructPatternField::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_type == Type::INTEGER) {
+    _pattern_opt->accept(visitor);
+  } else if(_type == Type::IDENTIFIER) {
+    _pattern_opt->accept(visitor);
+  } else if(_type == Type::RESTRICTION) {
+    // Intended blank
+  }
   visitor.post_visit(*this);
 }
 
 void TuplePattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_items_opt) _items_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void TuplePatternItems::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_type == Type::PATTERNS) {
+    for(auto &pattern: _patterns) pattern->accept(visitor);
+  } else if(_type == Type::REST) {
+    // Intended blank
+  }
   visitor.post_visit(*this);
 }
 
 void GroupedPattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _pattern->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void SlicePattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  if(_items_opt) _items_opt->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void SlicePatternItems::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  for(auto &pattern: _patterns) pattern->accept(visitor);
   visitor.post_visit(*this);
 }
 
 void PathPattern::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
+  _path_expr->accept(visitor);
   visitor.post_visit(*this);
 }
-
-
 
 }
