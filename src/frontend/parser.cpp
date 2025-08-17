@@ -1,4 +1,4 @@
-#include "frontend/parser.h"
+#include "parser.h"
 
 namespace insomnia::ast {
 

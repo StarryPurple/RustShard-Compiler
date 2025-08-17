@@ -1,4 +1,4 @@
-#include "frontend/lexer.h"
+#include "lexer.h"
 #include <fstream>
 #include <sstream>
 #include <iostream>

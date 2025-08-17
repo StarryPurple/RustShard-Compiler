@@ -3,26 +3,33 @@ project(RustShardCompiler)
 
 set(CMAKE_CXX_STANDARD 20)
 
-include_directories(src/include)
-
 # end to end
+add_executable(main)
 
-file(GLOB SOURCE_FILES
-    "main.cpp"
-    "src/*.cpp" # in case
-    "src/*/*.cpp"
+target_sources(main
+    PRIVATE
+    main.cpp
+    src/frontend/ast.cpp
+    src/frontend/ast_type.cpp
+    src/frontend/lexer.cpp
+    src/frontend/parser.cpp
 )
-message(STATUS "Source files found: ${SOURCE_FILES}")
-add_executable(code ${SOURCE_FILES})
+target_include_directories(main
+    PRIVATE
+    src/include/common
+    src/include/frontend
+)
+
 
 # gtest
 find_package(GTest REQUIRED)
 
-add_library(lexer src/include/frontend/lexer.h src/frontend/lexer.cpp)
+add_library(lexer src/frontend/lexer.cpp)
+target_include_directories(lexer PUBLIC src/include/frontend)
 add_executable(lexer_gtest test/lexer/lexer_gtest.cpp)
-set_target_properties(lexer_gtest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/lexer")
 target_link_libraries(lexer_gtest PRIVATE GTest::gtest_main GTest::gtest)
 target_link_libraries(lexer_gtest PRIVATE lexer)
+set_target_properties(lexer_gtest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/lexer")
 
 # ctest
 enable_testing()

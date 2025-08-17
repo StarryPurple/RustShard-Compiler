@@ -1,4 +1,4 @@
-#include "frontend/ast.h"
+#include "ast.h"
 
 namespace insomnia::ast {
 
@@ -235,7 +235,7 @@ void PathExpression::accept(BasicVisitor &visitor) {
 
 void PathInExpression::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  for(auto segment: _segments) segment->accept(visitor);
+  for(auto &segment: _segments) segment->accept(visitor);
   visitor.post_visit(*this);
 }
 
@@ -325,9 +325,9 @@ void ArrayExpression::accept(BasicVisitor &visitor) {
 
 void ArrayElements::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  if(_arr_type == ArrType::EXPLICIT) {
+  if(_spec_type == SpecType::EXPLICIT) {
     for(auto &expr: _expr_list) expr->accept(visitor);
-  } else if(_arr_type == ArrType::IMPLICIT) {
+  } else if(_spec_type == SpecType::IMPLICIT) {
     if(_rep_expr_opt) _rep_expr_opt->accept(visitor);
     if(_const_expr_opt) _const_expr_opt->accept(visitor);
   } else {
@@ -376,11 +376,11 @@ void StructExprFields::accept(BasicVisitor &visitor) {
 
 void StructExprField::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  if(_type == StructType::ID_ONLY) {
+  if(_spec_type == SpecType::ID_ONLY) {
     // Intended blank
-  } else if(_type == StructType::ID_EXPR) {
+  } else if(_spec_type == SpecType::ID_EXPR) {
     _expr_opt->accept(visitor);
-  } else if(_type == StructType::IDX_EXPR) {
+  } else if(_spec_type == SpecType::IDX_EXPR) {
     _expr_opt->accept(visitor);
   }
   visitor.post_visit(*this);
@@ -670,11 +670,11 @@ void StructPatternFields::accept(BasicVisitor &visitor) {
 
 void StructPatternField::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  if(_type == Type::INTEGER) {
+  if(_spec_type == SpecType::INTEGER) {
     _pattern_opt->accept(visitor);
-  } else if(_type == Type::IDENTIFIER) {
+  } else if(_spec_type == SpecType::IDENTIFIER) {
     _pattern_opt->accept(visitor);
-  } else if(_type == Type::RESTRICTION) {
+  } else if(_spec_type == SpecType::RESTRICTION) {
     // Intended blank
   }
   visitor.post_visit(*this);
@@ -688,9 +688,9 @@ void TuplePattern::accept(BasicVisitor &visitor) {
 
 void TuplePatternItems::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
-  if(_type == Type::PATTERNS) {
+  if(_spec_type == SpecType::PATTERNS) {
     for(auto &pattern: _patterns) pattern->accept(visitor);
-  } else if(_type == Type::REST) {
+  } else if(_spec_type == SpecType::REST) {
     // Intended blank
   }
   visitor.post_visit(*this);

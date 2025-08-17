@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "frontend/lexer.h"
+#include "lexer.h"
 
 namespace ism = insomnia;
 using TKT = ism::TokenType;

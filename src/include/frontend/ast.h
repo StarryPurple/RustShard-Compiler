@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "ast_fwd.h"
+#include "ast_type.h"
 #include "ast_visitor.h"
 
 namespace insomnia::ast {
@@ -426,6 +427,9 @@ public:
   template <class Spec>
   explicit Expression(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override;
+  std::shared_ptr<ExprType> get_type() const { return _expr_type; }
+protected:
+  std::shared_ptr<ExprType> _expr_type;
 private:
   std::variant<
     std::unique_ptr<ExpressionWithoutBlock>,
@@ -664,21 +668,21 @@ private:
 };
 
 class ArrayElements : public BasicNode {
-  enum class ArrType {
+  enum class SpecType {
     EXPLICIT, IMPLICIT
   };
 public:
   explicit ArrayElements(
     std::vector<std::unique_ptr<Expression>> &&expr_list
-  ): _arr_type(ArrType::EXPLICIT),  _expr_list(std::move(expr_list)) {}
+  ): _spec_type(SpecType::EXPLICIT),  _expr_list(std::move(expr_list)) {}
   ArrayElements(
     std::unique_ptr<Expression> &&rep_expr_opt,
     std::unique_ptr<Expression> &&const_expr_opt
-  ): _arr_type(ArrType::IMPLICIT), _rep_expr_opt(std::move(rep_expr_opt)),
+  ): _spec_type(SpecType::IMPLICIT), _rep_expr_opt(std::move(rep_expr_opt)),
   _const_expr_opt(std::move(const_expr_opt)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  ArrType _arr_type;
+  SpecType _spec_type;
   std::vector<std::unique_ptr<Expression>> _expr_list;
   std::unique_ptr<Expression> _rep_expr_opt, _const_expr_opt;
 };
@@ -750,24 +754,24 @@ private:
 };
 
 class StructExprField : public BasicNode {
-  enum class StructType {
+  enum class SpecType {
     ID_ONLY, ID_EXPR, IDX_EXPR
   };
 public:
   explicit StructExprField(
     std::string_view ident
-  ): _type(StructType::ID_ONLY), _ident_opt(ident) {}
+  ): _spec_type(SpecType::ID_ONLY), _ident_opt(ident) {}
   StructExprField(
     std::string_view ident,
     std::unique_ptr<Expression> &&expr
-  ): _type(StructType::ID_EXPR), _ident_opt(ident), _expr_opt(std::move(expr)) {}
+  ): _spec_type(SpecType::ID_EXPR), _ident_opt(ident), _expr_opt(std::move(expr)) {}
   StructExprField(
     std::uintptr_t index,
     std::unique_ptr<Expression> &&expr
-  ): _type(StructType::IDX_EXPR), _index_opt(index), _expr_opt(std::move(expr)) {}
+  ): _spec_type(SpecType::IDX_EXPR), _index_opt(index), _expr_opt(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  StructType _type;
+  SpecType _spec_type;
   std::string_view _ident_opt;
   std::uintptr_t _index_opt{};
   std::unique_ptr<Expression> _expr_opt;
@@ -1264,29 +1268,29 @@ private:
 };
 
 class StructPatternField : public BasicNode {
-  enum class Type {
+  enum class SpecType {
     INTEGER, IDENTIFIER, RESTRICTION
   };
 public:
   StructPatternField(
     std::uintptr_t index,
     std::unique_ptr<Pattern> &&pattern
-  ): _type(Type::INTEGER),
+  ): _spec_type(SpecType::INTEGER),
   _index(index), _pattern_opt(std::move(pattern)) {}
   StructPatternField(
     std::string_view ident,
     std::unique_ptr<Pattern> &&pattern
-  ): _type(Type::IDENTIFIER),
+  ): _spec_type(SpecType::IDENTIFIER),
   _ident(ident), _pattern_opt(std::move(pattern)) {}
   StructPatternField(
     bool is_ref,
     bool is_mut,
     std::string_view ident
-  ): _type(Type::RESTRICTION),
+  ): _spec_type(SpecType::RESTRICTION),
   _is_ref(is_ref), _is_mut(is_mut), _ident(ident) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  Type _type;
+  SpecType _spec_type;
   std::uintptr_t _index;
   std::string_view _ident;
   bool _is_ref, _is_mut;
@@ -1304,19 +1308,19 @@ private:
 };
 
 class TuplePatternItems : public BasicNode {
-  enum class Type {
+  enum class SpecType {
     PATTERNS, REST
   };
 public:
   explicit TuplePatternItems(
     std::vector<std::unique_ptr<Pattern>> &&patterns
-  ): _type(Type::PATTERNS), _patterns(std::move(patterns)) {}
+  ): _spec_type(SpecType::PATTERNS), _patterns(std::move(patterns)) {}
   explicit TuplePatternItems(
     std::unique_ptr<RestPattern> &&rest
-  ): _type(Type::REST), _rest_opt(std::move(rest)) {}
+  ): _spec_type(SpecType::REST), _rest_opt(std::move(rest)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  Type _type;
+  SpecType _spec_type;
   std::vector<std::unique_ptr<Pattern>> _patterns;
   std::unique_ptr<RestPattern> _rest_opt;
 };
