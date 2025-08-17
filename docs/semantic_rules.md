@@ -11,7 +11,7 @@ The super grammar module is `Crate`.
 ```
 
 Crate -> 
-    Item
+    Item*
 
 Item -> 
     VisItem
@@ -27,13 +27,18 @@ VisItem ->
 Function ->
     "const"? "fn" IDENTIFIER #GenericParams?#
     '(' FunctionParameters? ')'
-    (-> Type)? #WhereClause?# (BlockExpression | ';')
+    ("->" Type)? #WhereClause?# (BlockExpression | ';')
     
 # GenericParams -> ...
 
+# Followed by a ')'
 FunctionParameters ->
       SelfParam ','? 
     | (SelfParam ',')? FunctionParam (',' FunctionParam)* ','?
+
+# Actually you can use this:
+# SelfParam? (',' FunctionParam)* ','?
+# And there must be something
     
 # No unsafe "..."
 FunctionParam ->

@@ -10,7 +10,7 @@ class Parser {
   class Context; // Token flow
   class Backtracker;
   std::unique_ptr<Context> _ast_ctx;
-  bool _is_good;
+  bool _is_good = false;
 
   std::unique_ptr<Crate> _crate;
 
@@ -20,12 +20,6 @@ class Parser {
   std::unique_ptr<Item> parse_item();
   std::unique_ptr<VisItem> parse_vis_item();
   std::unique_ptr<Function> parse_function();
-  std::unique_ptr<Struct> parse_struct();
-  std::unique_ptr<Enumeration> parse_enumeration();
-  std::unique_ptr<ConstantItem> parse_constant_item();
-  std::unique_ptr<Trait> parse_trait();
-  std::unique_ptr<TypeAlias> parse_type_alias();
-  std::unique_ptr<Implementation> parse_implementation();
   std::unique_ptr<FunctionParameters> parse_function_parameters();
   std::unique_ptr<FunctionParam> parse_function_param();
   std::unique_ptr<FunctionParamPattern> parse_function_param_pattern();
@@ -37,13 +31,19 @@ class Parser {
   std::unique_ptr<ReferenceType> parse_reference_type();
   std::unique_ptr<ArrayType> parse_array_type();
   std::unique_ptr<SliceType> parse_slice_type();
+  std::unique_ptr<Struct> parse_struct();
   std::unique_ptr<StructStruct> parse_struct_struct();
   std::unique_ptr<StructFields> parse_struct_fields();
   std::unique_ptr<StructField> parse_struct_field();
+  std::unique_ptr<Enumeration> parse_enumeration();
   std::unique_ptr<EnumItems> parse_enum_items();
   std::unique_ptr<EnumItem> parse_enum_item();
   std::unique_ptr<EnumItemDiscriminant> parse_enum_item_discriminant();
+  std::unique_ptr<ConstantItem> parse_constant_item();
+  std::unique_ptr<Trait> parse_trait();
   std::unique_ptr<AssociatedItem> parse_associated_item();
+  std::unique_ptr<TypeAlias> parse_type_alias();
+  std::unique_ptr<Implementation> parse_implementation();
   std::unique_ptr<InherentImpl> parse_inherent_impl();
   std::unique_ptr<TraitImpl> parse_trait_impl();
   std::unique_ptr<TypePath> parse_type_path();
@@ -83,7 +83,7 @@ class Parser {
   std::unique_ptr<BreakExpression> parse_break_expression();
   std::unique_ptr<RangeExpression> parse_range_expression();
   std::unique_ptr<RangeExpr> parse_range_expr();
-  std::unique_ptr<RangeFromExpr> parse_rang_from_expr();
+  std::unique_ptr<RangeFromExpr> parse_range_from_expr();
   std::unique_ptr<RangeToExpr> parse_range_to_expr();
   std::unique_ptr<RangeFullExpr> parse_range_full_expr();
   std::unique_ptr<RangeInclusiveExpr> parse_range_inclusive_expr();
@@ -112,7 +112,7 @@ class Parser {
   std::unique_ptr<IdentifierPattern> parse_identifier_pattern();
   std::unique_ptr<WildcardPattern> parse_wildcard_pattern();
   std::unique_ptr<RestPattern> parse_rest_pattern();
-  std::unique_ptr<ReferencePattern> parse_reference_patter();
+  std::unique_ptr<ReferencePattern> parse_reference_pattern();
   std::unique_ptr<StructPattern> parse_struct_pattern();
   std::unique_ptr<StructPatternElements> parse_struct_pattern_elements();
   std::unique_ptr<StructPatternEtCetera> parse_struct_pattern_et_cetera();

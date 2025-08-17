@@ -70,16 +70,16 @@ class Function : public BasicNode {
 public:
   Function(
     bool is_const,
-    std::string_view fn_name,
-    std::unique_ptr<FunctionParameters> &&params,
-    std::unique_ptr<Type> &&res_type,
-    std::unique_ptr<BlockExpression> &&block_expr
-  ): _is_const(is_const), _fn_name(fn_name), _params_opt(std::move(params)),
-  _res_type_opt(std::move(res_type)), _block_expr_opt(std::move(block_expr)) {}
+    std::string_view ident,
+    std::unique_ptr<FunctionParameters> &&params_opt,
+    std::unique_ptr<Type> &&res_type_opt,
+    std::unique_ptr<BlockExpression> &&block_expr_opt
+  ): _is_const(is_const), _ident(ident), _params_opt(std::move(params_opt)),
+  _res_type_opt(std::move(res_type_opt)), _block_expr_opt(std::move(block_expr_opt)) {}
   void accept(BasicVisitor &visitor) override;
 private:
   bool _is_const;
-  std::string_view _fn_name;
+  std::string_view _ident;
   std::unique_ptr<FunctionParameters> _params_opt;
   std::unique_ptr<Type> _res_type_opt;
   std::unique_ptr<BlockExpression> _block_expr_opt;

@@ -61,9 +61,9 @@ enum class TokenType : uint32_t {
 std::string_view token_type_to_string(TokenType type);
 
 struct Token {
-  TokenType token_type;
+  TokenType token_type = TokenType::INVALID;
   std::string_view lexeme;
-  std::size_t row, col;
+  std::size_t row = -1, col = -1;
   Token() = default;
   Token(TokenType _token_type, std::string_view _lexeme, std::size_t _row, std::size_t _col)
     : token_type(_token_type), lexeme(_lexeme), row(_row), col(_col) {}
