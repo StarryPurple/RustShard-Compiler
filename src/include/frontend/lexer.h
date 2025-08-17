@@ -9,7 +9,7 @@
 #include <vector>
 #include <iostream>
 
-namespace insomnia {
+namespace insomnia::rust_shard {
 
 // token type mask
 enum class TokenTypeCat : uint32_t {

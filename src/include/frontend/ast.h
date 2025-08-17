@@ -27,7 +27,7 @@
 #include "ast_type.h"
 #include "ast_visitor.h"
 
-namespace insomnia::ast {
+namespace insomnia::rust_shard::ast {
 
 class BasicNode {
 public:
@@ -427,9 +427,9 @@ public:
   template <class Spec>
   explicit Expression(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override;
-  std::shared_ptr<ExprType> get_type() const { return _expr_type; }
+  std::shared_ptr<insomnia::rust_shard::type::ExprType> get_type() const { return _expr_type; }
 protected:
-  std::shared_ptr<ExprType> _expr_type;
+  std::shared_ptr<insomnia::rust_shard::type::ExprType> _expr_type;
 private:
   std::variant<
     std::unique_ptr<ExpressionWithoutBlock>,

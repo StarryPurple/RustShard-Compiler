@@ -1,7 +1,7 @@
 #ifndef INSOMNIA_AST_FWD_H
 #define INSOMNIA_AST_FWD_H
 
-namespace insomnia::ast {
+namespace insomnia::rust_shard::ast {
 
 class BasicVisitor;
 

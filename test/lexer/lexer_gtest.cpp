@@ -1,11 +1,11 @@
 #include "gtest/gtest.h"
 #include "lexer.h"
 
-namespace ism = insomnia;
-using TKT = ism::TokenType;
+namespace rs = insomnia::rust_shard;
+using TKT = rs::TokenType;
 
 std::vector<std::pair<TKT, std::string>> get_token_pairs(const std::string &source_code) {
-  ism::Lexer lexer(source_code);
+  rs::Lexer lexer(source_code);
   EXPECT_TRUE(lexer.is_good()) << lexer.error_msg();
   std::vector<std::pair<TKT, std::string>> res;
   for(auto &token: lexer.tokens()) {
@@ -19,13 +19,13 @@ std::vector<std::pair<TKT, std::string>> get_token_pairs(const std::string &sour
 #define TEST_LEXER_SUCCESS(test_name, source_code, expected_tokens) \
   TEST(LexerTest, test_name) { \
     auto tokens = get_token_pairs(source_code); \
-    auto expected = std::vector<std::pair<ism::TokenType, std::string>> expected_tokens; \
+    auto expected = std::vector<std::pair<TKT, std::string>> expected_tokens; \
     ASSERT_EQ(tokens, expected); \
   }
 
 #define TEST_LEXER_FAILURE(test_name, source_code) \
   TEST(LexerTest, test_name) { \
-    ism::Lexer lexer(source_code); \
+    rs::Lexer lexer(source_code); \
     ASSERT_FALSE(lexer.is_good()); \
   }
 

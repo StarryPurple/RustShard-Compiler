@@ -1,6 +1,6 @@
 #include "ast.h"
 
-namespace insomnia::ast {
+namespace insomnia::rust_shard::ast {
 
 void Crate::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);

@@ -3,7 +3,7 @@
 
 #include "ast_fwd.h"
 
-namespace insomnia::ast {
+namespace insomnia::rust_shard::ast {
 
 class BasicVisitor {
 public:

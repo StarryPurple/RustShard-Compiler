@@ -3,7 +3,7 @@
 #include "ast.h"
 #include "lexer.h"
 
-namespace insomnia::ast {
+namespace insomnia::rust_shard::ast {
 
 
 class Parser {

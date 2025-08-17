@@ -1,6 +1,6 @@
 #include "parser.h"
 
-namespace insomnia::ast {
+namespace insomnia::rust_shard::ast {
 
 class Parser::Context {
   friend Backtracker;

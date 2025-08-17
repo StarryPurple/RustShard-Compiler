@@ -15,7 +15,7 @@ int main() {
   std::string path = "../test/semantic-1/basic18/basic18.rx";
   std::string source_code = read_file(path);
   source_code = "let num = 1.2.3.foo;";
-  insomnia::Lexer lexer(source_code);
+  insomnia::rust_shard::Lexer lexer(source_code);
   if(!lexer) {
     std::cout << lexer.error_msg() << std::endl;
     return 0;

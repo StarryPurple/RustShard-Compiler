@@ -2,7 +2,7 @@
 #include <regex>
 #include <unordered_map>
 
-namespace insomnia {
+namespace insomnia::rust_shard {
 
 bool is_whitespace(char ch) { return ch == '\t' || ch == '\n' || ch == '\r' || ch == ' '; }
 bool is_alpha(char ch) { return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z'); }
