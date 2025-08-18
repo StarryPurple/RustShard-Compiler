@@ -161,7 +161,7 @@ TypePathSegment ->
 
 # Not every possibility can be used    
 PathIdentSegment ->
-    IDENTIFIER | "super" | "self" | "Self" | "crate" | "$crate"
+    IDENTIFIER | "super" | "self" | "Self" | "crate" #| "$crate"#
 
 # TypePathFn ->
 #     '(' TypePathFnInputs? ')' ("->" TypeNoBounds)?

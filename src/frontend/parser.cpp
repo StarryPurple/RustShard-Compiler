@@ -442,116 +442,424 @@ std::unique_ptr<ArrayType> Parser::parse_array_type() {
 
 std::unique_ptr<SliceType> Parser::parse_slice_type() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::L_SQUARE_BRACKET) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  auto t = parse_type();
+  if(!t) {
+    return nullptr;
+  }
+  if(_ast_ctx->current().token_type != TokenType::R_SQUARE_BRACKET) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<SliceType>(std::move(t));
 }
 
 std::unique_ptr<Struct> Parser::parse_struct() {
   Backtracker tracker(*_ast_ctx);
+  auto ss = parse_struct_struct();
+  if(!ss) {
+    return nullptr;
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<Struct>(std::move(ss));
 }
 
 std::unique_ptr<StructStruct> Parser::parse_struct_struct() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::STRUCT) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  std::string_view ident;
+  if(_ast_ctx->current().token_type != TokenType::IDENTIFIER) {
+    return nullptr;
+  }
+  ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+
+  if(_ast_ctx->current().token_type == TokenType::SEMI) {
+    tracker.commit();
+    return std::make_unique<StructStruct>(ident, std::unique_ptr<StructFields>());
+  }
+  if(_ast_ctx->current().token_type != TokenType::L_CURLY_BRACE) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  auto sf = parse_struct_fields();
+  if(!sf) {
+    return nullptr;
+  }
+  if(_ast_ctx->current().token_type != TokenType::R_CURLY_BRACE) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<StructStruct>(ident, std::move(sf));
 }
 
 std::unique_ptr<StructFields> Parser::parse_struct_fields() {
   Backtracker tracker(*_ast_ctx);
+  std::vector<std::unique_ptr<StructField>> fields;
+  if(auto sf = parse_struct_field(); !sf) {
+    return nullptr;
+  } else {
+    fields.push_back(std::move(sf));
+  }
+  while(_ast_ctx->current().token_type != TokenType::R_CURLY_BRACE) {
+    if(_ast_ctx->current().token_type != TokenType::SEMI) {
+      return nullptr;
+    }
+    _ast_ctx->consume();
+    if(_ast_ctx->current().token_type == TokenType::R_CURLY_BRACE) {
+      break;
+    }
+    auto sf = parse_struct_field();
+    if(!sf) {
+      return nullptr;
+    }
+    fields.push_back(std::move(sf));
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<StructFields>(std::move(fields));
 }
 
 std::unique_ptr<StructField> Parser::parse_struct_field() {
   Backtracker tracker(*_ast_ctx);
+  std::string_view ident;
+  if(_ast_ctx->current().token_type != TokenType::IDENTIFIER) {
+    return nullptr;
+  }
+  ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+  if(_ast_ctx->current().token_type != TokenType::COLON) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  auto t = parse_type();
+  if(!t) {
+    return nullptr;
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<StructField>(ident, std::move(t));
 }
 
 std::unique_ptr<Enumeration> Parser::parse_enumeration() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::ENUM) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  if(_ast_ctx->current().token_type != TokenType::IDENTIFIER) {
+    return nullptr;
+  }
+  std::string_view ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+  if(_ast_ctx->current().token_type != TokenType::L_CURLY_BRACE) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  std::unique_ptr<EnumItems> ei;
+  if(_ast_ctx->current().token_type != TokenType::R_CURLY_BRACE) {
+    ei = parse_enum_items();
+    if(!ei) {
+      return nullptr;
+    }
+  }
+  if(_ast_ctx->current().token_type != TokenType::R_CURLY_BRACE) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<Enumeration>(ident, std::move(ei));
 }
 
 std::unique_ptr<EnumItems> Parser::parse_enum_items() {
   Backtracker tracker(*_ast_ctx);
+  std::vector<std::unique_ptr<EnumItem>> items;
+  if(auto ei = parse_enum_item(); !ei) {
+    return nullptr;
+  } else {
+    items.push_back(std::move(ei));
+  }
+  while(_ast_ctx->current().token_type != TokenType::R_CURLY_BRACE) {
+    if(_ast_ctx->current().token_type != TokenType::SEMI) {
+      return nullptr;
+    }
+    _ast_ctx->consume();
+    if(_ast_ctx->current().token_type == TokenType::R_CURLY_BRACE) {
+      break;
+    }
+    auto ei = parse_enum_item();
+    if(!ei) {
+      return nullptr;
+    }
+    items.push_back(std::move(ei));
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<EnumItems>(std::move(items));
 }
 
 std::unique_ptr<EnumItem> Parser::parse_enum_item() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::IDENTIFIER) {
+    return nullptr;
+  }
+  auto ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+  auto dis = parse_enum_item_discriminant();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<EnumItem>(ident, std::move(dis));
 }
 
 std::unique_ptr<EnumItemDiscriminant> Parser::parse_enum_item_discriminant() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::EQ) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  auto e = parse_expression();
+  if(!e) {
+    return nullptr;
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<EnumItemDiscriminant>(std::move(e));
 }
 
 std::unique_ptr<ConstantItem> Parser::parse_constant_item() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::CONST) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  std::string_view ident;
+  if(_ast_ctx->current().token_type == TokenType::IDENTIFIER ||
+    _ast_ctx->current().token_type == TokenType::UNDERSCORE) {
+    ident = _ast_ctx->current().lexeme;
+  } else {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  if(_ast_ctx->current().token_type != TokenType::COLON) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  auto t = parse_type();
+  if(!t) {
+    return nullptr;
+  }
+  std::unique_ptr<Expression> e;
+  if(_ast_ctx->current().token_type == TokenType::EQ) {
+    _ast_ctx->consume();
+    e = parse_expression();
+    if(!e) {
+      return nullptr;
+    }
+  }
+  if(_ast_ctx->current().token_type != TokenType::SEMI) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<ConstantItem>(ident, std::move(t), std::move(e));
 }
 
 std::unique_ptr<Trait> Parser::parse_trait() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::TRAIT) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  if(_ast_ctx->current().token_type != TokenType::IDENTIFIER) {
+    return nullptr;
+  }
+  auto ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+  if(_ast_ctx->current().token_type != TokenType::L_CURLY_BRACE) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  std::vector<std::unique_ptr<AssociatedItem>> items;
+  while(_ast_ctx->current().token_type != TokenType::R_CURLY_BRACE) {
+    auto ai = parse_associated_item();
+    if(!ai) {
+      return nullptr;
+    }
+    items.push_back(std::move(ai));
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<Trait>(ident, std::move(items));
 }
 
 std::unique_ptr<AssociatedItem> Parser::parse_associated_item() {
   Backtracker tracker(*_ast_ctx);
-  tracker.commit();
+  if(auto t = parse_type_alias()) {
+    tracker.commit();
+    return std::make_unique<AssociatedItem>(std::move(t));
+  }
+  if(auto c = parse_constant_item()) {
+    tracker.commit();
+    return std::make_unique<AssociatedItem>(std::move(c));
+  }
+  if(auto f = parse_function()) {
+    tracker.commit();
+    return std::make_unique<AssociatedItem>(std::move(f));
+  }
   return nullptr;
 }
 
 std::unique_ptr<TypeAlias> Parser::parse_type_alias() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::TYPE) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  if(_ast_ctx->current().token_type != TokenType::IDENTIFIER) {
+    return nullptr;
+  }
+  auto ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+  std::unique_ptr<Type> t;
+  if(_ast_ctx->current().token_type == TokenType::EQ) {
+    _ast_ctx->consume();
+    t = parse_type();
+    if(!t) {
+      return nullptr;
+    }
+  }
+  if(_ast_ctx->current().token_type != TokenType::SEMI) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<TypeAlias>(ident, std::move(t));
 }
 
 std::unique_ptr<Implementation> Parser::parse_implementation() {
   Backtracker tracker(*_ast_ctx);
-  tracker.commit();
+  if(auto i = parse_inherent_impl()) {
+    tracker.commit();
+    return std::make_unique<Implementation>(std::move(i));
+  }
+  if(auto t = parse_trait_impl()) {
+    tracker.commit();
+    return std::make_unique<Implementation>(std::move(t));
+  }
   return nullptr;
 }
 
 std::unique_ptr<InherentImpl> Parser::parse_inherent_impl() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::IMPL) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  auto t = parse_type();
+  if(!t) {
+    return nullptr;
+  }
+  if(_ast_ctx->current().token_type != TokenType::L_CURLY_BRACE) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  std::vector<std::unique_ptr<AssociatedItem>> items;
+  while(_ast_ctx->current().token_type != TokenType::R_CURLY_BRACE) {
+    auto ai = parse_associated_item();
+    if(!ai) {
+      return nullptr;
+    }
+    items.push_back(std::move(ai));
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<InherentImpl>(std::move(t), std::move(items));
 }
 
 std::unique_ptr<TraitImpl> Parser::parse_trait_impl() {
   Backtracker tracker(*_ast_ctx);
+  if(_ast_ctx->current().token_type != TokenType::IMPL) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  auto tpp = parse_type_path();
+  if(!tpp) {
+    return nullptr;
+  }
+  if(_ast_ctx->current().token_type != TokenType::FOR) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  auto tp = parse_type();
+  if(!tp) {
+    return nullptr;
+  }
+  if(_ast_ctx->current().token_type != TokenType::L_CURLY_BRACE) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  std::vector<std::unique_ptr<AssociatedItem>> items;
+  while(_ast_ctx->current().token_type != TokenType::R_CURLY_BRACE) {
+    auto ai = parse_associated_item();
+    if(!ai) {
+      return nullptr;
+    }
+    items.push_back(std::move(ai));
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<TraitImpl>(std::move(tpp), std::move(tp), std::move(items));
 }
 
 std::unique_ptr<TypePath> Parser::parse_type_path() {
   Backtracker tracker(*_ast_ctx);
+  std::vector<std::unique_ptr<TypePathSegment>> ss;
+  if(auto s1 = parse_type_path_segment()) {
+    ss.push_back(std::move(s1));
+  } else {
+    return nullptr;
+  }
+  while(_ast_ctx->current().token_type == TokenType::PATH_SEP) {
+    auto s = parse_type_path_segment();
+    if(!s) {
+      return nullptr;
+    }
+    ss.push_back(std::move(s));
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<TypePath>(std::move(ss));
 }
 
 std::unique_ptr<TypePathSegment> Parser::parse_type_path_segment() {
   Backtracker tracker(*_ast_ctx);
+  auto p = parse_path_ident_segment();
+  if(!p) {
+    return nullptr;
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<TypePathSegment>(std::move(p));
 }
 
 std::unique_ptr<PathIdentSegment> Parser::parse_path_ident_segment() {
   Backtracker tracker(*_ast_ctx);
+  std::string_view ident;
+  switch(_ast_ctx->current().token_type) {
+  case TokenType::IDENTIFIER:
+  case TokenType::SUPER:
+  case TokenType::SELF_OBJECT:
+  case TokenType::SELF_TYPE:
+  case TokenType::CRATE:
+    ident = _ast_ctx->current().lexeme;
+    break;
+  default:
+    return nullptr;
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<PathIdentSegment>(ident);
 }
 
 std::unique_ptr<Expression> Parser::parse_expression() {
