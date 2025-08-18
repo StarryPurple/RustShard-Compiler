@@ -41,6 +41,8 @@ class TypePath;
 class TypePathSegment;
 class PathIdentSegment;
 
+class BasicExpression;
+
 class Expression;
 class ExpressionWithoutBlock;
 class LiteralExpression;

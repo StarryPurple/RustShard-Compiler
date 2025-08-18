@@ -31,7 +31,15 @@ target_link_libraries(lexer_gtest PRIVATE GTest::gtest_main GTest::gtest)
 target_link_libraries(lexer_gtest PRIVATE lexer)
 set_target_properties(lexer_gtest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/lexer")
 
+add_library(ast_type src/frontend/ast_type.cpp)
+target_include_directories(ast_type PUBLIC src/include/frontend)
+add_executable(ast_type_gtest test/ast/type_gtest.cpp)
+target_link_libraries(ast_type_gtest PRIVATE GTest::gtest_main GTest::gtest)
+target_link_libraries(ast_type_gtest PRIVATE ast_type)
+set_target_properties(ast_type_gtest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/ast")
+
 # ctest
 enable_testing()
 
 add_test(NAME lexer_ctest COMMAND $<TARGET_FILE:lexer_gtest>)
+add_test(NAME ast_type_ctest COMMAND $<TARGET_FILE:ast_type_gtest>)

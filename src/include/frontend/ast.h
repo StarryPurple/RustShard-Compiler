@@ -438,7 +438,17 @@ private:
   > _spec;
 };
 
-class ExpressionWithoutBlock : public BasicNode {
+class BasicExpression : public BasicNode {
+  using ExprType = insomnia::rust_shard::type::ExprType;
+public:
+  BasicExpression() = default;
+  void set_type(std::shared_ptr<ExprType> expr_type) { _expr_type = expr_type; }
+  std::shared_ptr<ExprType> get_type() const { return _expr_type; }
+private:
+  std::shared_ptr<ExprType> _expr_type;
+};
+
+class ExpressionWithoutBlock : public BasicExpression {
 public:
   template <class Spec>
   explicit ExpressionWithoutBlock(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
@@ -465,7 +475,7 @@ private:
   > _spec;
 };
 
-class LiteralExpression : public BasicNode {
+class LiteralExpression : public BasicExpression {
   using TypePrime = insomnia::rust_shard::type::TypePrime;
 public:
   template <class Spec>
@@ -485,7 +495,7 @@ private:
   > _spec;
 };
 
-class PathExpression : public BasicNode {
+class PathExpression : public BasicExpression {
 public:
   explicit PathExpression(
     std::unique_ptr<PathInExpression> &&path
@@ -495,7 +505,7 @@ private:
   std::unique_ptr<PathInExpression> _path;
 };
 
-class PathInExpression : public BasicNode {
+class PathInExpression : public BasicExpression {
 public:
   explicit PathInExpression(
     std::vector<std::unique_ptr<PathExprSegment>> &&segments
@@ -505,7 +515,7 @@ private:
   std::vector<std::unique_ptr<PathExprSegment>> _segments;
 };
 
-class PathExprSegment : public BasicNode {
+class PathExprSegment : public BasicExpression {
 public:
   explicit PathExprSegment(
     std::unique_ptr<PathIdentSegment> &&ident
@@ -515,7 +525,7 @@ private:
   std::unique_ptr<PathIdentSegment> _ident;
 };
 
-class OperatorExpression : public BasicNode {
+class OperatorExpression : public BasicExpression {
 public:
   template <class Spec>
   OperatorExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
@@ -534,7 +544,7 @@ private:
   > _spec;
 };
 
-class BorrowExpression : public BasicNode {
+class BorrowExpression : public BasicExpression {
 public:
   BorrowExpression(
     int ref_cnt,
@@ -548,7 +558,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class DereferenceExpression : public BasicNode {
+class DereferenceExpression : public BasicExpression {
 public:
   explicit DereferenceExpression(
     std::unique_ptr<Expression> &&expr
@@ -558,7 +568,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class NegationExpression : public BasicNode {
+class NegationExpression : public BasicExpression {
 public:
   NegationExpression(
     bool is_neg,
@@ -570,7 +580,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ArithmeticOrLogicalExpression : public BasicNode {
+class ArithmeticOrLogicalExpression : public BasicExpression {
 public:
   ArithmeticOrLogicalExpression(
   std::string_view oper,
@@ -583,7 +593,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class ComparisonExpression : public BasicNode {
+class ComparisonExpression : public BasicExpression {
 public:
   ComparisonExpression(
   std::string_view oper,
@@ -596,7 +606,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class LazyBooleanExpression : public BasicNode {
+class LazyBooleanExpression : public BasicExpression {
 public:
   LazyBooleanExpression(
     std::string_view oper,
@@ -609,7 +619,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class TypeCastExpression : public BasicNode {
+class TypeCastExpression : public BasicExpression {
 public:
   TypeCastExpression(
     std::unique_ptr<Expression> &&expr,
@@ -621,7 +631,7 @@ private:
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
 };
 
-class AssignmentExpression : public BasicNode {
+class AssignmentExpression : public BasicExpression {
 public:
   AssignmentExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -632,7 +642,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class CompoundAssignmentExpression : public BasicNode {
+class CompoundAssignmentExpression : public BasicExpression {
 public:
   CompoundAssignmentExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -643,7 +653,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class GroupedExpression : public BasicNode {
+class GroupedExpression : public BasicExpression {
 public:
   GroupedExpression(
     std::unique_ptr<Expression> expr
@@ -653,7 +663,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ArrayExpression : public BasicNode {
+class ArrayExpression : public BasicExpression {
 public:
   explicit ArrayExpression(
     std::unique_ptr<ArrayElements> &&elements_opt
@@ -663,7 +673,7 @@ private:
   std::unique_ptr<ArrayElements> _elements_opt;
 };
 
-class ArrayElements : public BasicNode {
+class ArrayElements : public BasicExpression {
   enum class SpecType {
     EXPLICIT, IMPLICIT
   };
@@ -683,7 +693,7 @@ private:
   std::unique_ptr<Expression> _rep_expr_opt, _const_expr_opt;
 };
 
-class IndexExpression : public BasicNode {
+class IndexExpression : public BasicExpression {
 public:
   IndexExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -695,7 +705,7 @@ private:
   std::unique_ptr<Expression> _expr_index;
 };
 
-class TupleExpression : public BasicNode {
+class TupleExpression : public BasicExpression {
 public:
   explicit TupleExpression(
     std::unique_ptr<TupleElements> &&elems_opt
@@ -705,7 +715,7 @@ private:
   std::unique_ptr<TupleElements> _elems_opt;
 };
 
-class TupleElements : public BasicNode {
+class TupleElements : public BasicExpression {
 public:
   explicit TupleElements(
     std::vector<std::unique_ptr<Expression>> &&expr_list
@@ -715,7 +725,7 @@ private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
 
-class TupleIndexingExpression : public BasicNode {
+class TupleIndexingExpression : public BasicExpression {
 public:
   TupleIndexingExpression(
     std::unique_ptr<Expression> &&expr,
@@ -727,7 +737,7 @@ private:
   std::uintptr_t _index;
 };
 
-class StructExpression : public BasicNode {
+class StructExpression : public BasicExpression {
 public:
   StructExpression(
     std::unique_ptr<PathInExpression> &&path,
@@ -739,7 +749,7 @@ private:
   std::unique_ptr<StructExprFields> _fields_opt;
 };
 
-class StructExprFields : public BasicNode {
+class StructExprFields : public BasicExpression {
 public:
   explicit StructExprFields(
     std::vector<std::unique_ptr<StructExprField>> &&fields
@@ -749,7 +759,7 @@ private:
   std::vector<std::unique_ptr<StructExprField>> _fields;
 };
 
-class StructExprField : public BasicNode {
+class StructExprField : public BasicExpression {
   enum class SpecType {
     ID_ONLY, ID_EXPR, IDX_EXPR
   };
@@ -773,7 +783,7 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class CallExpression : public BasicNode {
+class CallExpression : public BasicExpression {
 public:
   CallExpression(
     std::unique_ptr<Expression> &&expr,
@@ -795,7 +805,7 @@ private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
 
-class MethodCallExpression : public BasicNode {
+class MethodCallExpression : public BasicExpression {
 public:
   MethodCallExpression(
     std::unique_ptr<Expression> &&expr,
@@ -810,7 +820,7 @@ private:
   std::unique_ptr<CallParams> _params_opt;
 };
 
-class FieldExpression : public BasicNode {
+class FieldExpression : public BasicExpression {
 public:
   FieldExpression(
     std::unique_ptr<Expression> &&expr,
@@ -822,14 +832,14 @@ private:
   std::string_view _ident;
 };
 
-class ContinueExpression : public BasicNode {
+class ContinueExpression : public BasicExpression {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class BreakExpression : public BasicNode {
+class BreakExpression : public BasicExpression {
 public:
   BreakExpression(
     std::unique_ptr<Expression> &&expr_opt
@@ -839,7 +849,7 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class RangeExpression : public BasicNode {
+class RangeExpression : public BasicExpression {
 public:
   template <class Spec>
   explicit RangeExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
@@ -855,7 +865,7 @@ private:
   > _spec;
 };
 
-class RangeExpr : public BasicNode {
+class RangeExpr : public BasicExpression {
 public:
   RangeExpr(
     std::unique_ptr<Expression> &&expr1,
@@ -866,7 +876,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class RangeFromExpr : public BasicNode {
+class RangeFromExpr : public BasicExpression {
 public:
   explicit RangeFromExpr(
     std::unique_ptr<Expression> &&expr
@@ -876,7 +886,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class RangeToExpr : public BasicNode {
+class RangeToExpr : public BasicExpression {
 public:
   explicit RangeToExpr(
     std::unique_ptr<Expression> &&expr
@@ -886,14 +896,14 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class RangeFullExpr : public BasicNode {
+class RangeFullExpr : public BasicExpression {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class RangeInclusiveExpr : public BasicNode {
+class RangeInclusiveExpr : public BasicExpression {
 public:
   RangeInclusiveExpr(
     std::unique_ptr<Expression> &&expr1,
@@ -904,7 +914,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class RangeToInclusiveExpr : public BasicNode {
+class RangeToInclusiveExpr : public BasicExpression {
 public:
   explicit RangeToInclusiveExpr(
     std::unique_ptr<Expression> &&expr
@@ -914,7 +924,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ReturnExpression : public BasicNode {
+class ReturnExpression : public BasicExpression {
 public:
   explicit ReturnExpression(
     std::unique_ptr<Expression> &&expr_opt
@@ -924,14 +934,14 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class UnderscoreExpression : public BasicNode {
+class UnderscoreExpression : public BasicExpression {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class ExpressionWithBlock : public BasicNode {
+class ExpressionWithBlock : public BasicExpression {
 public:
   template <class Spec>
   explicit ExpressionWithBlock(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
@@ -945,7 +955,7 @@ private:
   > _spec;
 };
 
-class BlockExpression : public BasicNode {
+class BlockExpression : public BasicExpression {
 public:
   explicit BlockExpression(
     std::unique_ptr<Statements> &&stmts_opt
@@ -1008,7 +1018,7 @@ private:
   > _spec;
 };
 
-class LoopExpression : public BasicNode {
+class LoopExpression : public BasicExpression {
 public:
   template <class Spec>
   explicit LoopExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
@@ -1020,7 +1030,7 @@ private:
   > _spec;
 };
 
-class InfiniteLoopExpression : public BasicNode {
+class InfiniteLoopExpression : public BasicExpression {
 public:
   explicit InfiniteLoopExpression(
     std::unique_ptr<BlockExpression> &&block_expr
@@ -1030,7 +1040,7 @@ private:
   std::unique_ptr<BlockExpression> _block_expr;
 };
 
-class PredicateLoopExpression : public BasicNode {
+class PredicateLoopExpression : public BasicExpression {
 public:
   PredicateLoopExpression(
     std::unique_ptr<Conditions> &&cond,
@@ -1042,7 +1052,7 @@ private:
   std::unique_ptr<BlockExpression> _block_expr;
 };
 
-class IfExpression : public BasicNode {
+class IfExpression : public BasicExpression {
 public:
   template <class ElseSpec>
   IfExpression(
@@ -1072,7 +1082,7 @@ private:
   std::unique_ptr<Expression> _expr; // not StructExpression
 };
 
-class MatchExpression : public BasicNode {
+class MatchExpression : public BasicExpression {
 public:
   MatchExpression(
     std::unique_ptr<Expression> &&expr,
