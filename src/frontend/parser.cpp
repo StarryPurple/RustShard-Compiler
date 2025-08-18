@@ -220,56 +220,224 @@ std::unique_ptr<FunctionParameters> Parser::parse_function_parameters() {
 
 std::unique_ptr<FunctionParam> Parser::parse_function_param() {
   Backtracker tracker(*_ast_ctx);
-  tracker.commit();
+  // FunctionParamPattern
+  if(auto f = parse_function_param_pattern()) {
+    tracker.commit();
+    return std::make_unique<FunctionParam>(std::move(f));
+  }
+  // Type
+  if(auto t = parse_type()) {
+    tracker.commit();
+    return std::make_unique<FunctionParam>(std::move(t));
+  }
   return nullptr;
 }
 
 std::unique_ptr<FunctionParamPattern> Parser::parse_function_param_pattern() {
   Backtracker tracker(*_ast_ctx);
+  // PatternNoTopAlt
+  auto p = parse_pattern_no_top_alt();
+  if(!p) {
+    return nullptr;
+  }
+  // ':'
+  if(_ast_ctx->current().token_type != TokenType::COLON) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  // Type
+  auto t = parse_type();
+  if(!t) {
+    return nullptr;
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<FunctionParamPattern>(std::move(p), std::move(t));
 }
 
 std::unique_ptr<SelfParam> Parser::parse_self_param() {
   Backtracker tracker(*_ast_ctx);
+  // '&'?
+  bool is_ref = false;
+  if(_ast_ctx->current().token_type == TokenType::AND) {
+    is_ref = true;
+    _ast_ctx->consume();
+  }
+  // "mut"?
+  bool is_mut = false;
+  if(_ast_ctx->current().token_type == TokenType::MUT) {
+    is_mut = true;
+    _ast_ctx->consume();
+  }
+  // "self"
+  if(_ast_ctx->current().token_type != TokenType::SELF_OBJECT) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  // (':' Type)?
+  std::unique_ptr<Type> t;
+  if(_ast_ctx->current().token_type == TokenType::COLON) {
+    _ast_ctx->consume();
+    t = parse_type();
+    if(!t) {
+      return nullptr;
+    }
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<SelfParam>(is_ref, is_mut, std::move(t));
 }
 
 std::unique_ptr<Type> Parser::parse_type() {
   Backtracker tracker(*_ast_ctx);
-  tracker.commit();
+  // TypeNoBounds
+  if(auto t = parse_type_no_bounds()) {
+    tracker.commit();
+    return std::make_unique<Type>(std::move(t));
+  }
   return nullptr;
 }
 
 std::unique_ptr<TypeNoBounds> Parser::parse_type_no_bounds() {
   Backtracker tracker(*_ast_ctx);
-  tracker.commit();
+  // ParenthesizedType
+  if(auto p = parse_parenthesized_type()) {
+    tracker.commit();
+    return std::make_unique<TypeNoBounds>(std::move(p));
+  }
+  // TupleType
+  if(auto t = parse_tuple_type()) {
+    tracker.commit();
+    return std::make_unique<TypeNoBounds>(std::move(t));
+  }
+  // ReferenceType
+  if(auto r = parse_reference_type()) {
+    tracker.commit();
+    return std::make_unique<TypeNoBounds>(std::move(r));
+  }
+  // ArrayType
+  if(auto a = parse_array_type()) {
+    tracker.commit();
+    return std::make_unique<TypeNoBounds>(std::move(a));
+  }
+  // SliceType
+  if(auto s = parse_slice_type()) {
+    tracker.commit();
+    return std::make_unique<TypeNoBounds>(std::move(s));
+  }
   return nullptr;
 }
 
 std::unique_ptr<ParenthesizedType> Parser::parse_parenthesized_type() {
   Backtracker tracker(*_ast_ctx);
+  // '('
+  if(_ast_ctx->current().token_type != TokenType::L_PARENTHESIS) {
+    return nullptr;
+  }
+  // Type
+  auto t = parse_type();
+  if(!t) {
+    return nullptr;
+  }
+  // ')'
+  if(_ast_ctx->current().token_type != TokenType::R_PARENTHESIS) {
+    return nullptr;
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<ParenthesizedType>(std::move(t));
 }
 
 std::unique_ptr<TupleType> Parser::parse_tuple_type() {
   Backtracker tracker(*_ast_ctx);
+  std::vector<std::unique_ptr<Type>> types;
+  // '('
+  if(_ast_ctx->current().token_type != TokenType::L_PARENTHESIS) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  // empty?
+  if(_ast_ctx->current().token_type == TokenType::R_PARENTHESIS) {
+    _ast_ctx->consume();
+    tracker.commit();
+    return std::make_unique<TupleType>(std::move(types));
+  }
+  // (Type ',')+ Type?
+  if(auto t = parse_type(); !t) {
+    return nullptr;
+  } else {
+    types.push_back(std::move(t));
+  }
+  if(_ast_ctx->current().token_type != TokenType::COMMA) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  while(_ast_ctx->current().token_type != TokenType::R_PARENTHESIS) {
+    auto t = parse_type();
+    if(!t) {
+      return nullptr;
+    }
+    types.push_back(std::move(t));
+    if(_ast_ctx->current().token_type == TokenType::COMMA) {
+      _ast_ctx->consume();
+    } else if(_ast_ctx->current().token_type != TokenType::R_PARENTHESIS) {
+      return nullptr;
+    }
+  }
+  // ')'
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<TupleType>(std::move(types));
 }
 
 std::unique_ptr<ReferenceType> Parser::parse_reference_type() {
   Backtracker tracker(*_ast_ctx);
+  // '&'
+  if(_ast_ctx->current().token_type != TokenType::AND) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  // "mut"?
+  bool is_mut = false;
+  if(_ast_ctx->current().token_type == TokenType::MUT) {
+    is_mut = true;
+    _ast_ctx->consume();
+  }
+  // TypeNoBounds
+  auto t = parse_type_no_bounds();
+  if(!t) {
+    return nullptr;
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<ReferenceType>(is_mut, std::move(t));
 }
 
 std::unique_ptr<ArrayType> Parser::parse_array_type() {
   Backtracker tracker(*_ast_ctx);
+  // '['
+  if(_ast_ctx->current().token_type != TokenType::L_SQUARE_BRACKET) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  // Type
+  auto t = parse_type();
+  if(!t) {
+    return nullptr;
+  }
+  // ';'
+  if(_ast_ctx->current().token_type != TokenType::SEMI) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
+  // Expression
+  auto e = parse_expression();
+  if(!e) {
+    return nullptr;
+  }
+  // ']'
+  if(_ast_ctx->current().token_type != TokenType::R_SQUARE_BRACKET) {
+    return nullptr;
+  }
+  _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<ArrayType>(std::move(t), std::move(e));
 }
 
 std::unique_ptr<SliceType> Parser::parse_slice_type() {

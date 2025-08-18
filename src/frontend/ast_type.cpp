@@ -124,4 +124,29 @@ bool AliasType::equals_impl(const ExprType &other) const {
   return *_type == *static_cast<const AliasType&>(other).get_type();
 }
 
+void EnumType::combine_hash(std::size_t &seed) const {
+  static constexpr std::hash<std::string> hasher;
+  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
+  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+  combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
+  for(auto &[name, type]: _variants) {
+    combine_hash_impl(seed, static_cast<std::size_t>(hasher(name)));
+    type->combine_hash(seed);
+  }
+}
+
+bool EnumType::equals_impl(const ExprType &other) const {
+  const auto &other_struct = static_cast<const EnumType&>(other);
+  if(_ident != other_struct.get_ident()) return false;
+  const auto &other_variants = other_struct.get_variants();
+  if(_variants.size() != other_variants.size()) return false;
+  for(auto it = _variants.begin(), other_it = other_variants.begin();
+    other_it != other_variants.end(); ++it, ++other_it) {
+    if(it->first != other_it->first) return false;
+    if(*it->second != *other_it->second) return false;
+    }
+  return true;
+}
+
+
 }

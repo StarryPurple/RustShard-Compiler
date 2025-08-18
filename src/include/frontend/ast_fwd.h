@@ -15,6 +15,9 @@ class FunctionParameters;
 class FunctionParam;
 class FunctionParamPattern;
 class SelfParam;
+
+class BasicType;
+
 class Type;
 class TypeNoBounds;
 class ParenthesizedType;

@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include "ast_type.h"
+#include "ast_type.h"
 
 namespace insomnia::rust_shard::type {
 
@@ -33,11 +34,12 @@ enum class TypeKind {
   STRUCT,
   TUPLE,
   SLICE,
-  ALIAS, // redundant node for debug.
+  ALIAS, // redundant...
+  ENUM,
 };
 
 // referred to boost::hash_combine
-// Heh, CRTP...
+// Heh, CRTP..., NVI...
 // TODO: Add a pretty printer. Maybe in another language...
 class ExprType : public std::enable_shared_from_this<ExprType> {
 public:
@@ -153,6 +155,27 @@ protected:
 private:
   std::string _ident;
   std::shared_ptr<ExprType> _type;
+};
+
+class EnumType : public ExprType {
+public:
+  EnumType(
+    std::string ident,
+    std::map<std::string, std::shared_ptr<ExprType>> &&variants,
+    bool is_mut
+  ): ExprType(is_mut, TypeKind::ENUM), _ident(std::move(ident)),
+  _variants(std::move(variants)) {}
+  const std::string& get_ident() const { return _ident; }
+  const std::map<
+    std::string,
+    std::shared_ptr<ExprType>
+  >& get_variants() const { return _variants; }
+  void combine_hash(std::size_t &seed) const override;
+protected:
+  bool equals_impl(const ExprType &other) const override;
+private:
+  std::string _ident;
+  std::map<std::string, std::shared_ptr<ExprType>> _variants;
 };
 
 class TypePool {

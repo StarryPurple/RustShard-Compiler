@@ -135,6 +135,13 @@ private:
   std::unique_ptr<Type> _type;
 };
 
+class BasicType : public BasicNode {
+public:
+  BasicType() = default;
+private:
+
+};
+
 class Type : public BasicNode {
 public:
   Type(
@@ -422,22 +429,6 @@ private:
   std::string_view _ident; // might be super/self/Self/crate/$crate
 };
 
-class Expression : public BasicNode {
-  using ExprType = insomnia::rust_shard::type::ExprType;
-public:
-  template <class Spec>
-  explicit Expression(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
-  std::shared_ptr<ExprType> get_type() const { return _expr_type; }
-protected:
-  std::shared_ptr<ExprType> _expr_type;
-private:
-  std::variant<
-    std::unique_ptr<ExpressionWithoutBlock>,
-    std::unique_ptr<ExpressionWithBlock>
-  > _spec;
-};
-
 class BasicExpression : public BasicNode {
   using ExprType = insomnia::rust_shard::type::ExprType;
 public:
@@ -446,6 +437,18 @@ public:
   std::shared_ptr<ExprType> get_type() const { return _expr_type; }
 private:
   std::shared_ptr<ExprType> _expr_type;
+};
+
+class Expression : public BasicExpression {
+public:
+  template <class Spec>
+  explicit Expression(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::variant<
+    std::unique_ptr<ExpressionWithoutBlock>,
+    std::unique_ptr<ExpressionWithBlock>
+  > _spec;
 };
 
 class ExpressionWithoutBlock : public BasicExpression {
