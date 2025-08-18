@@ -423,13 +423,14 @@ private:
 };
 
 class Expression : public BasicNode {
+  using ExprType = insomnia::rust_shard::type::ExprType;
 public:
   template <class Spec>
   explicit Expression(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override;
-  std::shared_ptr<insomnia::rust_shard::type::ExprType> get_type() const { return _expr_type; }
+  std::shared_ptr<ExprType> get_type() const { return _expr_type; }
 protected:
-  std::shared_ptr<insomnia::rust_shard::type::ExprType> _expr_type;
+  std::shared_ptr<ExprType> _expr_type;
 private:
   std::variant<
     std::unique_ptr<ExpressionWithoutBlock>,
@@ -465,24 +466,19 @@ private:
 };
 
 class LiteralExpression : public BasicNode {
+  using TypePrime = insomnia::rust_shard::type::TypePrime;
 public:
   template <class Spec>
-  explicit LiteralExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
+  explicit LiteralExpression(TypePrime prime, Spec &&spec)
+  : _prime(prime), _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override;
 private:
+  TypePrime _prime;
   std::variant<
     char,
     std::string_view,
-    std::int8_t,
-    std::uint8_t,
-    std::int16_t,
-    std::uint16_t,
-    std::int32_t,
-    std::uint32_t,
     std::int64_t,
     std::uint64_t,
-    std::intptr_t,
-    std::uintptr_t,
     float,
     double,
     bool
