@@ -1,15 +1,12 @@
 /**
  * Definition of AST nodes.
  * The child-parent relationship is maintained by the parent holding unique_ptr of its child(ren).
- * In different rules, std::vector or std::variant might be introduced.
+ * In different rules, std::vector might be introduced.
  * Generally the pointers are not null.
  * If a unique_ptr can be nullptr, this property will be reflected by its name.
  * Such as:
  *   (A -> B) std::unique_ptr<B> _b;
  *   (A -> B C?) std::unique_ptr<B> _b; std::unique_ptr<C> _c_opt;
- *   (A -> B | C) std::variant<std::unique_ptr<B>, std::unique_ptr<C>> _spec;
- *   (A -> B (C | D)?) std::unique_ptr<B> _b;
- *      std::variant<std::monostate, std::unique_ptr<C>, std::unique_ptr<D>> _spec_opt;
  *   // no need for _opt suffix, since std::vector has already reflected the optionality.
  *   // maybe I should change this naming rule...
  *   (A -> B*) std::vector<std::unique_ptr<B>> _b;
@@ -53,21 +50,12 @@ private:
 
 class VisItem : public BasicNode {
 public:
-  template <class Spec>
-  explicit VisItem(Spec &&spec_item): _spec_item(std::forward<Spec>(spec_item)) {}
-  void accept(BasicVisitor &visitor) override;
+  VisItem() = default;
 private:
-  std::variant<
-    std::unique_ptr<Function>,
-    std::unique_ptr<Struct>,
-    std::unique_ptr<Enumeration>,
-    std::unique_ptr<ConstantItem>,
-    std::unique_ptr<Trait>,
-    std::unique_ptr<Implementation>
-  > _spec_item;
+  // Intended blank.
 };
 
-class Function : public BasicNode {
+class Function : public VisItem {
 public:
   Function(
     bool is_const,
@@ -100,17 +88,12 @@ private:
 
 class FunctionParam : public BasicNode {
 public:
-  template <class Spec>
-  explicit FunctionParam(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  FunctionParam() = default;
 private:
-  std::variant<
-    std::unique_ptr<FunctionParamPattern>,
-    std::unique_ptr<Type>
-  > _spec;
+  // Intended blank
 };
 
-class FunctionParamPattern : public BasicNode {
+class FunctionParamPattern : public FunctionParam {
 public:
   FunctionParamPattern(
     std::unique_ptr<PatternNoTopAlt> &&pattern,
@@ -119,6 +102,16 @@ public:
   void accept(BasicVisitor &visitor) override;
 private:
   std::unique_ptr<PatternNoTopAlt> _pattern;
+  std::unique_ptr<Type> _type;
+};
+
+class FunctionParamType : public FunctionParam {
+public:
+  explicit FunctionParamType(
+    std::unique_ptr<Type> &&type
+  ): _type(std::move(type)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
   std::unique_ptr<Type> _type;
 };
 
@@ -135,39 +128,23 @@ private:
   std::unique_ptr<Type> _type;
 };
 
-class BasicType : public BasicNode {
-public:
-  BasicType() = default;
-private:
-
-};
-
 class Type : public BasicNode {
+  using ExprType = ::insomnia::rust_shard::type::ExprType;
 public:
-  Type(
-    std::unique_ptr<TypeNoBounds> &&type_no_bounds
-  ): _type_no_bounds(std::move(type_no_bounds)) {}
-  void accept(BasicVisitor &visitor) override;
+  void set_type(std::shared_ptr<ExprType> expr_type) { _type = expr_type; }
+  std::shared_ptr<ExprType> get_type() const { return _type; }
 private:
-  std::unique_ptr<TypeNoBounds> _type_no_bounds;
+  std::shared_ptr<ExprType> _type;
 };
 
-class TypeNoBounds : public BasicNode {
+class TypeNoBounds : public Type {
 public:
-  template <class Spec>
-  explicit TypeNoBounds(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  TypeNoBounds() = default;
 private:
-  std::variant<
-    std::unique_ptr<ParenthesizedType>,
-    std::unique_ptr<TupleType>,
-    std::unique_ptr<ReferenceType>,
-    std::unique_ptr<ArrayType>,
-    std::unique_ptr<SliceType>
-  > _spec;
+  // Intended blank
 };
 
-class ParenthesizedType : public BasicNode {
+class ParenthesizedType : public TypeNoBounds {
 public:
   ParenthesizedType(
     std::unique_ptr<Type> &&type
@@ -177,7 +154,7 @@ private:
   std::unique_ptr<Type> _type;
 };
 
-class TupleType : public BasicNode {
+class TupleType : public TypeNoBounds {
 public:
   TupleType(
     std::vector<std::unique_ptr<Type>> &&types
@@ -187,7 +164,7 @@ private:
   std::vector<std::unique_ptr<Type>> _types;
 };
 
-class ReferenceType : public BasicNode {
+class ReferenceType : public TypeNoBounds {
 public:
   ReferenceType(
     bool is_mut,
@@ -199,7 +176,7 @@ private:
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
 };
 
-class ArrayType : public BasicNode {
+class ArrayType : public TypeNoBounds {
 public:
   ArrayType(
     std::unique_ptr<Type> &&type,
@@ -211,7 +188,7 @@ private:
   std::unique_ptr<Expression> _const_expr;
 };
 
-class SliceType : public BasicNode {
+class SliceType : public TypeNoBounds {
 public:
   explicit SliceType(
     std::unique_ptr<Type> &&type
@@ -221,17 +198,14 @@ private:
   std::unique_ptr<Type> _type;
 };
 
-class Struct : public BasicNode {
+class Struct : public VisItem {
 public:
-  explicit Struct(
-    std::unique_ptr<StructStruct> &&ss
-  ): _ss(std::move(ss)) {}
-  void accept(BasicVisitor &visitor) override;
+  Struct() = default;
 private:
-  std::unique_ptr<StructStruct> _ss;
+  // Intended blank
 };
 
-class StructStruct : public BasicNode {
+class StructStruct : public Struct {
 public:
   StructStruct(
     std::string_view struct_name,
@@ -265,7 +239,7 @@ private:
   std::unique_ptr<Type> _type;
 };
 
-class Enumeration : public BasicNode {
+class Enumeration : public VisItem {
 public:
   Enumeration(
     std::string_view enum_name,
@@ -309,7 +283,7 @@ private:
   std::unique_ptr<Expression> _const_expr;
 };
 
-class ConstantItem : public BasicNode {
+class ConstantItem : public VisItem {
 public:
   ConstantItem(
     std::string_view item_name,
@@ -323,7 +297,7 @@ private:
   std::unique_ptr<Expression> _const_expr_opt;
 };
 
-class Trait : public BasicNode {
+class Trait : public VisItem {
 public:
   Trait(
     std::string_view trait_name,
@@ -337,18 +311,42 @@ private:
 
 class AssociatedItem : public BasicNode {
 public:
-  template <class Spec>
-  explicit AssociatedItem(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  AssociatedItem() = default;
 private:
-  std::variant<
-    std::unique_ptr<TypeAlias>,
-    std::unique_ptr<ConstantItem>,
-    std::unique_ptr<Function>
-  > _spec;
+  // Intended blank
 };
 
-class TypeAlias : public BasicNode {
+class AssociatedTypeAlias : public AssociatedItem {
+public:
+  explicit AssociatedTypeAlias(
+    std::unique_ptr<TypeAlias> &&alias
+  ): _alias(std::move(alias)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::unique_ptr<TypeAlias> _alias;
+};
+
+class AssociatedConstantItem : public AssociatedItem {
+public:
+  explicit AssociatedConstantItem(
+    std::unique_ptr<ConstantItem> &&citem
+  ): _citem(std::move(citem)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::unique_ptr<ConstantItem> _citem;
+};
+
+class AssociatedFunction : public AssociatedItem {
+public:
+  explicit AssociatedFunction(
+    std::unique_ptr<Function> &&func
+  ): _func(std::move(func)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::unique_ptr<Function> _func;
+};
+
+class TypeAlias : public VisItem {
 public:
   TypeAlias(
     std::string_view alias_name,
@@ -360,19 +358,14 @@ private:
   std::unique_ptr<Type> _type_opt;
 };
 
-class Implementation : public BasicNode {
+class Implementation : public VisItem {
 public:
-  template <class Spec>
-  Implementation(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  Implementation() = default;
 private:
-  std::variant<
-    std::unique_ptr<InherentImpl>,
-    std::unique_ptr<TraitImpl>
-  > _spec;
+  // Intended blank
 };
 
-class InherentImpl : public BasicNode {
+class InherentImpl : public Implementation {
 public:
   InherentImpl(
     std::unique_ptr<Type> &&type,
@@ -384,7 +377,7 @@ private:
   std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
 };
 
-class TraitImpl : public BasicNode {
+class TraitImpl : public Implementation {
 public:
   TraitImpl(
     std::unique_ptr<TypePath> &&type_path,
@@ -430,7 +423,7 @@ private:
 };
 
 class Expression : public BasicNode {
-  using ExprType = insomnia::rust_shard::type::ExprType;
+  using ExprType = ::insomnia::rust_shard::type::ExprType;
 public:
   Expression() = default;
   void set_type(std::shared_ptr<ExprType> expr_type) { _expr_type = expr_type; }
@@ -441,32 +434,12 @@ private:
 
 class ExpressionWithoutBlock : public Expression {
 public:
-  template <class Spec>
-  explicit ExpressionWithoutBlock(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  ExpressionWithoutBlock() = default;
 private:
-  std::variant<
-    std::unique_ptr<LiteralExpression>,
-    std::unique_ptr<PathExpression>,
-    std::unique_ptr<OperatorExpression>,
-    std::unique_ptr<GroupedExpression>,
-    std::unique_ptr<ArrayExpression>,
-    std::unique_ptr<IndexExpression>,
-    std::unique_ptr<TupleExpression>,
-    std::unique_ptr<TupleIndexingExpression>,
-    std::unique_ptr<StructExpression>,
-    std::unique_ptr<CallExpression>,
-    std::unique_ptr<MethodCallExpression>,
-    std::unique_ptr<FieldExpression>,
-    std::unique_ptr<ContinueExpression>,
-    std::unique_ptr<BreakExpression>,
-    std::unique_ptr<RangeExpression>,
-    std::unique_ptr<ReturnExpression>,
-    std::unique_ptr<UnderscoreExpression>
-  > _spec;
+  // Intended blank
 };
 
-class LiteralExpression : public Expression {
+class LiteralExpression : public ExpressionWithoutBlock {
   using TypePrime = insomnia::rust_shard::type::TypePrime;
 public:
   template <class Spec>
@@ -486,17 +459,14 @@ private:
   > _spec;
 };
 
-class PathExpression : public Expression {
+class PathExpression : public ExpressionWithoutBlock {
 public:
-  explicit PathExpression(
-    std::unique_ptr<PathInExpression> &&path
-  ): _path(std::move(path)) {}
-  void accept(BasicVisitor &visitor) override;
+  PathExpression() = default;
 private:
-  std::unique_ptr<PathInExpression> _path;
+  // Intended blank
 };
 
-class PathInExpression : public Expression {
+class PathInExpression : public PathExpression {
 public:
   explicit PathInExpression(
     std::vector<std::unique_ptr<PathExprSegment>> &&segments
@@ -506,7 +476,7 @@ private:
   std::vector<std::unique_ptr<PathExprSegment>> _segments;
 };
 
-class PathExprSegment : public Expression {
+class PathExprSegment : public BasicNode {
 public:
   explicit PathExprSegment(
     std::unique_ptr<PathIdentSegment> &&ident
@@ -516,26 +486,14 @@ private:
   std::unique_ptr<PathIdentSegment> _ident;
 };
 
-class OperatorExpression : public Expression {
+class OperatorExpression : public ExpressionWithoutBlock {
 public:
-  template <class Spec>
-  OperatorExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  OperatorExpression() = default;
 private:
-  std::variant<
-    std::unique_ptr<BorrowExpression>,
-    std::unique_ptr<DereferenceExpression>,
-    std::unique_ptr<NegationExpression>,
-    std::unique_ptr<ArithmeticOrLogicalExpression>,
-    std::unique_ptr<ComparisonExpression>,
-    std::unique_ptr<LazyBooleanExpression>,
-    std::unique_ptr<TypeCastExpression>,
-    std::unique_ptr<AssignmentExpression>,
-    std::unique_ptr<CompoundAssignmentExpression>
-  > _spec;
+  // Intended blank
 };
 
-class BorrowExpression : public Expression {
+class BorrowExpression : public OperatorExpression {
 public:
   BorrowExpression(
     int ref_cnt,
@@ -549,7 +507,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class DereferenceExpression : public Expression {
+class DereferenceExpression : public OperatorExpression {
 public:
   explicit DereferenceExpression(
     std::unique_ptr<Expression> &&expr
@@ -559,7 +517,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class NegationExpression : public Expression {
+class NegationExpression : public OperatorExpression {
 public:
   NegationExpression(
     bool is_neg,
@@ -571,7 +529,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ArithmeticOrLogicalExpression : public Expression {
+class ArithmeticOrLogicalExpression : public OperatorExpression {
 public:
   ArithmeticOrLogicalExpression(
   std::string_view oper,
@@ -584,7 +542,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class ComparisonExpression : public Expression {
+class ComparisonExpression : public OperatorExpression {
 public:
   ComparisonExpression(
   std::string_view oper,
@@ -597,7 +555,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class LazyBooleanExpression : public Expression {
+class LazyBooleanExpression : public OperatorExpression {
 public:
   LazyBooleanExpression(
     std::string_view oper,
@@ -610,7 +568,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class TypeCastExpression : public Expression {
+class TypeCastExpression : public OperatorExpression {
 public:
   TypeCastExpression(
     std::unique_ptr<Expression> &&expr,
@@ -622,7 +580,7 @@ private:
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
 };
 
-class AssignmentExpression : public Expression {
+class AssignmentExpression : public OperatorExpression {
 public:
   AssignmentExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -633,7 +591,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class CompoundAssignmentExpression : public Expression {
+class CompoundAssignmentExpression : public OperatorExpression {
 public:
   CompoundAssignmentExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -644,7 +602,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class GroupedExpression : public Expression {
+class GroupedExpression : public ExpressionWithoutBlock {
 public:
   GroupedExpression(
     std::unique_ptr<Expression> expr
@@ -654,7 +612,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ArrayExpression : public Expression {
+class ArrayExpression : public ExpressionWithoutBlock {
 public:
   explicit ArrayExpression(
     std::unique_ptr<ArrayElements> &&elements_opt
@@ -665,26 +623,34 @@ private:
 };
 
 class ArrayElements : public Expression {
-  enum class SpecType {
-    EXPLICIT, IMPLICIT
-  };
 public:
-  explicit ArrayElements(
-    std::vector<std::unique_ptr<Expression>> &&expr_list
-  ): _spec_type(SpecType::EXPLICIT),  _expr_list(std::move(expr_list)) {}
-  ArrayElements(
-    std::unique_ptr<Expression> &&rep_expr_opt,
-    std::unique_ptr<Expression> &&const_expr_opt
-  ): _spec_type(SpecType::IMPLICIT), _rep_expr_opt(std::move(rep_expr_opt)),
-  _const_expr_opt(std::move(const_expr_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  ArrayElements() = default;
 private:
-  SpecType _spec_type;
-  std::vector<std::unique_ptr<Expression>> _expr_list;
-  std::unique_ptr<Expression> _rep_expr_opt, _const_expr_opt;
+  // Intended blank
 };
 
-class IndexExpression : public Expression {
+class ExplicitArrayElements : public ArrayElements {
+public:
+  explicit ExplicitArrayElements(
+    std::vector<std::unique_ptr<Expression>> &&expr_list
+  ): _expr_list(std::move(expr_list)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::vector<std::unique_ptr<Expression>> _expr_list;
+};
+
+class RepeatedArrayElements : public ArrayElements {
+public:
+  RepeatedArrayElements(
+    std::unique_ptr<Expression> &&expr,
+    std::unique_ptr<Expression> &&length
+  ): _expr(std::move(expr)), _length(std::move(length)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::unique_ptr<Expression> _expr, _length;
+};
+
+class IndexExpression : public ExpressionWithoutBlock {
 public:
   IndexExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -696,7 +662,7 @@ private:
   std::unique_ptr<Expression> _expr_index;
 };
 
-class TupleExpression : public Expression {
+class TupleExpression : public ExpressionWithoutBlock {
 public:
   explicit TupleExpression(
     std::unique_ptr<TupleElements> &&elems_opt
@@ -716,7 +682,7 @@ private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
 
-class TupleIndexingExpression : public Expression {
+class TupleIndexingExpression : public ExpressionWithoutBlock {
 public:
   TupleIndexingExpression(
     std::unique_ptr<Expression> &&expr,
@@ -728,7 +694,7 @@ private:
   std::uintptr_t _index;
 };
 
-class StructExpression : public Expression {
+class StructExpression : public ExpressionWithoutBlock {
 public:
   StructExpression(
     std::unique_ptr<PathInExpression> &&path,
@@ -751,30 +717,37 @@ private:
 };
 
 class StructExprField : public Expression {
-  enum class SpecType {
-    ID_ONLY, ID_EXPR, IDX_EXPR
-  };
 public:
-  explicit StructExprField(
-    std::string_view ident
-  ): _spec_type(SpecType::ID_ONLY), _ident_opt(ident) {}
-  StructExprField(
-    std::string_view ident,
-    std::unique_ptr<Expression> &&expr
-  ): _spec_type(SpecType::ID_EXPR), _ident_opt(ident), _expr_opt(std::move(expr)) {}
-  StructExprField(
-    std::uintptr_t index,
-    std::unique_ptr<Expression> &&expr
-  ): _spec_type(SpecType::IDX_EXPR), _index_opt(index), _expr_opt(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  StructExprField() = default;
 private:
-  SpecType _spec_type;
-  std::string_view _ident_opt;
-  std::uintptr_t _index_opt{};
-  std::unique_ptr<Expression> _expr_opt;
+  // Intended blank
 };
 
-class CallExpression : public Expression {
+class NamedStructExprField : public StructExprField {
+public:
+  NamedStructExprField(
+    std::string_view ident,
+    std::unique_ptr<Expression> &&expr
+  ): _ident(ident), _expr(std::move(expr)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::string_view _ident;
+  std::unique_ptr<Expression> _expr;
+};
+
+class IndexStructExprField : public StructExprField {
+public:
+  IndexStructExprField(
+    std::size_t index,
+    std::unique_ptr<Expression> &&expr
+  ): _index(index), _expr(std::move(expr)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::size_t _index;
+  std::unique_ptr<Expression> _expr;
+};
+
+class CallExpression : public ExpressionWithoutBlock {
 public:
   CallExpression(
     std::unique_ptr<Expression> &&expr,
@@ -796,7 +769,7 @@ private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
 
-class MethodCallExpression : public Expression {
+class MethodCallExpression : public ExpressionWithoutBlock {
 public:
   MethodCallExpression(
     std::unique_ptr<Expression> &&expr,
@@ -811,7 +784,7 @@ private:
   std::unique_ptr<CallParams> _params_opt;
 };
 
-class FieldExpression : public Expression {
+class FieldExpression : public ExpressionWithoutBlock {
 public:
   FieldExpression(
     std::unique_ptr<Expression> &&expr,
@@ -823,14 +796,14 @@ private:
   std::string_view _ident;
 };
 
-class ContinueExpression : public Expression {
+class ContinueExpression : public ExpressionWithoutBlock {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class BreakExpression : public Expression {
+class BreakExpression : public ExpressionWithoutBlock {
 public:
   BreakExpression(
     std::unique_ptr<Expression> &&expr_opt
@@ -840,23 +813,14 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class RangeExpression : public Expression {
+class RangeExpression : public ExpressionWithoutBlock {
 public:
-  template <class Spec>
-  explicit RangeExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  RangeExpression() = default;
 private:
-  std::variant<
-    std::unique_ptr<RangeExpr>,
-    std::unique_ptr<RangeFromExpr>,
-    std::unique_ptr<RangeToExpr>,
-    std::unique_ptr<RangeFullExpr>,
-    std::unique_ptr<RangeInclusiveExpr>,
-    std::unique_ptr<RangeToInclusiveExpr>
-  > _spec;
+  // Intended blank
 };
 
-class RangeExpr : public Expression {
+class RangeExpr : public RangeExpression {
 public:
   RangeExpr(
     std::unique_ptr<Expression> &&expr1,
@@ -867,7 +831,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class RangeFromExpr : public Expression {
+class RangeFromExpr : public RangeExpression {
 public:
   explicit RangeFromExpr(
     std::unique_ptr<Expression> &&expr
@@ -877,7 +841,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class RangeToExpr : public Expression {
+class RangeToExpr : public RangeExpression {
 public:
   explicit RangeToExpr(
     std::unique_ptr<Expression> &&expr
@@ -887,14 +851,14 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class RangeFullExpr : public Expression {
+class RangeFullExpr : public RangeExpression {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class RangeInclusiveExpr : public Expression {
+class RangeInclusiveExpr : public RangeExpression {
 public:
   RangeInclusiveExpr(
     std::unique_ptr<Expression> &&expr1,
@@ -905,7 +869,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class RangeToInclusiveExpr : public Expression {
+class RangeToInclusiveExpr : public RangeExpression {
 public:
   explicit RangeToInclusiveExpr(
     std::unique_ptr<Expression> &&expr
@@ -915,7 +879,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ReturnExpression : public Expression {
+class ReturnExpression : public ExpressionWithoutBlock {
 public:
   explicit ReturnExpression(
     std::unique_ptr<Expression> &&expr_opt
@@ -925,7 +889,7 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class UnderscoreExpression : public Expression {
+class UnderscoreExpression : public ExpressionWithoutBlock {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
@@ -934,19 +898,12 @@ private:
 
 class ExpressionWithBlock : public Expression {
 public:
-  template <class Spec>
-  explicit ExpressionWithBlock(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  ExpressionWithBlock() = default;
 private:
-  std::variant<
-    std::unique_ptr<BlockExpression>,
-    std::unique_ptr<LoopExpression>,
-    std::unique_ptr<IfExpression>,
-    std::unique_ptr<MatchExpression>
-  > _spec;
+  // Intended blank
 };
 
-class BlockExpression : public Expression {
+class BlockExpression : public ExpressionWithBlock {
 public:
   explicit BlockExpression(
     std::unique_ptr<Statements> &&stmts_opt
@@ -970,19 +927,29 @@ private:
 
 class Statement : public BasicNode {
 public:
-  template <class Spec>
-  explicit Statement(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  Statement() = default;
 private:
-  std::variant<
-    std::monostate,
-    std::unique_ptr<Item>,
-    std::unique_ptr<LetStatement>,
-    std::unique_ptr<ExpressionStatement>
-  > _spec;
+  // Intended blank
 };
 
-class LetStatement : public BasicNode {
+class EmptyStatement : public Statement {
+public:
+  void accept(BasicVisitor &visitor) override;
+private:
+  // Intended blank
+};
+
+class ItemStatement : public Statement {
+public:
+  explicit ItemStatement(
+    std::unique_ptr<Item> &&item
+  ): _item(std::move(item)) {}
+  void accept(BasicVisitor &visitor) override;
+private:
+  std::unique_ptr<Item> _item;
+};
+
+class LetStatement : public Statement {
 public:
   LetStatement(
     std::unique_ptr<PatternNoTopAlt> &&pattern,
@@ -997,31 +964,24 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class ExpressionStatement : public BasicNode {
+class ExpressionStatement : public Statement {
 public:
-  template <class Spec>
-  explicit ExpressionStatement(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
+  explicit ExpressionStatement(
+    std::unique_ptr<Expression> &&expr
+  ): _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  std::variant<
-    std::unique_ptr<ExpressionWithoutBlock>,
-    std::unique_ptr<ExpressionWithBlock>
-  > _spec;
+  std::unique_ptr<Expression> _expr;
 };
 
-class LoopExpression : public Expression {
+class LoopExpression : public ExpressionWithBlock {
 public:
-  template <class Spec>
-  explicit LoopExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  LoopExpression() = default;
 private:
-  std::variant<
-    std::unique_ptr<InfiniteLoopExpression>,
-    std::unique_ptr<PredicateLoopExpression>
-  > _spec;
+  // Intended blank
 };
 
-class InfiniteLoopExpression : public Expression {
+class InfiniteLoopExpression : public LoopExpression {
 public:
   explicit InfiniteLoopExpression(
     std::unique_ptr<BlockExpression> &&block_expr
@@ -1031,7 +991,7 @@ private:
   std::unique_ptr<BlockExpression> _block_expr;
 };
 
-class PredicateLoopExpression : public Expression {
+class PredicateLoopExpression : public LoopExpression {
 public:
   PredicateLoopExpression(
     std::unique_ptr<Conditions> &&cond,
@@ -1043,7 +1003,7 @@ private:
   std::unique_ptr<BlockExpression> _block_expr;
 };
 
-class IfExpression : public Expression {
+class IfExpression : public ExpressionWithBlock {
 public:
   template <class ElseSpec>
   IfExpression(
@@ -1073,7 +1033,7 @@ private:
   std::unique_ptr<Expression> _expr; // not StructExpression
 };
 
-class MatchExpression : public Expression {
+class MatchExpression : public ExpressionWithBlock {
 public:
   MatchExpression(
     std::unique_ptr<Expression> &&expr,
@@ -1129,35 +1089,19 @@ private:
 
 class PatternNoTopAlt : public BasicNode {
 public:
-  explicit PatternNoTopAlt(
-    std::unique_ptr<PatternWithoutRange> &&pattern
-  ): _pattern(std::move(pattern)) {}
-  void accept(BasicVisitor &visitor) override;
+  PatternNoTopAlt() = default;
 private:
-  std::unique_ptr<PatternWithoutRange> _pattern;
+  // Intended blank
 };
 
-class PatternWithoutRange : public BasicNode {
+class PatternWithoutRange : public PatternNoTopAlt {
 public:
-  template <class Spec>
-  PatternWithoutRange(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  PatternWithoutRange() = default;
 private:
-  std::variant<
-    std::unique_ptr<LiteralPattern>,
-    std::unique_ptr<IdentifierPattern>,
-    std::unique_ptr<WildcardPattern>,
-    std::unique_ptr<RestPattern>,
-    std::unique_ptr<ReferencePattern>,
-    std::unique_ptr<StructPattern>,
-    std::unique_ptr<TuplePattern>,
-    std::unique_ptr<GroupedPattern>,
-    std::unique_ptr<SlicePattern>,
-    std::unique_ptr<PathPattern>
-  > _spec;
+  // Intended blank
 };
 
-class LiteralPattern : public BasicNode {
+class LiteralPattern : public PatternWithoutRange {
 public:
   LiteralPattern(
     bool is_neg,
@@ -1169,7 +1113,7 @@ private:
   std::unique_ptr<LiteralExpression> _expr;
 };
 
-class IdentifierPattern : public BasicNode {
+class IdentifierPattern : public PatternWithoutRange {
 public:
   IdentifierPattern(
     bool is_ref,
@@ -1186,21 +1130,14 @@ private:
   std::unique_ptr<PatternNoTopAlt> _pattern_opt;
 };
 
-class WildcardPattern : public BasicNode {
+class WildcardPattern : public PatternWithoutRange {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class RestPattern : public BasicNode {
-public:
-  void accept(BasicVisitor &visitor) override;
-private:
-  // Intended blank
-};
-
-class ReferencePattern : public BasicNode {
+class ReferencePattern : public PatternWithoutRange {
 public:
   ReferencePattern(
     int ref_cnt,
@@ -1214,7 +1151,7 @@ private:
   std::unique_ptr<PatternWithoutRange> _pattern;
 };
 
-class StructPattern : public BasicNode {
+class StructPattern : public PatternWithoutRange {
 public:
   StructPattern(
     std::unique_ptr<PathInExpression> &&path_in_expr,
@@ -1228,30 +1165,13 @@ private:
 };
 
 class StructPatternElements : public BasicNode {
-  enum class Type {
-    NORMAL, ET_CETERA
-  };
 public:
-  StructPatternElements(
-    std::unique_ptr<StructPatternFields> &&fields,
-    std::unique_ptr<StructPatternEtCetera> &&etc_opt
-  ): _type(Type::NORMAL), _fields(std::move(fields)),
-  _etc_opt(std::move(etc_opt)) {}
-  StructPatternElements(
-    std::unique_ptr<StructPatternEtCetera> &&etc
-  ): _type(Type::ET_CETERA), _etc_opt(std::move(etc)) {}
+  explicit StructPatternElements(
+    std::unique_ptr<StructPatternFields> &&fields
+  ): _fields(std::move(fields)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  Type _type;
   std::unique_ptr<StructPatternFields> _fields;
-  std::unique_ptr<StructPatternEtCetera> _etc_opt;
-};
-
-class StructPatternEtCetera : public BasicNode {
-public:
-  void accept(BasicVisitor &visitor) override;
-private:
-  // Intended blank
 };
 
 class StructPatternFields : public BasicNode {
@@ -1265,36 +1185,18 @@ private:
 };
 
 class StructPatternField : public BasicNode {
-  enum class SpecType {
-    INTEGER, IDENTIFIER, RESTRICTION
-  };
 public:
-  StructPatternField(
-    std::uintptr_t index,
-    std::unique_ptr<Pattern> &&pattern
-  ): _spec_type(SpecType::INTEGER),
-  _index(index), _pattern_opt(std::move(pattern)) {}
   StructPatternField(
     std::string_view ident,
     std::unique_ptr<Pattern> &&pattern
-  ): _spec_type(SpecType::IDENTIFIER),
-  _ident(ident), _pattern_opt(std::move(pattern)) {}
-  StructPatternField(
-    bool is_ref,
-    bool is_mut,
-    std::string_view ident
-  ): _spec_type(SpecType::RESTRICTION),
-  _is_ref(is_ref), _is_mut(is_mut), _ident(ident) {}
+  ): _ident(ident), _pattern(std::move(pattern)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  SpecType _spec_type;
-  std::uintptr_t _index;
   std::string_view _ident;
-  bool _is_ref, _is_mut;
-  std::unique_ptr<Pattern> _pattern_opt;
+  std::unique_ptr<Pattern> _pattern;
 };
 
-class TuplePattern : public BasicNode {
+class TuplePattern : public PatternWithoutRange {
 public:
   explicit TuplePattern(
     std::unique_ptr<TuplePatternItems> items_opt
@@ -1305,24 +1207,16 @@ private:
 };
 
 class TuplePatternItems : public BasicNode {
-  enum class SpecType {
-    PATTERNS, REST
-  };
 public:
   explicit TuplePatternItems(
     std::vector<std::unique_ptr<Pattern>> &&patterns
-  ): _spec_type(SpecType::PATTERNS), _patterns(std::move(patterns)) {}
-  explicit TuplePatternItems(
-    std::unique_ptr<RestPattern> &&rest
-  ): _spec_type(SpecType::REST), _rest_opt(std::move(rest)) {}
+  ): _patterns(std::move(patterns)) {}
   void accept(BasicVisitor &visitor) override;
 private:
-  SpecType _spec_type;
   std::vector<std::unique_ptr<Pattern>> _patterns;
-  std::unique_ptr<RestPattern> _rest_opt;
 };
 
-class GroupedPattern : public BasicNode {
+class GroupedPattern : public PatternWithoutRange {
 public:
   explicit GroupedPattern(
     std::unique_ptr<Pattern> &&pattern
@@ -1332,7 +1226,7 @@ private:
   std::unique_ptr<Pattern> _pattern;
 };
 
-class SlicePattern : public BasicNode {
+class SlicePattern : public PatternWithoutRange {
 public:
   explicit SlicePattern(
     std::unique_ptr<SlicePatternItems> &&items_opt
@@ -1352,7 +1246,7 @@ private:
   std::vector<std::unique_ptr<Pattern>> _patterns;
 };
 
-class PathPattern : public BasicNode {
+class PathPattern : public PatternWithoutRange {
 public:
   explicit PathPattern(
     std::unique_ptr<PathExpression> &&path_expr
@@ -1361,7 +1255,6 @@ public:
 private:
   std::unique_ptr<PathExpression> _path_expr;
 };
-
 }
 
 #endif // INSOMNIA_AST_H

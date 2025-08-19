@@ -254,6 +254,10 @@ std::unique_ptr<FunctionParamPattern> Parser::parse_function_param_pattern() {
   return std::make_unique<FunctionParamPattern>(std::move(p), std::move(t));
 }
 
+std::unique_ptr<FunctionParamType> Parser::parse_function_param_type() {
+
+}
+
 std::unique_ptr<SelfParam> Parser::parse_self_param() {
   Backtracker tracker(*_ast_ctx);
   // '&'?
@@ -712,6 +716,18 @@ std::unique_ptr<AssociatedItem> Parser::parse_associated_item() {
   return nullptr;
 }
 
+std::unique_ptr<AssociatedTypeAlias> Parser::parse_associated_type_alias() {
+
+}
+
+std::unique_ptr<AssociatedConstantItem> Parser::parse_associated_constant_item() {
+
+}
+
+std::unique_ptr<AssociatedFunction> Parser::parse_associated_function() {
+
+}
+
 std::unique_ptr<TypeAlias> Parser::parse_type_alias() {
   Backtracker tracker(*_ast_ctx);
   if(_ast_ctx->current().token_type != TokenType::TYPE) {
@@ -976,6 +992,14 @@ std::unique_ptr<ArrayElements> Parser::parse_array_elements() {
   return nullptr;
 }
 
+std::unique_ptr<ExplicitArrayElements> Parser::parse_explicit_array_elements() {
+
+}
+
+std::unique_ptr<RepeatedArrayElements> Parser::parse_repeated_array_elements() {
+
+}
+
 std::unique_ptr<IndexExpression> Parser::parse_index_expression() {
   Backtracker tracker(*_ast_ctx);
   tracker.commit();
@@ -1016,6 +1040,14 @@ std::unique_ptr<StructExprField> Parser::parse_struct_expr_field() {
   Backtracker tracker(*_ast_ctx);
   tracker.commit();
   return nullptr;
+}
+
+std::unique_ptr<NamedStructExprField> Parser::parse_named_struct_expr_field() {
+
+}
+
+std::unique_ptr<IndexStructExprField> Parser::parse_index_struct_expr_field() {
+
 }
 
 std::unique_ptr<CallExpression> Parser::parse_call_expression() {
@@ -1132,6 +1164,16 @@ std::unique_ptr<Statement> Parser::parse_statement() {
   return nullptr;
 }
 
+std::unique_ptr<EmptyStatement> Parser::parse_empty_statement() {
+  Backtracker tracker(*_ast_ctx);
+  tracker.commit();
+  return nullptr;
+}
+
+std::unique_ptr<ItemStatement> Parser::parse_item_statement() {
+
+}
+
 std::unique_ptr<LetStatement> Parser::parse_let_statement() {
   Backtracker tracker(*_ast_ctx);
   tracker.commit();
@@ -1234,12 +1276,6 @@ std::unique_ptr<WildcardPattern> Parser::parse_wildcard_pattern() {
   return nullptr;
 }
 
-std::unique_ptr<RestPattern> Parser::parse_rest_pattern() {
-  Backtracker tracker(*_ast_ctx);
-  tracker.commit();
-  return nullptr;
-}
-
 std::unique_ptr<ReferencePattern> Parser::parse_reference_pattern() {
   Backtracker tracker(*_ast_ctx);
   tracker.commit();
@@ -1253,12 +1289,6 @@ std::unique_ptr<StructPattern> Parser::parse_struct_pattern() {
 }
 
 std::unique_ptr<StructPatternElements> Parser::parse_struct_pattern_elements() {
-  Backtracker tracker(*_ast_ctx);
-  tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<StructPatternEtCetera> Parser::parse_struct_pattern_et_cetera() {
   Backtracker tracker(*_ast_ctx);
   tracker.commit();
   return nullptr;

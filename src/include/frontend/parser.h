@@ -23,6 +23,7 @@ class Parser {
   std::unique_ptr<FunctionParameters> parse_function_parameters();
   std::unique_ptr<FunctionParam> parse_function_param();
   std::unique_ptr<FunctionParamPattern> parse_function_param_pattern();
+  std::unique_ptr<FunctionParamType> parse_function_param_type();
   std::unique_ptr<SelfParam> parse_self_param();
   std::unique_ptr<Type> parse_type();
   std::unique_ptr<TypeNoBounds> parse_type_no_bounds();
@@ -42,6 +43,9 @@ class Parser {
   std::unique_ptr<ConstantItem> parse_constant_item();
   std::unique_ptr<Trait> parse_trait();
   std::unique_ptr<AssociatedItem> parse_associated_item();
+  std::unique_ptr<AssociatedTypeAlias> parse_associated_type_alias();
+  std::unique_ptr<AssociatedConstantItem> parse_associated_constant_item();
+  std::unique_ptr<AssociatedFunction> parse_associated_function();
   std::unique_ptr<TypeAlias> parse_type_alias();
   std::unique_ptr<Implementation> parse_implementation();
   std::unique_ptr<InherentImpl> parse_inherent_impl();
@@ -49,6 +53,7 @@ class Parser {
   std::unique_ptr<TypePath> parse_type_path();
   std::unique_ptr<TypePathSegment> parse_type_path_segment();
   std::unique_ptr<PathIdentSegment> parse_path_ident_segment();
+
   std::unique_ptr<Expression> parse_expression();
   std::unique_ptr<ExpressionWithoutBlock> parse_expression_without_block();
   std::unique_ptr<LiteralExpression> parse_literal_expression();
@@ -68,6 +73,8 @@ class Parser {
   std::unique_ptr<GroupedExpression> parse_grouped_expression();
   std::unique_ptr<ArrayExpression> parse_array_expression();
   std::unique_ptr<ArrayElements> parse_array_elements();
+  std::unique_ptr<ExplicitArrayElements> parse_explicit_array_elements();
+  std::unique_ptr<RepeatedArrayElements> parse_repeated_array_elements();
   std::unique_ptr<IndexExpression> parse_index_expression();
   std::unique_ptr<TupleExpression> parse_tuple_expression();
   std::unique_ptr<TupleElements> parse_tuple_elements();
@@ -75,6 +82,8 @@ class Parser {
   std::unique_ptr<StructExpression> parse_struct_expression();
   std::unique_ptr<StructExprFields> parse_struct_expr_fields();
   std::unique_ptr<StructExprField> parse_struct_expr_field();
+  std::unique_ptr<NamedStructExprField> parse_named_struct_expr_field();
+  std::unique_ptr<IndexStructExprField> parse_index_struct_expr_field();
   std::unique_ptr<CallExpression> parse_call_expression();
   std::unique_ptr<CallParams> parse_call_params();
   std::unique_ptr<MethodCallExpression> parse_method_call_expression();
@@ -94,6 +103,8 @@ class Parser {
   std::unique_ptr<BlockExpression> parse_block_expression();
   std::unique_ptr<Statements> parse_statements();
   std::unique_ptr<Statement> parse_statement();
+  std::unique_ptr<EmptyStatement> parse_empty_statement();
+  std::unique_ptr<ItemStatement> parse_item_statement();
   std::unique_ptr<LetStatement> parse_let_statement();
   std::unique_ptr<ExpressionStatement> parse_expression_statement();
   std::unique_ptr<LoopExpression> parse_loop_expression();
@@ -111,11 +122,9 @@ class Parser {
   std::unique_ptr<LiteralPattern> parse_literal_pattern();
   std::unique_ptr<IdentifierPattern> parse_identifier_pattern();
   std::unique_ptr<WildcardPattern> parse_wildcard_pattern();
-  std::unique_ptr<RestPattern> parse_rest_pattern();
   std::unique_ptr<ReferencePattern> parse_reference_pattern();
   std::unique_ptr<StructPattern> parse_struct_pattern();
   std::unique_ptr<StructPatternElements> parse_struct_pattern_elements();
-  std::unique_ptr<StructPatternEtCetera> parse_struct_pattern_et_cetera();
   std::unique_ptr<StructPatternFields> parse_struct_pattern_fields();
   std::unique_ptr<StructPatternField> parse_struct_pattern_field();
   std::unique_ptr<TuplePattern> parse_tuple_pattern();

@@ -15,6 +15,7 @@ public:
   virtual void pre_visit(FunctionParameters &node) {}
   virtual void pre_visit(FunctionParam &node) {}
   virtual void pre_visit(FunctionParamPattern &node) {}
+  virtual void pre_visit(FunctionParamType &node) {}
   virtual void pre_visit(SelfParam &node) {}
   virtual void pre_visit(Type &node) {}
   virtual void pre_visit(TypeNoBounds &node) {}
@@ -34,6 +35,9 @@ public:
   virtual void pre_visit(ConstantItem &node) {}
   virtual void pre_visit(Trait &node) {}
   virtual void pre_visit(AssociatedItem &node) {}
+  virtual void pre_visit(AssociatedTypeAlias &node) {}
+  virtual void pre_visit(AssociatedConstantItem &node) {}
+  virtual void pre_visit(AssociatedFunction &node) {}
   virtual void pre_visit(TypeAlias &node) {}
   virtual void pre_visit(Implementation &node) {}
   virtual void pre_visit(InherentImpl &node) {}
@@ -86,6 +90,7 @@ public:
   virtual void pre_visit(BlockExpression &node) {}
   virtual void pre_visit(Statements &node) {}
   virtual void pre_visit(Statement &node) {}
+  virtual void pre_visit(EmptyStatement &node) {}
   virtual void pre_visit(LetStatement &node) {}
   virtual void pre_visit(ExpressionStatement &node) {}
   virtual void pre_visit(LoopExpression &node) {}
@@ -103,11 +108,9 @@ public:
   virtual void pre_visit(LiteralPattern &node) {}
   virtual void pre_visit(IdentifierPattern &node) {}
   virtual void pre_visit(WildcardPattern &node) {}
-  virtual void pre_visit(RestPattern &node) {}
   virtual void pre_visit(ReferencePattern &node) {}
   virtual void pre_visit(StructPattern &node) {}
   virtual void pre_visit(StructPatternElements &node) {}
-  virtual void pre_visit(StructPatternEtCetera &node) {}
   virtual void pre_visit(StructPatternFields &node) {}
   virtual void pre_visit(StructPatternField &node) {}
   virtual void pre_visit(TuplePattern &node) {}
@@ -123,6 +126,7 @@ public:
   virtual void post_visit(FunctionParameters &node) {}
   virtual void post_visit(FunctionParam &node) {}
   virtual void post_visit(FunctionParamPattern &node) {}
+  virtual void post_visit(FunctionParamType &node) {}
   virtual void post_visit(SelfParam &node) {}
   virtual void post_visit(Type &node) {}
   virtual void post_visit(TypeNoBounds &node) {}
@@ -142,6 +146,9 @@ public:
   virtual void post_visit(ConstantItem &node) {}
   virtual void post_visit(Trait &node) {}
   virtual void post_visit(AssociatedItem &node) {}
+  virtual void post_visit(AssociatedTypeAlias &node) {}
+  virtual void post_visit(AssociatedConstantItem &node) {}
+  virtual void post_visit(AssociatedFunction &node) {}
   virtual void post_visit(TypeAlias &node) {}
   virtual void post_visit(Implementation &node) {}
   virtual void post_visit(InherentImpl &node) {}
@@ -194,6 +201,7 @@ public:
   virtual void post_visit(BlockExpression &node) {}
   virtual void post_visit(Statements &node) {}
   virtual void post_visit(Statement &node) {}
+  virtual void post_visit(EmptyStatement &node) {}
   virtual void post_visit(LetStatement &node) {}
   virtual void post_visit(ExpressionStatement &node) {}
   virtual void post_visit(LoopExpression &node) {}
@@ -211,11 +219,9 @@ public:
   virtual void post_visit(LiteralPattern &node) {}
   virtual void post_visit(IdentifierPattern &node) {}
   virtual void post_visit(WildcardPattern &node) {}
-  virtual void post_visit(RestPattern &node) {}
   virtual void post_visit(ReferencePattern &node) {}
   virtual void post_visit(StructPattern &node) {}
   virtual void post_visit(StructPatternElements &node) {}
-  virtual void post_visit(StructPatternEtCetera &node) {}
   virtual void post_visit(StructPatternFields &node) {}
   virtual void post_visit(StructPatternField &node) {}
   virtual void post_visit(TuplePattern &node) {}

@@ -504,6 +504,13 @@ void Statement::accept(BasicVisitor &visitor) {
   visitor.post_visit(*this);
 }
 
+void EmptyStatement::accept(BasicVisitor &visitor) {
+  visitor.pre_visit(*this);
+  // Intended blank
+  visitor.post_visit(*this);
+}
+
+
 void LetStatement::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
   _pattern->accept(visitor);

@@ -18,6 +18,7 @@ Item ->
 
 VisItem ->
       Function
+    | TypeAlias
     | Struct
     | Enumeration
     | ConstantItem
@@ -42,7 +43,11 @@ FunctionParameters ->
     
 # No unsafe "..."
 FunctionParam ->
-    FunctionParamPattern | Type
+      FunctionParamPattern 
+    | FunctionParamType
+
+FunctionParamType ->
+    Type
 
 # No unsafe "..."
 FunctionParamPattern ->
@@ -131,7 +136,18 @@ Trait ->
     '{' AssociatedItem* '}'
 
 AssociatedItem ->
-    TypeAlias | ConstantItem | Function
+      AssociatedTypeAlias 
+    | AssociatedConstantItem 
+    | AssociatedFunction
+
+AssociatedTypeAlias ->
+    TypeAlias
+    
+AssociatedConstantItem ->
+    ConstantItem
+
+AssociatedFunction ->
+    Function
 
 # Simplified version
 TypeAlias ->
@@ -140,7 +156,8 @@ TypeAlias ->
     ('=' Type #WhereClause?#)? ';'
 
 Implementation ->
-    InherentImpl | TraitImpl
+      InherentImpl 
+    | TraitImpl
 
 InherentImpl ->
     "impl" #GenericParams?# Type #WhereClause?#
@@ -260,9 +277,15 @@ ArrayExpression ->
     '[' ArrayElements? ']'
 
 ArrayElements →
-      Expression (',' Expression)* ','?
-    | Expression ; Expression
-    
+      ExplicitArrayElements
+    | RepeatedArrayElements
+
+ExplicitArrayElements ->
+    Expression (',' Expression)* ','?
+
+RepeatedArrayElements ->
+    Expression ; Expression
+
 IndexExpression ->
     Expression '[' Expression ']'
     
@@ -281,8 +304,15 @@ StructExpression ->
 StructExprFields ->
     StructExprField (',' StructExprField)* ','? #(',' StructBase | ','?)#
 
-StructExprfield ->
-    IDENTIFIER | (IDENTIFIER | TUPLE_INDEX) ':' Expression
+# Identifier only is not supported now.
+StructExprField ->
+    (IDENTIFIER | TUPLE_INDEX) ':' Expression
+
+NamedStructExprField ->
+    IDENTIFIER ':' Expression
+    
+IndexStructExprField ->
+    TUPLE_INDEX ':' Expression
 
 # StructBase ->
 #    ".." Expression
@@ -339,7 +369,7 @@ UnderscoreExpression ->
 
 ExpressionWithBlock ->
       BlockExpression           # '{' something '}'
-   #| ConstBlockExpression#     # "const" + BlockExpression. I defy it.
+   #| ConstBlockExpression        "const" + BlockExpression. I defy it.
     | LoopExpression            # "loop", "while", "for"
     | IfExpression              # "if" "else"
     | MatchExpression           # "match" ... implement later
@@ -354,18 +384,26 @@ BlockExpression -> '{' Statements? '}'
 
 Statements ->
     Statement* ExpressionWithoutBlock?
-   
+
 Statement ->
-      ';'
-    | Item
+      EmptyStatement
+    | ItemStatement
     | LetStatement
     | ExpressionStatement
+
+ItemStatement ->
+    Item
+
+EmptyStatement ->
+    ';'
     
 # No bind-failure else expression
 LetStatement ->
     "let" PatternNoTopAlt (':' Type)?
     ('=' Expression)? 
-    
+
+# The ast nodes will just use ExprStatement -> Expression.
+# The semi problem will be handled in parser.
 ExpressionStatement ->
       ExpressionWithoutBlock ';'
     | ExpressionWithBlock ';'?
@@ -412,13 +450,14 @@ Pattern ->
 
 # No RangePattern
 PatternNoTopAlt ->
-    PatternWithoutRange
+      PatternWithoutRange
+   #| RangePattern
 
 PatternWithoutRange ->
       LiteralPattern
     | IdentifierPattern
     | WildcardPattern
-    | RestPattern
+   #| RestPattern
     | ReferencePattern
     | StructPattern
     | TuplePattern
@@ -435,8 +474,8 @@ IdentifierPattern ->
 WildcardPattern ->
     '_'
     
-RestPattern ->
-    ".."
+# RestPattern ->
+#     ".."
     
 ReferencePattern ->
     ('&' || "&&") "mut"? PatternWithoutRange
@@ -445,26 +484,33 @@ StructPattern ->
     PathInExpression '{' StructPatternElements? '}'
 
 StructPatternElements -> 
-      StructPatternFields (',' | ',' StructPatternEtCetera)?
-    | StructPatternEtCetera
+      StructPatternFields (',' #| ',' StructPatternEtCetera#)?
+   #| StructPatternEtCetera
         
-StructPatternEtCetera ->
-    ".."
+# StructPatternEtCetera ->
+#     ".."
 
 StructPatternFields ->
     StructPatternField (',' StructPatternField)*
 
+# Uh... I removed some possibilities.
+# You know, even the entire struct pattern is not being tested (for now).
 StructPatternField ->
-      TUPLE_INDEX ':' Pattern
+   #  TUPLE_INDEX ':' Pattern
     | IDENTIFIER ':' Pattern
-    | "ref"? "mut"? IDENTIFIER
+   #| "ref"? "mut"? IDENTIFIER
+
+IndexStructPatternField ->
+    TUPLE_INDEX ':' Pattern
+
+NamedStr
 
 TuplePattern ->
     '(' TuplePatternItems? ')'
     
 TuplePatternItems ->
       Pattern ','
-    | RestPattern
+   #| RestPattern
     | Pattern (',' Pattern)+ ','?
 
 GroupedPattern ->
