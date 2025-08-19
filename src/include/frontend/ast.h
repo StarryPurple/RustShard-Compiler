@@ -429,29 +429,17 @@ private:
   std::string_view _ident; // might be super/self/Self/crate/$crate
 };
 
-class BasicExpression : public BasicNode {
+class Expression : public BasicNode {
   using ExprType = insomnia::rust_shard::type::ExprType;
 public:
-  BasicExpression() = default;
+  Expression() = default;
   void set_type(std::shared_ptr<ExprType> expr_type) { _expr_type = expr_type; }
   std::shared_ptr<ExprType> get_type() const { return _expr_type; }
 private:
   std::shared_ptr<ExprType> _expr_type;
 };
 
-class Expression : public BasicExpression {
-public:
-  template <class Spec>
-  explicit Expression(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
-private:
-  std::variant<
-    std::unique_ptr<ExpressionWithoutBlock>,
-    std::unique_ptr<ExpressionWithBlock>
-  > _spec;
-};
-
-class ExpressionWithoutBlock : public BasicExpression {
+class ExpressionWithoutBlock : public Expression {
 public:
   template <class Spec>
   explicit ExpressionWithoutBlock(Spec &&spec) : _spec(std::forward<Spec>(spec)) {}
@@ -478,7 +466,7 @@ private:
   > _spec;
 };
 
-class LiteralExpression : public BasicExpression {
+class LiteralExpression : public Expression {
   using TypePrime = insomnia::rust_shard::type::TypePrime;
 public:
   template <class Spec>
@@ -498,7 +486,7 @@ private:
   > _spec;
 };
 
-class PathExpression : public BasicExpression {
+class PathExpression : public Expression {
 public:
   explicit PathExpression(
     std::unique_ptr<PathInExpression> &&path
@@ -508,7 +496,7 @@ private:
   std::unique_ptr<PathInExpression> _path;
 };
 
-class PathInExpression : public BasicExpression {
+class PathInExpression : public Expression {
 public:
   explicit PathInExpression(
     std::vector<std::unique_ptr<PathExprSegment>> &&segments
@@ -518,7 +506,7 @@ private:
   std::vector<std::unique_ptr<PathExprSegment>> _segments;
 };
 
-class PathExprSegment : public BasicExpression {
+class PathExprSegment : public Expression {
 public:
   explicit PathExprSegment(
     std::unique_ptr<PathIdentSegment> &&ident
@@ -528,7 +516,7 @@ private:
   std::unique_ptr<PathIdentSegment> _ident;
 };
 
-class OperatorExpression : public BasicExpression {
+class OperatorExpression : public Expression {
 public:
   template <class Spec>
   OperatorExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
@@ -547,7 +535,7 @@ private:
   > _spec;
 };
 
-class BorrowExpression : public BasicExpression {
+class BorrowExpression : public Expression {
 public:
   BorrowExpression(
     int ref_cnt,
@@ -561,7 +549,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class DereferenceExpression : public BasicExpression {
+class DereferenceExpression : public Expression {
 public:
   explicit DereferenceExpression(
     std::unique_ptr<Expression> &&expr
@@ -571,7 +559,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class NegationExpression : public BasicExpression {
+class NegationExpression : public Expression {
 public:
   NegationExpression(
     bool is_neg,
@@ -583,7 +571,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ArithmeticOrLogicalExpression : public BasicExpression {
+class ArithmeticOrLogicalExpression : public Expression {
 public:
   ArithmeticOrLogicalExpression(
   std::string_view oper,
@@ -596,7 +584,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class ComparisonExpression : public BasicExpression {
+class ComparisonExpression : public Expression {
 public:
   ComparisonExpression(
   std::string_view oper,
@@ -609,7 +597,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class LazyBooleanExpression : public BasicExpression {
+class LazyBooleanExpression : public Expression {
 public:
   LazyBooleanExpression(
     std::string_view oper,
@@ -622,7 +610,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class TypeCastExpression : public BasicExpression {
+class TypeCastExpression : public Expression {
 public:
   TypeCastExpression(
     std::unique_ptr<Expression> &&expr,
@@ -634,7 +622,7 @@ private:
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
 };
 
-class AssignmentExpression : public BasicExpression {
+class AssignmentExpression : public Expression {
 public:
   AssignmentExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -645,7 +633,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class CompoundAssignmentExpression : public BasicExpression {
+class CompoundAssignmentExpression : public Expression {
 public:
   CompoundAssignmentExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -656,7 +644,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class GroupedExpression : public BasicExpression {
+class GroupedExpression : public Expression {
 public:
   GroupedExpression(
     std::unique_ptr<Expression> expr
@@ -666,7 +654,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ArrayExpression : public BasicExpression {
+class ArrayExpression : public Expression {
 public:
   explicit ArrayExpression(
     std::unique_ptr<ArrayElements> &&elements_opt
@@ -676,7 +664,7 @@ private:
   std::unique_ptr<ArrayElements> _elements_opt;
 };
 
-class ArrayElements : public BasicExpression {
+class ArrayElements : public Expression {
   enum class SpecType {
     EXPLICIT, IMPLICIT
   };
@@ -696,7 +684,7 @@ private:
   std::unique_ptr<Expression> _rep_expr_opt, _const_expr_opt;
 };
 
-class IndexExpression : public BasicExpression {
+class IndexExpression : public Expression {
 public:
   IndexExpression(
     std::unique_ptr<Expression> &&expr1,
@@ -708,7 +696,7 @@ private:
   std::unique_ptr<Expression> _expr_index;
 };
 
-class TupleExpression : public BasicExpression {
+class TupleExpression : public Expression {
 public:
   explicit TupleExpression(
     std::unique_ptr<TupleElements> &&elems_opt
@@ -718,7 +706,7 @@ private:
   std::unique_ptr<TupleElements> _elems_opt;
 };
 
-class TupleElements : public BasicExpression {
+class TupleElements : public Expression {
 public:
   explicit TupleElements(
     std::vector<std::unique_ptr<Expression>> &&expr_list
@@ -728,7 +716,7 @@ private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
 
-class TupleIndexingExpression : public BasicExpression {
+class TupleIndexingExpression : public Expression {
 public:
   TupleIndexingExpression(
     std::unique_ptr<Expression> &&expr,
@@ -740,7 +728,7 @@ private:
   std::uintptr_t _index;
 };
 
-class StructExpression : public BasicExpression {
+class StructExpression : public Expression {
 public:
   StructExpression(
     std::unique_ptr<PathInExpression> &&path,
@@ -752,7 +740,7 @@ private:
   std::unique_ptr<StructExprFields> _fields_opt;
 };
 
-class StructExprFields : public BasicExpression {
+class StructExprFields : public Expression {
 public:
   explicit StructExprFields(
     std::vector<std::unique_ptr<StructExprField>> &&fields
@@ -762,7 +750,7 @@ private:
   std::vector<std::unique_ptr<StructExprField>> _fields;
 };
 
-class StructExprField : public BasicExpression {
+class StructExprField : public Expression {
   enum class SpecType {
     ID_ONLY, ID_EXPR, IDX_EXPR
   };
@@ -786,7 +774,7 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class CallExpression : public BasicExpression {
+class CallExpression : public Expression {
 public:
   CallExpression(
     std::unique_ptr<Expression> &&expr,
@@ -808,7 +796,7 @@ private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
 
-class MethodCallExpression : public BasicExpression {
+class MethodCallExpression : public Expression {
 public:
   MethodCallExpression(
     std::unique_ptr<Expression> &&expr,
@@ -823,7 +811,7 @@ private:
   std::unique_ptr<CallParams> _params_opt;
 };
 
-class FieldExpression : public BasicExpression {
+class FieldExpression : public Expression {
 public:
   FieldExpression(
     std::unique_ptr<Expression> &&expr,
@@ -835,14 +823,14 @@ private:
   std::string_view _ident;
 };
 
-class ContinueExpression : public BasicExpression {
+class ContinueExpression : public Expression {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class BreakExpression : public BasicExpression {
+class BreakExpression : public Expression {
 public:
   BreakExpression(
     std::unique_ptr<Expression> &&expr_opt
@@ -852,7 +840,7 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class RangeExpression : public BasicExpression {
+class RangeExpression : public Expression {
 public:
   template <class Spec>
   explicit RangeExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
@@ -868,7 +856,7 @@ private:
   > _spec;
 };
 
-class RangeExpr : public BasicExpression {
+class RangeExpr : public Expression {
 public:
   RangeExpr(
     std::unique_ptr<Expression> &&expr1,
@@ -879,7 +867,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class RangeFromExpr : public BasicExpression {
+class RangeFromExpr : public Expression {
 public:
   explicit RangeFromExpr(
     std::unique_ptr<Expression> &&expr
@@ -889,7 +877,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class RangeToExpr : public BasicExpression {
+class RangeToExpr : public Expression {
 public:
   explicit RangeToExpr(
     std::unique_ptr<Expression> &&expr
@@ -899,14 +887,14 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class RangeFullExpr : public BasicExpression {
+class RangeFullExpr : public Expression {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class RangeInclusiveExpr : public BasicExpression {
+class RangeInclusiveExpr : public Expression {
 public:
   RangeInclusiveExpr(
     std::unique_ptr<Expression> &&expr1,
@@ -917,7 +905,7 @@ private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
 
-class RangeToInclusiveExpr : public BasicExpression {
+class RangeToInclusiveExpr : public Expression {
 public:
   explicit RangeToInclusiveExpr(
     std::unique_ptr<Expression> &&expr
@@ -927,7 +915,7 @@ private:
   std::unique_ptr<Expression> _expr;
 };
 
-class ReturnExpression : public BasicExpression {
+class ReturnExpression : public Expression {
 public:
   explicit ReturnExpression(
     std::unique_ptr<Expression> &&expr_opt
@@ -937,14 +925,14 @@ private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
-class UnderscoreExpression : public BasicExpression {
+class UnderscoreExpression : public Expression {
 public:
   void accept(BasicVisitor &visitor) override;
 private:
   // Intended blank
 };
 
-class ExpressionWithBlock : public BasicExpression {
+class ExpressionWithBlock : public Expression {
 public:
   template <class Spec>
   explicit ExpressionWithBlock(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
@@ -958,7 +946,7 @@ private:
   > _spec;
 };
 
-class BlockExpression : public BasicExpression {
+class BlockExpression : public Expression {
 public:
   explicit BlockExpression(
     std::unique_ptr<Statements> &&stmts_opt
@@ -1021,7 +1009,7 @@ private:
   > _spec;
 };
 
-class LoopExpression : public BasicExpression {
+class LoopExpression : public Expression {
 public:
   template <class Spec>
   explicit LoopExpression(Spec &&spec): _spec(std::forward<Spec>(spec)) {}
@@ -1033,7 +1021,7 @@ private:
   > _spec;
 };
 
-class InfiniteLoopExpression : public BasicExpression {
+class InfiniteLoopExpression : public Expression {
 public:
   explicit InfiniteLoopExpression(
     std::unique_ptr<BlockExpression> &&block_expr
@@ -1043,7 +1031,7 @@ private:
   std::unique_ptr<BlockExpression> _block_expr;
 };
 
-class PredicateLoopExpression : public BasicExpression {
+class PredicateLoopExpression : public Expression {
 public:
   PredicateLoopExpression(
     std::unique_ptr<Conditions> &&cond,
@@ -1055,7 +1043,7 @@ private:
   std::unique_ptr<BlockExpression> _block_expr;
 };
 
-class IfExpression : public BasicExpression {
+class IfExpression : public Expression {
 public:
   template <class ElseSpec>
   IfExpression(
@@ -1085,7 +1073,7 @@ private:
   std::unique_ptr<Expression> _expr; // not StructExpression
 };
 
-class MatchExpression : public BasicExpression {
+class MatchExpression : public Expression {
 public:
   MatchExpression(
     std::unique_ptr<Expression> &&expr,

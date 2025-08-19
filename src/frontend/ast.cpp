@@ -209,12 +209,6 @@ void PathIdentSegment::accept(BasicVisitor &visitor) {
   visitor.post_visit(*this);
 }
 
-void Expression::accept(BasicVisitor &visitor) {
-  visitor.pre_visit(*this);
-  std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
-  visitor.post_visit(*this);
-}
-
 void ExpressionWithoutBlock::accept(BasicVisitor &visitor) {
   visitor.pre_visit(*this);
   std::visit([&](auto &spec){ spec->accept(visitor); }, _spec);
