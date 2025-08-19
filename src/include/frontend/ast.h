@@ -13,6 +13,7 @@
  *   (A -> B+) std::vector<std::unique_ptr<B>> _b;
  *   (A -> (B C)*) struct Group { B b; C c; }; std::vector<Group> _groups;
  */
+// the builtin type for TUPLE_INDEX is not fixed... Maybe fix it someday.
 #ifndef INSOMNIA_AST_H
 #define INSOMNIA_AST_H
 
@@ -60,7 +61,7 @@ class VisItem : public BasicNode {
 public:
   VisItem() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class Function : public VisItem {
@@ -107,7 +108,7 @@ class FunctionParam : public BasicNode {
 public:
   FunctionParam() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class FunctionParamPattern : public FunctionParam {
@@ -158,14 +159,14 @@ class Type : public BasicNode {
 public:
   Type() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class TypeNoBounds : public Type {
 public:
   TypeNoBounds() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class ParenthesizedType : public TypeNoBounds {
@@ -238,7 +239,7 @@ class Struct : public VisItem {
 public:
   Struct() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class StructStruct : public Struct {
@@ -374,7 +375,7 @@ class AssociatedItem : public BasicNode {
 public:
   AssociatedItem() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class AssociatedTypeAlias : public AssociatedItem {
@@ -432,7 +433,7 @@ class Implementation : public VisItem {
 public:
   Implementation() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class InherentImpl : public Implementation {
@@ -509,14 +510,14 @@ class Expression : public BasicNode {
 public:
   Expression() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class ExpressionWithoutBlock : public Expression {
 public:
   ExpressionWithoutBlock() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class LiteralExpression : public ExpressionWithoutBlock {
@@ -546,7 +547,7 @@ class PathExpression : public ExpressionWithoutBlock {
 public:
   PathExpression() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class PathInExpression : public PathExpression {
@@ -577,7 +578,7 @@ class OperatorExpression : public ExpressionWithoutBlock {
 public:
   OperatorExpression() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class BorrowExpression : public OperatorExpression {
@@ -747,7 +748,7 @@ class ArrayElements : public Expression {
 public:
   ArrayElements() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class ExplicitArrayElements : public ArrayElements {
@@ -861,7 +862,7 @@ class StructExprField : public Expression {
 public:
   StructExprField() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class NamedStructExprField : public StructExprField {
@@ -959,7 +960,7 @@ class ContinueExpression : public ExpressionWithoutBlock {
 public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class BreakExpression : public ExpressionWithoutBlock {
@@ -978,7 +979,7 @@ class RangeExpression : public ExpressionWithoutBlock {
 public:
   RangeExpression() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class RangeExpr : public RangeExpression {
@@ -1023,7 +1024,7 @@ class RangeFullExpr : public RangeExpression {
 public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class RangeInclusiveExpr : public RangeExpression {
@@ -1068,14 +1069,14 @@ class UnderscoreExpression : public ExpressionWithoutBlock {
 public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class ExpressionWithBlock : public Expression {
 public:
   ExpressionWithBlock() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class BlockExpression : public ExpressionWithBlock {
@@ -1109,14 +1110,14 @@ class Statement : public BasicNode {
 public:
   Statement() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class EmptyStatement : public Statement {
 public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class ItemStatement : public Statement {
@@ -1166,7 +1167,7 @@ class LoopExpression : public ExpressionWithBlock {
 public:
   LoopExpression() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class InfiniteLoopExpression : public LoopExpression {
@@ -1312,14 +1313,14 @@ class PatternNoTopAlt : public BasicNode {
 public:
   PatternNoTopAlt() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class PatternWithoutRange : public PatternNoTopAlt {
 public:
   PatternWithoutRange() = default;
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class LiteralPattern : public PatternWithoutRange {
@@ -1363,7 +1364,7 @@ class WildcardPattern : public PatternWithoutRange {
 public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intentionally blank.
+  // Intentional blank.
 };
 
 class ReferencePattern : public PatternWithoutRange {
