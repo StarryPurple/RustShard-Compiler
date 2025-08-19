@@ -3,6 +3,7 @@
 
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 #include <unordered_set>
 
@@ -76,7 +77,7 @@ private:
 class ArrayType : public ExprType {
 public:
   ArrayType(std::shared_ptr<ExprType> type, std::size_t length, bool is_mut)
-  : ExprType(is_mut, TypeKind::ARRAY), _type(type), _length(length) {}
+  : ExprType(is_mut, TypeKind::ARRAY), _type(std::move(type)), _length(length) {}
   std::shared_ptr<ExprType> get_type() const { return _type; }
   std::size_t length() const { return _length; }
   void combine_hash(std::size_t &seed) const override;
@@ -90,7 +91,7 @@ private:
 class ReferenceType : public ExprType {
 public:
   ReferenceType(std::shared_ptr<ExprType> type, bool is_mut)
-  : ExprType(is_mut, TypeKind::REFERENCE), _type(type) {}
+  : ExprType(is_mut, TypeKind::REFERENCE), _type(std::move(type)) {}
   std::shared_ptr<ExprType> get_type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
 protected:
@@ -135,7 +136,7 @@ private:
 class SliceType : public ExprType {
 public:
   SliceType(std::shared_ptr<ExprType> type, bool is_mut)
-  : ExprType(is_mut, TypeKind::SLICE), _type(type) {}
+  : ExprType(is_mut, TypeKind::SLICE), _type(std::move(type)) {}
   std::shared_ptr<ExprType> get_type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
 protected:
@@ -147,7 +148,7 @@ private:
 class AliasType : public ExprType {
 public:
   explicit AliasType(std::string ident, std::shared_ptr<ExprType> type)
-  : ExprType(false, TypeKind::ALIAS), _ident(std::move(ident)), _type(type) {}
+  : ExprType(false, TypeKind::ALIAS), _ident(std::move(ident)), _type(std::move(type)) {}
   std::shared_ptr<ExprType> get_type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
 protected:

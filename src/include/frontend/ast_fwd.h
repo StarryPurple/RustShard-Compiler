@@ -18,8 +18,6 @@ class FunctionParamPattern;
 class FunctionParamType;
 class SelfParam;
 
-class BasicType;
-
 class Type;
 class TypeNoBounds;
 class ParenthesizedType;
@@ -129,6 +127,125 @@ class GroupedPattern;
 class SlicePattern;
 class SlicePatternItems;
 class PathPattern;
+
+#define INSOMNIA_RUST_SHARD_AST_NODES_LIST(M) \
+  M(Crate) \
+  M(Item) \
+  M(VisItem) \
+  M(Function) \
+  M(FunctionParameters) \
+  M(FunctionParam) \
+  M(FunctionParamPattern) \
+  M(FunctionParamType) \
+  M(SelfParam) \
+  M(Type) \
+  M(TypeNoBounds) \
+  M(ParenthesizedType) \
+  M(TupleType) \
+  M(ReferenceType) \
+  M(ArrayType) \
+  M(SliceType) \
+  M(Struct) \
+  M(StructStruct) \
+  M(StructFields) \
+  M(StructField) \
+  M(Enumeration) \
+  M(EnumItems) \
+  M(EnumItem) \
+  M(EnumItemDiscriminant) \
+  M(ConstantItem) \
+  M(Trait) \
+  M(AssociatedItem) \
+  M(AssociatedTypeAlias) \
+  M(AssociatedConstantItem) \
+  M(AssociatedFunction) \
+  M(TypeAlias) \
+  M(Implementation) \
+  M(InherentImpl) \
+  M(TraitImpl) \
+  M(TypePath) \
+  M(TypePathSegment) \
+  M(PathIdentSegment) \
+  M(Expression) \
+  M(ExpressionWithoutBlock) \
+  M(LiteralExpression) \
+  M(PathExpression) \
+  M(PathInExpression) \
+  M(PathExprSegment) \
+  M(OperatorExpression) \
+  M(BorrowExpression) \
+  M(DereferenceExpression) \
+  M(NegationExpression) \
+  M(ArithmeticOrLogicalExpression) \
+  M(ComparisonExpression) \
+  M(LazyBooleanExpression) \
+  M(TypeCastExpression) \
+  M(AssignmentExpression) \
+  M(CompoundAssignmentExpression) \
+  M(GroupedExpression) \
+  M(ArrayExpression) \
+  M(ArrayElements) \
+  M(ExplicitArrayElements) \
+  M(RepeatedArrayElements) \
+  M(IndexExpression) \
+  M(TupleExpression) \
+  M(TupleElements) \
+  M(TupleIndexingExpression) \
+  M(StructExpression) \
+  M(StructExprFields) \
+  M(StructExprField) \
+  M(NamedStructExprField) \
+  M(IndexStructExprField) \
+  M(CallExpression) \
+  M(CallParams) \
+  M(MethodCallExpression) \
+  M(FieldExpression) \
+  M(ContinueExpression) \
+  M(BreakExpression) \
+  M(RangeExpression) \
+  M(RangeExpr) \
+  M(RangeFromExpr) \
+  M(RangeToExpr) \
+  M(RangeFullExpr) \
+  M(RangeInclusiveExpr) \
+  M(RangeToInclusiveExpr) \
+  M(ReturnExpression) \
+  M(UnderscoreExpression) \
+  M(ExpressionWithBlock) \
+  M(BlockExpression) \
+  M(Statements) \
+  M(Statement) \
+  M(EmptyStatement) \
+  M(ItemStatement) \
+  M(LetStatement) \
+  M(ExpressionStatement) \
+  M(LoopExpression) \
+  M(InfiniteLoopExpression) \
+  M(PredicateLoopExpression) \
+  M(IfExpression) \
+  M(Conditions) \
+  M(MatchExpression) \
+  M(MatchArms) \
+  M(MatchArm) \
+  M(MatchArmGuard) \
+  M(Pattern) \
+  M(PatternNoTopAlt) \
+  M(PatternWithoutRange) \
+  M(LiteralPattern) \
+  M(IdentifierPattern) \
+  M(WildcardPattern) \
+  M(ReferencePattern) \
+  M(StructPattern) \
+  M(StructPatternElements) \
+  M(StructPatternFields) \
+  M(StructPatternField) \
+  M(TuplePattern) \
+  M(TuplePatternItems) \
+  M(GroupedPattern) \
+  M(SlicePattern) \
+  M(SlicePatternItems) \
+  M(PathPattern)
+
 
 #define INSOMNIA_RUST_SHARD_AST_VISITABLE_NODES_LIST(M) \
   M(Crate) \

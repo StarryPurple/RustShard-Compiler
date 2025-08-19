@@ -3,18 +3,28 @@
 #include "ast.h"
 #include "lexer.h"
 
-namespace insomnia::rust_shard::ast {
+#define PARSE_FUNCTION_GEN_METHOD(Node) \
+  std::unique_ptr<Node> parse##Node();
 
+namespace insomnia::rust_shard::ast {
 
 class Parser {
   class Context; // Token flow
   class Backtracker;
-  std::unique_ptr<Context> _ast_ctx;
   bool _is_good = false;
-
+  std::unique_ptr<Context> _ast_ctx;
   std::unique_ptr<Crate> _crate;
+  std::string _error_msg;
 
-  // returns an empty pointer as an error signal.
+  // record? report? ...
+  void recordError(const std::string &msg) {
+    _error_msg += msg;
+    _error_msg += '\n';
+  }
+
+  // returns an empty pointer as failure signal.
+
+  INSOMNIA_RUST_SHARD_AST_NODES_LIST(PARSE_FUNCTION_GEN_METHOD)
 
 public:
   Parser() = default;
@@ -22,10 +32,12 @@ public:
 
   void parseAll(Lexer &lexer);
 
-  [[nodiscard]] explicit operator bool() const { return _is_good; }
-  [[nodiscard]] bool is_good() const { return _is_good; }
+  explicit operator bool() const { return _is_good; }
+  bool is_good() const { return _is_good; }
+  const std::string& error_msg() const { return _error_msg; }
 };
 
 }
 
+#undef PARSE_FUNCTION_GEN_METHOD
 #endif // INSOMNIA_PARSER_H
