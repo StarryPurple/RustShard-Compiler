@@ -4,6 +4,7 @@
 namespace insomnia::rust_shard::ast {
 
 class BasicVisitor;
+class RecursiveVisitor;
 
 class BasicNode;
 
@@ -129,6 +130,104 @@ class SlicePattern;
 class SlicePatternItems;
 class PathPattern;
 
-}
+#define INSOMNIA_RUST_SHARD_AST_VISITABLE_NODES_LIST(M) \
+  M(Crate) \
+  M(Item) \
+  M(Function) \
+  M(FunctionParameters) \
+  M(FunctionParamPattern) \
+  M(FunctionParamType) \
+  M(SelfParam) \
+  M(ParenthesizedType) \
+  M(TupleType) \
+  M(ReferenceType) \
+  M(ArrayType) \
+  M(SliceType) \
+  M(StructStruct) \
+  M(StructFields) \
+  M(StructField) \
+  M(Enumeration) \
+  M(EnumItems) \
+  M(EnumItem) \
+  M(EnumItemDiscriminant) \
+  M(ConstantItem) \
+  M(Trait) \
+  M(AssociatedTypeAlias) \
+  M(AssociatedConstantItem) \
+  M(AssociatedFunction) \
+  M(TypeAlias) \
+  M(InherentImpl) \
+  M(TraitImpl) \
+  M(TypePath) \
+  M(TypePathSegment) \
+  M(PathIdentSegment) \
+  M(LiteralExpression) \
+  M(PathInExpression) \
+  M(PathExprSegment) \
+  M(BorrowExpression) \
+  M(DereferenceExpression) \
+  M(NegationExpression) \
+  M(ArithmeticOrLogicalExpression) \
+  M(ComparisonExpression) \
+  M(LazyBooleanExpression) \
+  M(TypeCastExpression) \
+  M(AssignmentExpression) \
+  M(CompoundAssignmentExpression) \
+  M(GroupedExpression) \
+  M(ArrayExpression) \
+  M(ExplicitArrayElements) \
+  M(RepeatedArrayElements) \
+  M(IndexExpression) \
+  M(TupleExpression) \
+  M(TupleElements) \
+  M(TupleIndexingExpression) \
+  M(StructExpression) \
+  M(StructExprFields) \
+  M(NamedStructExprField) \
+  M(IndexStructExprField) \
+  M(CallExpression) \
+  M(CallParams) \
+  M(MethodCallExpression) \
+  M(FieldExpression) \
+  M(ContinueExpression) \
+  M(BreakExpression) \
+  M(RangeExpr) \
+  M(RangeFromExpr) \
+  M(RangeToExpr) \
+  M(RangeFullExpr) \
+  M(RangeInclusiveExpr) \
+  M(RangeToInclusiveExpr) \
+  M(ReturnExpression) \
+  M(UnderscoreExpression) \
+  M(BlockExpression) \
+  M(Statements) \
+  M(EmptyStatement) \
+  M(ItemStatement) \
+  M(LetStatement) \
+  M(ExpressionStatement) \
+  M(InfiniteLoopExpression) \
+  M(PredicateLoopExpression) \
+  M(IfExpression) \
+  M(Conditions) \
+  M(MatchExpression) \
+  M(MatchArms) \
+  M(MatchArm) \
+  M(MatchArmGuard) \
+  M(Pattern) \
+  M(LiteralPattern) \
+  M(IdentifierPattern) \
+  M(WildcardPattern) \
+  M(ReferencePattern) \
+  M(StructPattern) \
+  M(StructPatternElements) \
+  M(StructPatternFields) \
+  M(StructPatternField) \
+  M(TuplePattern) \
+  M(TuplePatternItems) \
+  M(GroupedPattern) \
+  M(SlicePattern) \
+  M(SlicePatternItems) \
+  M(PathPattern)
 
+}
 #endif // INSOMNIA_AST_FWD_H

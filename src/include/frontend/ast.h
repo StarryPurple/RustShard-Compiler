@@ -26,6 +26,9 @@
 
 namespace insomnia::rust_shard::ast {
 
+#define EXPOSE_FIELD(func_name, field_name) \
+  auto func_name() const -> const decltype(field_name) & { return field_name; }
+
 class BasicNode {
 public:
   virtual ~BasicNode() = default;
@@ -35,24 +38,28 @@ public:
 class Crate : public BasicNode {
 public:
   explicit Crate(std::vector<std::unique_ptr<Item>> &&items) : _items(std::move(items)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Item>> _items;
+public:
+  auto items() const -> const decltype(_items) & { return _items; }
 };
 
 class Item : public BasicNode {
 public:
   explicit Item(std::unique_ptr<VisItem> &&vis_item) : _vis_item(std::move(vis_item)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<VisItem> _vis_item;
+public:
+  auto vis_item() const -> const decltype(_vis_item) & { return _vis_item; }
 };
 
 class VisItem : public BasicNode {
 public:
   VisItem() = default;
 private:
-  // Intended blank.
+  // Intentionally blank.
 };
 
 class Function : public VisItem {
@@ -65,7 +72,7 @@ public:
     std::unique_ptr<BlockExpression> &&block_expr_opt
   ): _is_const(is_const), _ident(ident), _params_opt(std::move(params_opt)),
   _res_type_opt(std::move(res_type_opt)), _block_expr_opt(std::move(block_expr_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_const;
   std::string_view _ident;
@@ -80,7 +87,7 @@ public:
     std::unique_ptr<SelfParam> &&self_param,
     std::vector<std::unique_ptr<FunctionParam>> &&func_params
   ): _self_param_opt(std::move(self_param)), _func_params(std::move(func_params)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<SelfParam> _self_param_opt;
   std::vector<std::unique_ptr<FunctionParam>> _func_params;
@@ -90,7 +97,7 @@ class FunctionParam : public BasicNode {
 public:
   FunctionParam() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class FunctionParamPattern : public FunctionParam {
@@ -99,7 +106,7 @@ public:
     std::unique_ptr<PatternNoTopAlt> &&pattern,
     std::unique_ptr<Type> &&type
   ): _pattern(std::move(pattern)), _type(std::move(type)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PatternNoTopAlt> _pattern;
   std::unique_ptr<Type> _type;
@@ -110,7 +117,7 @@ public:
   explicit FunctionParamType(
     std::unique_ptr<Type> &&type
   ): _type(std::move(type)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Type> _type;
 };
@@ -121,7 +128,7 @@ public:
     bool is_ref, bool is_mut,
     std::unique_ptr<Type> &&type
   ): _is_ref(is_ref), _is_mut(is_mut), _type(std::move(type)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_ref;
   bool _is_mut;
@@ -129,19 +136,17 @@ private:
 };
 
 class Type : public BasicNode {
-  using ExprType = ::insomnia::rust_shard::type::ExprType;
 public:
-  void set_type(std::shared_ptr<ExprType> expr_type) { _type = expr_type; }
-  std::shared_ptr<ExprType> get_type() const { return _type; }
+  Type() = default;
 private:
-  std::shared_ptr<ExprType> _type;
+  // Intentionally blank.
 };
 
 class TypeNoBounds : public Type {
 public:
   TypeNoBounds() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class ParenthesizedType : public TypeNoBounds {
@@ -149,7 +154,7 @@ public:
   ParenthesizedType(
     std::unique_ptr<Type> &&type
   ): _type(std::move(type)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Type> _type;
 };
@@ -159,7 +164,7 @@ public:
   TupleType(
     std::vector<std::unique_ptr<Type>> &&types
   ): _types(std::move(types)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Type>> _types;
 };
@@ -170,7 +175,7 @@ public:
     bool is_mut,
     std::unique_ptr<TypeNoBounds> &&type_no_bounds
   ): _is_mut(is_mut), _type_no_bounds(std::move(type_no_bounds)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_mut;
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
@@ -182,7 +187,7 @@ public:
     std::unique_ptr<Type> &&type,
     std::unique_ptr<Expression> &&const_expr
   ): _type(std::move(type)), _const_expr(std::move(const_expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Type> _type;
   std::unique_ptr<Expression> _const_expr;
@@ -193,7 +198,7 @@ public:
   explicit SliceType(
     std::unique_ptr<Type> &&type
   ): _type(std::move(type)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Type> _type;
 };
@@ -202,7 +207,7 @@ class Struct : public VisItem {
 public:
   Struct() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class StructStruct : public Struct {
@@ -211,7 +216,7 @@ public:
     std::string_view struct_name,
     std::unique_ptr<StructFields> &&fields_opt
   ): _struct_name(struct_name), _fields_opt(std::move(fields_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _struct_name;
   std::unique_ptr<StructFields> _fields_opt;
@@ -222,7 +227,7 @@ public:
   explicit StructFields(
     std::vector<std::unique_ptr<StructField>> &&fields
   ): _fields(std::move(fields)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<StructField>> _fields;
 };
@@ -233,7 +238,7 @@ public:
     std::string_view struct_name,
     std::unique_ptr<Type> &&type
   ): _struct_name(struct_name), _type(std::move(type)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _struct_name;
   std::unique_ptr<Type> _type;
@@ -245,7 +250,7 @@ public:
     std::string_view enum_name,
     std::unique_ptr<EnumItems> &&items_opt
   ): _enum_name(enum_name), _items_opt(std::move(items_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _enum_name;
   std::unique_ptr<EnumItems> _items_opt;
@@ -256,7 +261,7 @@ public:
   explicit EnumItems(
     std::vector<std::unique_ptr<EnumItem>> &&item
   ): _items(std::move(item)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<EnumItem>> _items;
 };
@@ -267,7 +272,7 @@ public:
     std::string_view item_name,
     std::unique_ptr<EnumItemDiscriminant> &&discr_opt
   ): _item_name(item_name), _discr_opt(std::move(discr_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _item_name;
   std::unique_ptr<EnumItemDiscriminant> _discr_opt;
@@ -278,7 +283,7 @@ public:
   explicit EnumItemDiscriminant(
     std::unique_ptr<Expression> &&const_expr
   ): _const_expr(std::move(const_expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _const_expr;
 };
@@ -290,7 +295,7 @@ public:
     std::unique_ptr<Type> &&type,
     std::unique_ptr<Expression> &&const_expr_opt
   ): _item_name(item_name), _type(std::move(type)), _const_expr_opt(std::move(const_expr_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _item_name; // might be an underscore.
   std::unique_ptr<Type> _type;
@@ -303,7 +308,7 @@ public:
     std::string_view trait_name,
     std::vector<std::unique_ptr<AssociatedItem>> &&asso_items
   ): _trait_name(trait_name), _asso_items(std::move(asso_items)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _trait_name;
   std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
@@ -313,7 +318,7 @@ class AssociatedItem : public BasicNode {
 public:
   AssociatedItem() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class AssociatedTypeAlias : public AssociatedItem {
@@ -321,7 +326,7 @@ public:
   explicit AssociatedTypeAlias(
     std::unique_ptr<TypeAlias> &&alias
   ): _alias(std::move(alias)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<TypeAlias> _alias;
 };
@@ -331,7 +336,7 @@ public:
   explicit AssociatedConstantItem(
     std::unique_ptr<ConstantItem> &&citem
   ): _citem(std::move(citem)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<ConstantItem> _citem;
 };
@@ -341,7 +346,7 @@ public:
   explicit AssociatedFunction(
     std::unique_ptr<Function> &&func
   ): _func(std::move(func)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Function> _func;
 };
@@ -352,7 +357,7 @@ public:
     std::string_view alias_name,
     std::unique_ptr<Type> &&type_opt
   ): _alias_name(alias_name), _type_opt(std::move(type_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _alias_name;
   std::unique_ptr<Type> _type_opt;
@@ -362,7 +367,7 @@ class Implementation : public VisItem {
 public:
   Implementation() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class InherentImpl : public Implementation {
@@ -371,7 +376,7 @@ public:
     std::unique_ptr<Type> &&type,
     std::vector<std::unique_ptr<AssociatedItem>> &&asso_items
   ): _type(std::move(type)), _asso_items(std::move(asso_items)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Type> _type;
   std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
@@ -385,7 +390,7 @@ public:
     std::vector<std::unique_ptr<AssociatedItem>> &&asso_items
   ): _type_path(std::move(type_path)), _tar_type(std::move(tar_type)),
   _asso_items(std::move(asso_items)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<TypePath> _type_path;
   std::unique_ptr<Type> _tar_type;
@@ -397,7 +402,7 @@ public:
   explicit TypePath(
     std::vector<std::unique_ptr<TypePathSegment>> &&segments
   ): _segments(std::move(segments)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<TypePathSegment>> _segments;
 };
@@ -407,7 +412,7 @@ public:
   TypePathSegment(
     std::unique_ptr<PathIdentSegment> &&ident_segment
   ): _ident_segment(std::move(ident_segment)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PathIdentSegment> _ident_segment;
 };
@@ -417,26 +422,23 @@ public:
   explicit PathIdentSegment(
     std::string_view ident
   ): _ident(ident) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _ident; // might be super/self/Self/crate/$crate
 };
 
 class Expression : public BasicNode {
-  using ExprType = ::insomnia::rust_shard::type::ExprType;
 public:
   Expression() = default;
-  void set_type(std::shared_ptr<ExprType> expr_type) { _expr_type = expr_type; }
-  std::shared_ptr<ExprType> get_type() const { return _expr_type; }
 private:
-  std::shared_ptr<ExprType> _expr_type;
+  // Intentionally blank.
 };
 
 class ExpressionWithoutBlock : public Expression {
 public:
   ExpressionWithoutBlock() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class LiteralExpression : public ExpressionWithoutBlock {
@@ -445,7 +447,7 @@ public:
   template <class Spec>
   explicit LiteralExpression(TypePrime prime, Spec &&spec)
   : _prime(prime), _spec(std::forward<Spec>(spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   TypePrime _prime;
   std::variant<
@@ -463,7 +465,7 @@ class PathExpression : public ExpressionWithoutBlock {
 public:
   PathExpression() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class PathInExpression : public PathExpression {
@@ -471,7 +473,7 @@ public:
   explicit PathInExpression(
     std::vector<std::unique_ptr<PathExprSegment>> &&segments
   ): _segments(std::move(segments)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<PathExprSegment>> _segments;
 };
@@ -481,7 +483,7 @@ public:
   explicit PathExprSegment(
     std::unique_ptr<PathIdentSegment> &&ident
   ): _ident(std::move(ident)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PathIdentSegment> _ident;
 };
@@ -490,7 +492,7 @@ class OperatorExpression : public ExpressionWithoutBlock {
 public:
   OperatorExpression() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class BorrowExpression : public OperatorExpression {
@@ -500,7 +502,7 @@ public:
     bool is_mut,
     std::unique_ptr<Expression> &&expr
   ): _ref_cnt(ref_cnt), _is_mut(is_mut), _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   int _ref_cnt; // 0/1/2
   bool _is_mut;
@@ -512,7 +514,7 @@ public:
   explicit DereferenceExpression(
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
 };
@@ -523,7 +525,7 @@ public:
     bool is_neg,
     std::unique_ptr<Expression> &&expr
   ): _is_neg(is_neg), _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_neg; // true for neg '-', false for not '!'
   std::unique_ptr<Expression> _expr;
@@ -536,7 +538,7 @@ public:
   std::unique_ptr<Expression> &&expr1,
   std::unique_ptr<Expression> &&expr2
 ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
@@ -549,7 +551,7 @@ public:
   std::unique_ptr<Expression> &&expr1,
   std::unique_ptr<Expression> &&expr2
 ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
@@ -562,7 +564,7 @@ public:
     std::unique_ptr<Expression> &&expr1,
     std::unique_ptr<Expression> &&expr2
   ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
@@ -574,7 +576,7 @@ public:
     std::unique_ptr<Expression> &&expr,
     std::unique_ptr<TypeNoBounds> &&type_no_bounds
   ): _expr(std::move(expr)), _type_no_bounds(std::move(type_no_bounds)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
@@ -586,7 +588,7 @@ public:
     std::unique_ptr<Expression> &&expr1,
     std::unique_ptr<Expression> &&expr2
   ): _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
@@ -597,7 +599,7 @@ public:
     std::unique_ptr<Expression> &&expr1,
     std::unique_ptr<Expression> &&expr2
   ): _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
@@ -607,7 +609,7 @@ public:
   GroupedExpression(
     std::unique_ptr<Expression> expr
   ): _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
 };
@@ -617,7 +619,7 @@ public:
   explicit ArrayExpression(
     std::unique_ptr<ArrayElements> &&elements_opt
   ): _elements_opt(std::move(elements_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<ArrayElements> _elements_opt;
 };
@@ -626,7 +628,7 @@ class ArrayElements : public Expression {
 public:
   ArrayElements() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class ExplicitArrayElements : public ArrayElements {
@@ -634,7 +636,7 @@ public:
   explicit ExplicitArrayElements(
     std::vector<std::unique_ptr<Expression>> &&expr_list
   ): _expr_list(std::move(expr_list)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
@@ -645,7 +647,7 @@ public:
     std::unique_ptr<Expression> &&expr,
     std::unique_ptr<Expression> &&length
   ): _expr(std::move(expr)), _length(std::move(length)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr, _length;
 };
@@ -656,7 +658,7 @@ public:
     std::unique_ptr<Expression> &&expr1,
     std::unique_ptr<Expression> &&expr_index
   ): _expr1(std::move(expr1)), _expr_index(std::move(expr_index)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1;
   std::unique_ptr<Expression> _expr_index;
@@ -667,7 +669,7 @@ public:
   explicit TupleExpression(
     std::unique_ptr<TupleElements> &&elems_opt
   ): _elems_opt(std::move(elems_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<TupleElements> _elems_opt;
 };
@@ -677,7 +679,7 @@ public:
   explicit TupleElements(
     std::vector<std::unique_ptr<Expression>> &&expr_list
   ): _expr_list(std::move(expr_list)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
@@ -688,7 +690,7 @@ public:
     std::unique_ptr<Expression> &&expr,
     std::uintptr_t index
   ): _expr(std::move(expr)), _index(index) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
   std::uintptr_t _index;
@@ -700,7 +702,7 @@ public:
     std::unique_ptr<PathInExpression> &&path,
     std::unique_ptr<StructExprFields> &&fields_opt
   ): _path(std::move(path)), _fields_opt(std::move(fields_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PathInExpression> _path;
   std::unique_ptr<StructExprFields> _fields_opt;
@@ -711,7 +713,7 @@ public:
   explicit StructExprFields(
     std::vector<std::unique_ptr<StructExprField>> &&fields
   ): _fields(std::move(fields)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<StructExprField>> _fields;
 };
@@ -720,7 +722,7 @@ class StructExprField : public Expression {
 public:
   StructExprField() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class NamedStructExprField : public StructExprField {
@@ -729,7 +731,7 @@ public:
     std::string_view ident,
     std::unique_ptr<Expression> &&expr
   ): _ident(ident), _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _ident;
   std::unique_ptr<Expression> _expr;
@@ -741,7 +743,7 @@ public:
     std::size_t index,
     std::unique_ptr<Expression> &&expr
   ): _index(index), _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::size_t _index;
   std::unique_ptr<Expression> _expr;
@@ -753,7 +755,7 @@ public:
     std::unique_ptr<Expression> &&expr,
     std::unique_ptr<CallParams> &&params_opt
   ): _expr(std::move(expr)), _params_opt(std::move(params_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<CallParams> _params_opt;
@@ -764,7 +766,7 @@ public:
   explicit CallParams(
     std::vector<std::unique_ptr<Expression>> &&expr_list
   ): _expr_list(std::move(expr_list)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 };
@@ -777,7 +779,7 @@ public:
     std::unique_ptr<CallParams> &&params_opt
   ): _expr(std::move(expr)), _segment(std::move(segment)),
   _params_opt(std::move(params_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<PathExprSegment> _segment;
@@ -790,7 +792,7 @@ public:
     std::unique_ptr<Expression> &&expr,
     std::string_view ident
   ): _expr(std::move(expr)), _ident(ident) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
   std::string_view _ident;
@@ -798,9 +800,9 @@ private:
 
 class ContinueExpression : public ExpressionWithoutBlock {
 public:
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class BreakExpression : public ExpressionWithoutBlock {
@@ -808,7 +810,7 @@ public:
   BreakExpression(
     std::unique_ptr<Expression> &&expr_opt
   ): _expr_opt(std::move(expr_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr_opt;
 };
@@ -817,7 +819,7 @@ class RangeExpression : public ExpressionWithoutBlock {
 public:
   RangeExpression() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class RangeExpr : public RangeExpression {
@@ -826,7 +828,7 @@ public:
     std::unique_ptr<Expression> &&expr1,
     std::unique_ptr<Expression> &&expr2
   ): _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
@@ -836,7 +838,7 @@ public:
   explicit RangeFromExpr(
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
 };
@@ -846,16 +848,16 @@ public:
   explicit RangeToExpr(
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
 };
 
 class RangeFullExpr : public RangeExpression {
 public:
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class RangeInclusiveExpr : public RangeExpression {
@@ -864,7 +866,7 @@ public:
     std::unique_ptr<Expression> &&expr1,
     std::unique_ptr<Expression> &&expr2
   ): _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
 };
@@ -874,7 +876,7 @@ public:
   explicit RangeToInclusiveExpr(
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
 };
@@ -884,23 +886,23 @@ public:
   explicit ReturnExpression(
     std::unique_ptr<Expression> &&expr_opt
   ): _expr_opt(std::move(expr_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr_opt;
 };
 
 class UnderscoreExpression : public ExpressionWithoutBlock {
 public:
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class ExpressionWithBlock : public Expression {
 public:
   ExpressionWithBlock() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class BlockExpression : public ExpressionWithBlock {
@@ -908,7 +910,7 @@ public:
   explicit BlockExpression(
     std::unique_ptr<Statements> &&stmts_opt
   ): _stmts_opt(std::move(stmts_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Statements> _stmts_opt;
 };
@@ -919,7 +921,7 @@ public:
     std::vector<std::unique_ptr<Statement>> &&stmts,
     std::unique_ptr<ExpressionWithoutBlock> &&expr_no_block_opt
   ): _stmts(std::move(stmts)), _expr_no_block_opt(std::move(expr_no_block_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Statement>> _stmts;
   std::unique_ptr<ExpressionWithoutBlock> _expr_no_block_opt;
@@ -929,14 +931,14 @@ class Statement : public BasicNode {
 public:
   Statement() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class EmptyStatement : public Statement {
 public:
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class ItemStatement : public Statement {
@@ -944,7 +946,7 @@ public:
   explicit ItemStatement(
     std::unique_ptr<Item> &&item
   ): _item(std::move(item)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Item> _item;
 };
@@ -957,7 +959,7 @@ public:
     std::unique_ptr<Expression> &&expr_opt
   ): _pattern(std::move(pattern)), _type_opt(std::move(type_opt)),
   _expr_opt(std::move(expr_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PatternNoTopAlt> _pattern;
   std::unique_ptr<Type> _type_opt;
@@ -969,7 +971,7 @@ public:
   explicit ExpressionStatement(
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
 };
@@ -978,7 +980,7 @@ class LoopExpression : public ExpressionWithBlock {
 public:
   LoopExpression() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class InfiniteLoopExpression : public LoopExpression {
@@ -986,7 +988,7 @@ public:
   explicit InfiniteLoopExpression(
     std::unique_ptr<BlockExpression> &&block_expr
   ): _block_expr(std::move(block_expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<BlockExpression> _block_expr;
 };
@@ -997,7 +999,7 @@ public:
     std::unique_ptr<Conditions> &&cond,
     std::unique_ptr<BlockExpression> &&block_expr
   ): _cond(std::move(cond)), _block_expr(std::move(block_expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Conditions> _cond;
   std::unique_ptr<BlockExpression> _block_expr;
@@ -1012,7 +1014,7 @@ public:
     ElseSpec &&else_spec
   ): _cond(std::move(cond)), _block_expr(std::move(block_expr)),
   _else_spec(std::forward<ElseSpec>(else_spec)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Conditions> _cond;
   std::unique_ptr<BlockExpression> _block_expr;
@@ -1028,7 +1030,7 @@ public:
   explicit Conditions(
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr; // not StructExpression
 };
@@ -1039,7 +1041,7 @@ public:
     std::unique_ptr<Expression> &&expr,
     std::unique_ptr<MatchArms> &&match_arms_opt
   ): _expr(std::move(expr)), _match_arms_opt(std::move(match_arms_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr; // not StructExpression
   std::unique_ptr<MatchArms> _match_arms_opt;
@@ -1050,7 +1052,7 @@ public:
   explicit MatchArms(
     std::vector<std::pair<std::unique_ptr<MatchArm>, std::unique_ptr<Expression>>> &&arms
   ): _arms(std::move(arms)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::pair<std::unique_ptr<MatchArm>, std::unique_ptr<Expression>>> _arms;
 };
@@ -1061,7 +1063,7 @@ public:
     std::unique_ptr<Pattern> &&pattern,
     std::unique_ptr<MatchArmGuard> &&guard_opt
   ): _pattern(std::move(pattern)), _guard_opt(std::move(guard_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Pattern> _pattern;
   std::unique_ptr<MatchArmGuard> _guard_opt;
@@ -1072,7 +1074,7 @@ public:
   explicit MatchArmGuard(
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
 };
@@ -1082,7 +1084,7 @@ public:
   explicit Pattern(
     std::vector<std::unique_ptr<PatternNoTopAlt>> &&pattern_list
   ): _pattern_list(std::move(pattern_list)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<PatternNoTopAlt>> _pattern_list;
 };
@@ -1091,14 +1093,14 @@ class PatternNoTopAlt : public BasicNode {
 public:
   PatternNoTopAlt() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class PatternWithoutRange : public PatternNoTopAlt {
 public:
   PatternWithoutRange() = default;
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class LiteralPattern : public PatternWithoutRange {
@@ -1107,7 +1109,7 @@ public:
     bool is_neg,
     std::unique_ptr<LiteralExpression> &&expr
   ): _is_neg(is_neg), _expr(std::move(expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_neg;
   std::unique_ptr<LiteralExpression> _expr;
@@ -1122,7 +1124,7 @@ public:
     std::unique_ptr<PatternNoTopAlt> &&pattern_opt
   ): _is_ref(is_ref), _is_mut(is_mut), _ident(ident),
   _pattern_opt(std::move(pattern_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_ref;
   bool _is_mut;
@@ -1132,9 +1134,9 @@ private:
 
 class WildcardPattern : public PatternWithoutRange {
 public:
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  // Intended blank
+  // Intentionally blank.
 };
 
 class ReferencePattern : public PatternWithoutRange {
@@ -1144,7 +1146,7 @@ public:
     bool is_mut,
     std::unique_ptr<PatternWithoutRange> &&pattern
   ): _ref_cnt(ref_cnt), _is_mut(is_mut), _pattern(std::move(pattern)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   int _ref_cnt;
   bool _is_mut;
@@ -1158,7 +1160,7 @@ public:
     std::unique_ptr<StructPatternElements> &&elems_opt
   ): _path_in_expr(std::move(path_in_expr)),
   _elems_opt(std::move(elems_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PathInExpression> _path_in_expr;
   std::unique_ptr<StructPatternElements> _elems_opt;
@@ -1169,7 +1171,7 @@ public:
   explicit StructPatternElements(
     std::unique_ptr<StructPatternFields> &&fields
   ): _fields(std::move(fields)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<StructPatternFields> _fields;
 };
@@ -1179,7 +1181,7 @@ public:
   explicit StructPatternFields(
     std::vector<std::unique_ptr<StructPatternField>> &&fields
   ): _fields(std::move(fields)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<StructPatternField>> _fields;
 };
@@ -1190,7 +1192,7 @@ public:
     std::string_view ident,
     std::unique_ptr<Pattern> &&pattern
   ): _ident(ident), _pattern(std::move(pattern)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _ident;
   std::unique_ptr<Pattern> _pattern;
@@ -1201,7 +1203,7 @@ public:
   explicit TuplePattern(
     std::unique_ptr<TuplePatternItems> items_opt
   ): _items_opt(std::move(items_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<TuplePatternItems> _items_opt;
 };
@@ -1211,7 +1213,7 @@ public:
   explicit TuplePatternItems(
     std::vector<std::unique_ptr<Pattern>> &&patterns
   ): _patterns(std::move(patterns)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Pattern>> _patterns;
 };
@@ -1221,7 +1223,7 @@ public:
   explicit GroupedPattern(
     std::unique_ptr<Pattern> &&pattern
   ): _pattern(std::move(pattern)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Pattern> _pattern;
 };
@@ -1231,7 +1233,7 @@ public:
   explicit SlicePattern(
     std::unique_ptr<SlicePatternItems> &&items_opt
   ): _items_opt(std::move(items_opt)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<SlicePatternItems> _items_opt;
 };
@@ -1241,7 +1243,7 @@ public:
   explicit SlicePatternItems(
     std::vector<std::unique_ptr<Pattern>> &&patterns
   ): _patterns(std::move(patterns)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Pattern>> _patterns;
 };
@@ -1251,7 +1253,7 @@ public:
   explicit PathPattern(
     std::unique_ptr<PathExpression> &&path_expr
   ): _path_expr(std::move(path_expr)) {}
-  void accept(BasicVisitor &visitor) override;
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PathExpression> _path_expr;
 };

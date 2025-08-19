@@ -9,10 +9,10 @@ add_executable(main)
 target_sources(main
     PRIVATE
     main.cpp
-    src/frontend/ast.cpp
     src/frontend/ast_type.cpp
     src/frontend/lexer.cpp
     src/frontend/parser.cpp
+    src/frontend/ast_recursive_visitor.cpp
 )
 target_include_directories(main
     PRIVATE
