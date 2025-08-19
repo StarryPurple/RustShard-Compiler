@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "ast_enums.h"
 
 namespace insomnia::rust_shard::ast {
 

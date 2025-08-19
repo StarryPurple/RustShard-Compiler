@@ -22,11 +22,12 @@
 
 #include "ast_fwd.h"
 #include "ast_type.h"
+#include "ast_enums.h"
 #include "ast_visitor.h"
 
 namespace insomnia::rust_shard::ast {
 
-#define EXPOSE_FIELD(func_name, field_name) \
+#define EXPOSE_FIELD_CONST_REFERENCE(func_name, field_name) \
   auto func_name() const -> const decltype(field_name) & { return field_name; }
 
 class BasicNode {
@@ -42,7 +43,7 @@ public:
 private:
   std::vector<std::unique_ptr<Item>> _items;
 public:
-  auto items() const -> const decltype(_items) & { return _items; }
+  EXPOSE_FIELD_CONST_REFERENCE(items, _items)
 };
 
 class Item : public BasicNode {
@@ -52,7 +53,7 @@ public:
 private:
   std::unique_ptr<VisItem> _vis_item;
 public:
-  auto vis_item() const -> const decltype(_vis_item) & { return _vis_item; }
+  EXPOSE_FIELD_CONST_REFERENCE(vis_item, _vis_item)
 };
 
 class VisItem : public BasicNode {
@@ -69,16 +70,22 @@ public:
     std::string_view ident,
     std::unique_ptr<FunctionParameters> &&params_opt,
     std::unique_ptr<Type> &&res_type_opt,
-    std::unique_ptr<BlockExpression> &&block_expr_opt
+    std::unique_ptr<BlockExpression> &&expr_opt
   ): _is_const(is_const), _ident(ident), _params_opt(std::move(params_opt)),
-  _res_type_opt(std::move(res_type_opt)), _block_expr_opt(std::move(block_expr_opt)) {}
+  _res_type_opt(std::move(res_type_opt)), _expr_opt(std::move(expr_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_const;
   std::string_view _ident;
   std::unique_ptr<FunctionParameters> _params_opt;
   std::unique_ptr<Type> _res_type_opt;
-  std::unique_ptr<BlockExpression> _block_expr_opt;
+  std::unique_ptr<BlockExpression> _expr_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(is_const, _is_const)
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
+  EXPOSE_FIELD_CONST_REFERENCE(params_opt, _params_opt)
+  EXPOSE_FIELD_CONST_REFERENCE(res_type_opt, _res_type_opt)
+  EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_opt)
 };
 
 class FunctionParameters : public BasicNode {
@@ -91,6 +98,9 @@ public:
 private:
   std::unique_ptr<SelfParam> _self_param_opt;
   std::vector<std::unique_ptr<FunctionParam>> _func_params;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(self_param_opt, _self_param_opt)
+  EXPOSE_FIELD_CONST_REFERENCE(func_params, _func_params)
 };
 
 class FunctionParam : public BasicNode {
@@ -110,6 +120,9 @@ public:
 private:
   std::unique_ptr<PatternNoTopAlt> _pattern;
   std::unique_ptr<Type> _type;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
 class FunctionParamType : public FunctionParam {
@@ -120,6 +133,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Type> _type;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
 class SelfParam : public BasicNode {
@@ -133,6 +148,10 @@ private:
   bool _is_ref;
   bool _is_mut;
   std::unique_ptr<Type> _type;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(is_ref, _is_ref)
+  EXPOSE_FIELD_CONST_REFERENCE(is_mut, _is_mut)
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
 class Type : public BasicNode {
@@ -157,6 +176,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Type> _type;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
 class TupleType : public TypeNoBounds {
@@ -167,6 +188,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Type>> _types;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(types, _types)
 };
 
 class ReferenceType : public TypeNoBounds {
@@ -179,6 +202,9 @@ public:
 private:
   bool _is_mut;
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(is_mut, _is_mut)
+  EXPOSE_FIELD_CONST_REFERENCE(type_no_bounds, _type_no_bounds)
 };
 
 class ArrayType : public TypeNoBounds {
@@ -191,6 +217,9 @@ public:
 private:
   std::unique_ptr<Type> _type;
   std::unique_ptr<Expression> _const_expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
+  EXPOSE_FIELD_CONST_REFERENCE(const_expr, _const_expr)
 };
 
 class SliceType : public TypeNoBounds {
@@ -201,6 +230,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Type> _type;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
 class Struct : public VisItem {
@@ -220,6 +251,9 @@ public:
 private:
   std::string_view _struct_name;
   std::unique_ptr<StructFields> _fields_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _struct_name)
+  EXPOSE_FIELD_CONST_REFERENCE(fields_opt, _fields_opt)
 };
 
 class StructFields : public BasicNode {
@@ -230,6 +264,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<StructField>> _fields;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(fields, _fields)
 };
 
 class StructField : public BasicNode {
@@ -242,6 +278,9 @@ public:
 private:
   std::string_view _struct_name;
   std::unique_ptr<Type> _type;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _struct_name)
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
 class Enumeration : public VisItem {
@@ -254,6 +293,9 @@ public:
 private:
   std::string_view _enum_name;
   std::unique_ptr<EnumItems> _items_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _enum_name)
+  EXPOSE_FIELD_CONST_REFERENCE(items_opt, _items_opt)
 };
 
 class EnumItems : public BasicNode {
@@ -264,6 +306,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<EnumItem>> _items;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(items, _items)
 };
 
 class EnumItem : public BasicNode {
@@ -276,6 +320,9 @@ public:
 private:
   std::string_view _item_name;
   std::unique_ptr<EnumItemDiscriminant> _discr_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _item_name)
+  EXPOSE_FIELD_CONST_REFERENCE(discr_opt, _discr_opt)
 };
 
 class EnumItemDiscriminant : public BasicNode {
@@ -286,6 +333,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _const_expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(const_expr, _const_expr)
 };
 
 class ConstantItem : public VisItem {
@@ -300,6 +349,10 @@ private:
   std::string_view _item_name; // might be an underscore.
   std::unique_ptr<Type> _type;
   std::unique_ptr<Expression> _const_expr_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _item_name)
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
+  EXPOSE_FIELD_CONST_REFERENCE(const_expr_opt, _const_expr_opt)
 };
 
 class Trait : public VisItem {
@@ -312,6 +365,9 @@ public:
 private:
   std::string_view _trait_name;
   std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _trait_name)
+  EXPOSE_FIELD_CONST_REFERENCE(asso_items, _asso_items)
 };
 
 class AssociatedItem : public BasicNode {
@@ -329,6 +385,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<TypeAlias> _alias;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(alias, _alias)
 };
 
 class AssociatedConstantItem : public AssociatedItem {
@@ -339,6 +397,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<ConstantItem> _citem;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(citem, _citem)
 };
 
 class AssociatedFunction : public AssociatedItem {
@@ -349,6 +409,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Function> _func;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(func, _func)
 };
 
 class TypeAlias : public VisItem {
@@ -361,6 +423,9 @@ public:
 private:
   std::string_view _alias_name;
   std::unique_ptr<Type> _type_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _alias_name)
+  EXPOSE_FIELD_CONST_REFERENCE(type_opt, _type_opt)
 };
 
 class Implementation : public VisItem {
@@ -380,6 +445,9 @@ public:
 private:
   std::unique_ptr<Type> _type;
   std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
+  EXPOSE_FIELD_CONST_REFERENCE(asso_items, _asso_items)
 };
 
 class TraitImpl : public Implementation {
@@ -395,6 +463,10 @@ private:
   std::unique_ptr<TypePath> _type_path;
   std::unique_ptr<Type> _tar_type;
   std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(type_path, _type_path)
+  EXPOSE_FIELD_CONST_REFERENCE(tar_type, _tar_type)
+  EXPOSE_FIELD_CONST_REFERENCE(asso_items, _asso_items)
 };
 
 class TypePath : public BasicNode {
@@ -405,6 +477,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<TypePathSegment>> _segments;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(segments, _segments)
 };
 
 class TypePathSegment : public BasicNode {
@@ -415,6 +489,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PathIdentSegment> _ident_segment;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident_segment, _ident_segment)
 };
 
 class PathIdentSegment : public BasicNode {
@@ -425,6 +501,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string_view _ident; // might be super/self/Self/crate/$crate
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
 };
 
 class Expression : public BasicNode {
@@ -459,6 +537,9 @@ private:
     double,
     bool
   > _spec;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(prime, _prime)
+  EXPOSE_FIELD_CONST_REFERENCE(spec_value, _spec)
 };
 
 class PathExpression : public ExpressionWithoutBlock {
@@ -476,6 +557,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<PathExprSegment>> _segments;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(segments, _segments)
 };
 
 class PathExprSegment : public BasicNode {
@@ -486,6 +569,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PathIdentSegment> _ident;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
 };
 
 class OperatorExpression : public ExpressionWithoutBlock {
@@ -507,6 +592,10 @@ private:
   int _ref_cnt; // 0/1/2
   bool _is_mut;
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ref_cnt, _ref_cnt)
+  EXPOSE_FIELD_CONST_REFERENCE(is_mut, _is_mut)
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class DereferenceExpression : public OperatorExpression {
@@ -517,6 +606,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class NegationExpression : public OperatorExpression {
@@ -529,45 +620,60 @@ public:
 private:
   bool _is_neg; // true for neg '-', false for not '!'
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(is_neg, _is_neg)
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class ArithmeticOrLogicalExpression : public OperatorExpression {
 public:
   ArithmeticOrLogicalExpression(
-  std::string_view oper,
+  Operator oper,
   std::unique_ptr<Expression> &&expr1,
   std::unique_ptr<Expression> &&expr2
 ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  std::string_view _oper;
+  Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(oper, _oper)
+  EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
+  EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
 };
 
 class ComparisonExpression : public OperatorExpression {
 public:
   ComparisonExpression(
-  std::string_view oper,
+  Operator oper,
   std::unique_ptr<Expression> &&expr1,
   std::unique_ptr<Expression> &&expr2
 ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  std::string_view _oper;
+  Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(oper, _oper)
+  EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
+  EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
 };
 
 class LazyBooleanExpression : public OperatorExpression {
 public:
   LazyBooleanExpression(
-    std::string_view oper,
+    Operator oper,
     std::unique_ptr<Expression> &&expr1,
     std::unique_ptr<Expression> &&expr2
   ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  std::string_view _oper;
+  Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(oper, _oper)
+  EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
+  EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
 };
 
 class TypeCastExpression : public OperatorExpression {
@@ -580,6 +686,9 @@ public:
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<TypeNoBounds> _type_no_bounds;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
+  EXPOSE_FIELD_CONST_REFERENCE(type_no_bounds, _type_no_bounds)
 };
 
 class AssignmentExpression : public OperatorExpression {
@@ -591,6 +700,9 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
+  EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
 };
 
 class CompoundAssignmentExpression : public OperatorExpression {
@@ -602,6 +714,9 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
+  EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
 };
 
 class GroupedExpression : public ExpressionWithoutBlock {
@@ -612,6 +727,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class ArrayExpression : public ExpressionWithoutBlock {
@@ -622,6 +739,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<ArrayElements> _elements_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(elements_opt, _elements_opt)
 };
 
 class ArrayElements : public Expression {
@@ -639,29 +758,37 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr_list, _expr_list)
 };
 
 class RepeatedArrayElements : public ArrayElements {
 public:
   RepeatedArrayElements(
-    std::unique_ptr<Expression> &&expr,
-    std::unique_ptr<Expression> &&length
-  ): _expr(std::move(expr)), _length(std::move(length)) {}
+    std::unique_ptr<Expression> &&val_expr,
+    std::unique_ptr<Expression> &&len_expr
+  ): _val_expr(std::move(val_expr)), _len_expr(std::move(len_expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  std::unique_ptr<Expression> _expr, _length;
+  std::unique_ptr<Expression> _val_expr, _len_expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(val_expr, _val_expr)
+  EXPOSE_FIELD_CONST_REFERENCE(len_expr, _len_expr)
 };
 
 class IndexExpression : public ExpressionWithoutBlock {
 public:
   IndexExpression(
-    std::unique_ptr<Expression> &&expr1,
+    std::unique_ptr<Expression> &&expr_obj,
     std::unique_ptr<Expression> &&expr_index
-  ): _expr1(std::move(expr1)), _expr_index(std::move(expr_index)) {}
+  ): _expr_obj(std::move(expr_obj)), _expr_index(std::move(expr_index)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  std::unique_ptr<Expression> _expr1;
+  std::unique_ptr<Expression> _expr_obj;
   std::unique_ptr<Expression> _expr_index;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr_obj, _expr_obj)
+  EXPOSE_FIELD_CONST_REFERENCE(expr_index, _expr_index)
 };
 
 class TupleExpression : public ExpressionWithoutBlock {
@@ -672,6 +799,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<TupleElements> _elems_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(elems_opt, _elems_opt)
 };
 
 class TupleElements : public Expression {
@@ -682,6 +811,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr_list, _expr_list)
 };
 
 class TupleIndexingExpression : public ExpressionWithoutBlock {
@@ -694,6 +825,9 @@ public:
 private:
   std::unique_ptr<Expression> _expr;
   std::uintptr_t _index;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
+  EXPOSE_FIELD_CONST_REFERENCE(index, _index)
 };
 
 class StructExpression : public ExpressionWithoutBlock {
@@ -706,6 +840,9 @@ public:
 private:
   std::unique_ptr<PathInExpression> _path;
   std::unique_ptr<StructExprFields> _fields_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(path, _path)
+  EXPOSE_FIELD_CONST_REFERENCE(fields_opt, _fields_opt)
 };
 
 class StructExprFields : public Expression {
@@ -716,6 +853,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<StructExprField>> _fields;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(fields, _fields)
 };
 
 class StructExprField : public Expression {
@@ -735,6 +874,9 @@ public:
 private:
   std::string_view _ident;
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class IndexStructExprField : public StructExprField {
@@ -747,6 +889,9 @@ public:
 private:
   std::size_t _index;
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(index, _index)
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class CallExpression : public ExpressionWithoutBlock {
@@ -759,6 +904,9 @@ public:
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<CallParams> _params_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
+  EXPOSE_FIELD_CONST_REFERENCE(params_opt, _params_opt)
 };
 
 class CallParams : public BasicNode {
@@ -769,6 +917,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr_list, _expr_list)
 };
 
 class MethodCallExpression : public ExpressionWithoutBlock {
@@ -784,6 +934,10 @@ private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<PathExprSegment> _segment;
   std::unique_ptr<CallParams> _params_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
+  EXPOSE_FIELD_CONST_REFERENCE(segment, _segment)
+  EXPOSE_FIELD_CONST_REFERENCE(params_opt, _params_opt)
 };
 
 class FieldExpression : public ExpressionWithoutBlock {
@@ -796,6 +950,9 @@ public:
 private:
   std::unique_ptr<Expression> _expr;
   std::string_view _ident;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
 };
 
 class ContinueExpression : public ExpressionWithoutBlock {
@@ -813,6 +970,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_opt)
 };
 
 class RangeExpression : public ExpressionWithoutBlock {
@@ -831,6 +990,9 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
+  EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
 };
 
 class RangeFromExpr : public RangeExpression {
@@ -841,6 +1003,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class RangeToExpr : public RangeExpression {
@@ -851,6 +1015,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class RangeFullExpr : public RangeExpression {
@@ -869,6 +1035,9 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
+  EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
 };
 
 class RangeToInclusiveExpr : public RangeExpression {
@@ -879,6 +1048,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class ReturnExpression : public ExpressionWithoutBlock {
@@ -889,6 +1060,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_opt)
 };
 
 class UnderscoreExpression : public ExpressionWithoutBlock {
@@ -913,6 +1086,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Statements> _stmts_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(stmts_opt, _stmts_opt)
 };
 
 class Statements : public BasicNode {
@@ -925,6 +1100,9 @@ public:
 private:
   std::vector<std::unique_ptr<Statement>> _stmts;
   std::unique_ptr<ExpressionWithoutBlock> _expr_no_block_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(stmts, _stmts)
+  EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_no_block_opt)
 };
 
 class Statement : public BasicNode {
@@ -949,6 +1127,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Item> _item;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(item, _item)
 };
 
 class LetStatement : public Statement {
@@ -964,6 +1144,10 @@ private:
   std::unique_ptr<PatternNoTopAlt> _pattern;
   std::unique_ptr<Type> _type_opt;
   std::unique_ptr<Expression> _expr_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
+  EXPOSE_FIELD_CONST_REFERENCE(type_opt, _type_opt)
+  EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_opt)
 };
 
 class ExpressionStatement : public Statement {
@@ -974,6 +1158,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class LoopExpression : public ExpressionWithBlock {
@@ -991,6 +1177,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<BlockExpression> _block_expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(block_expr, _block_expr)
 };
 
 class PredicateLoopExpression : public LoopExpression {
@@ -1003,17 +1191,30 @@ public:
 private:
   std::unique_ptr<Conditions> _cond;
   std::unique_ptr<BlockExpression> _block_expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(cond, _cond)
+  EXPOSE_FIELD_CONST_REFERENCE(block_expr, _block_expr)
 };
 
 class IfExpression : public ExpressionWithBlock {
 public:
-  template <class ElseSpec>
+  IfExpression(
+    std::unique_ptr<Conditions> &&cond,
+    std::unique_ptr<BlockExpression> &&block_expr
+  ): _cond(std::move(cond)), _block_expr(std::move(block_expr)),
+  _else_spec() {}
   IfExpression(
     std::unique_ptr<Conditions> &&cond,
     std::unique_ptr<BlockExpression> &&block_expr,
-    ElseSpec &&else_spec
+    std::unique_ptr<BlockExpression> &&else_block_expr
   ): _cond(std::move(cond)), _block_expr(std::move(block_expr)),
-  _else_spec(std::forward<ElseSpec>(else_spec)) {}
+  _else_spec(std::move(else_block_expr)) {}
+  IfExpression(
+    std::unique_ptr<Conditions> &&cond,
+    std::unique_ptr<BlockExpression> &&block_expr,
+    std::unique_ptr<IfExpression> &&if_expr
+  ): _cond(std::move(cond)), _block_expr(std::move(block_expr)),
+  _else_spec(std::move(if_expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Conditions> _cond;
@@ -1023,6 +1224,10 @@ private:
     std::unique_ptr<BlockExpression>,
     std::unique_ptr<IfExpression>
   > _else_spec;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(cond, _cond)
+  EXPOSE_FIELD_CONST_REFERENCE(block_expr, _block_expr)
+  EXPOSE_FIELD_CONST_REFERENCE(else_spec, _else_spec)
 };
 
 class Conditions : public BasicNode {
@@ -1033,6 +1238,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr; // not StructExpression
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class MatchExpression : public ExpressionWithBlock {
@@ -1045,6 +1252,9 @@ public:
 private:
   std::unique_ptr<Expression> _expr; // not StructExpression
   std::unique_ptr<MatchArms> _match_arms_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
+  EXPOSE_FIELD_CONST_REFERENCE(match_arms_opt, _match_arms_opt)
 };
 
 class MatchArms : public BasicNode {
@@ -1055,6 +1265,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::pair<std::unique_ptr<MatchArm>, std::unique_ptr<Expression>>> _arms;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(arms, _arms)
 };
 
 class MatchArm : public BasicNode {
@@ -1067,6 +1279,9 @@ public:
 private:
   std::unique_ptr<Pattern> _pattern;
   std::unique_ptr<MatchArmGuard> _guard_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
+  EXPOSE_FIELD_CONST_REFERENCE(guard_opt, _guard_opt)
 };
 
 class MatchArmGuard : public BasicNode {
@@ -1077,16 +1292,20 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class Pattern : public BasicNode {
 public:
   explicit Pattern(
-    std::vector<std::unique_ptr<PatternNoTopAlt>> &&pattern_list
-  ): _pattern_list(std::move(pattern_list)) {}
+    std::vector<std::unique_ptr<PatternNoTopAlt>> &&patterns
+  ): _patterns(std::move(patterns)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  std::vector<std::unique_ptr<PatternNoTopAlt>> _pattern_list;
+  std::vector<std::unique_ptr<PatternNoTopAlt>> _patterns;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(patterns, _patterns)
 };
 
 class PatternNoTopAlt : public BasicNode {
@@ -1113,6 +1332,9 @@ public:
 private:
   bool _is_neg;
   std::unique_ptr<LiteralExpression> _expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(is_neg, _is_neg)
+  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
 class IdentifierPattern : public PatternWithoutRange {
@@ -1130,6 +1352,11 @@ private:
   bool _is_mut;
   std::string_view _ident;
   std::unique_ptr<PatternNoTopAlt> _pattern_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(is_ref, _is_ref)
+  EXPOSE_FIELD_CONST_REFERENCE(is_mut, _is_mut)
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
+  EXPOSE_FIELD_CONST_REFERENCE(pattern_opt, _pattern_opt)
 };
 
 class WildcardPattern : public PatternWithoutRange {
@@ -1151,6 +1378,10 @@ private:
   int _ref_cnt;
   bool _is_mut;
   std::unique_ptr<PatternWithoutRange> _pattern;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ref_cnt, _ref_cnt)
+  EXPOSE_FIELD_CONST_REFERENCE(is_mut, _is_mut)
+  EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
 };
 
 class StructPattern : public PatternWithoutRange {
@@ -1164,6 +1395,9 @@ public:
 private:
   std::unique_ptr<PathInExpression> _path_in_expr;
   std::unique_ptr<StructPatternElements> _elems_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(path_in_expr, _path_in_expr)
+  EXPOSE_FIELD_CONST_REFERENCE(elems_opt, _elems_opt)
 };
 
 class StructPatternElements : public BasicNode {
@@ -1174,6 +1408,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<StructPatternFields> _fields;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(fields, _fields)
 };
 
 class StructPatternFields : public BasicNode {
@@ -1184,6 +1420,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<StructPatternField>> _fields;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(fields, _fields)
 };
 
 class StructPatternField : public BasicNode {
@@ -1196,6 +1434,9 @@ public:
 private:
   std::string_view _ident;
   std::unique_ptr<Pattern> _pattern;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
+  EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
 };
 
 class TuplePattern : public PatternWithoutRange {
@@ -1206,6 +1447,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<TuplePatternItems> _items_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(items_opt, _items_opt)
 };
 
 class TuplePatternItems : public BasicNode {
@@ -1216,6 +1459,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Pattern>> _patterns;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(patterns, _patterns)
 };
 
 class GroupedPattern : public PatternWithoutRange {
@@ -1226,6 +1471,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Pattern> _pattern;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
 };
 
 class SlicePattern : public PatternWithoutRange {
@@ -1236,6 +1483,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<SlicePatternItems> _items_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(items_opt, _items_opt)
 };
 
 class SlicePatternItems : public BasicNode {
@@ -1246,6 +1495,8 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Pattern>> _patterns;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(patterns, _patterns)
 };
 
 class PathPattern : public PatternWithoutRange {
@@ -1256,7 +1507,10 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<PathExpression> _path_expr;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(path_expr, _path_expr)
 };
 }
 
+#undef EXPOSE_FIELD_CONST_REFERENCE
 #endif // INSOMNIA_AST_H
