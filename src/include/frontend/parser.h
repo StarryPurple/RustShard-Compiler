@@ -19,6 +19,12 @@ class Parser {
 
   INSOMNIA_RUST_SHARD_AST_NODES_LIST(PARSE_FUNCTION_GEN_METHOD)
 
+  // Pratt Expression Parsing helper functions.
+
+  std::unique_ptr<Expression> parsePrattExpression(int precedence);
+  std::unique_ptr<Expression> parsePrefixExpression();
+  std::unique_ptr<Expression> parseInfixExpression(std::unique_ptr<Expression> &&lft, int precedence);
+
 public:
   Parser() = default;
   explicit Parser(Lexer &lexer) { parseAll(lexer); }

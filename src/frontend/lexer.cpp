@@ -15,34 +15,34 @@ void Lexer::tokenize(std::string_view code) {
   _pos = 0; _row = 1; _col = 1;
   std::size_t src_len = code.length();
 
-  _error_code = Error::SUCCESS;
+  _error_code = Error::kSuccess;
   while(true) {
     if(!advance()) {
-      _error_code = Error::WHITESPACE_COMMENT; break;
+      _error_code = Error::kWhitespaceComment; break;
     }
     if(_pos >= src_len) break;
     const char &ch = code[_pos];
     if(is_digit(ch)) {
       // Number
       if(!tokenize_number_literal()) {
-        _error_code = Error::NUMBER; break;
+        _error_code = Error::kNumber; break;
       }
     } else if(ch == '\'' || ch == '\"') { // TODO: C / Raw String
       // Character / String
       if(!tokenize_string_literal()) {
-        _error_code = Error::STRING; break;
+        _error_code = Error::kString; break;
       }
     } else if(is_alpha(ch) ||
       (ch == '_' && _pos + 1 < src_len &&
         (is_alpha(code[_pos + 1]) || is_digit(code[_pos + 1]) || code[_pos + 1] == '_'))) {
       // Keyword / Identifier
       if(!tokenize_keyword_identifier()) { // NOLINT. I know this won't fail.
-        _error_code = Error::KW_ID; break;
+        _error_code = Error::kKeywordIdentifier; break;
       }
     } else {
       // Punctuation / Delimiter
       if(!tokenize_punctuation_delimiter()) {
-        _error_code = Error::PUNC_DELIM; break;
+        _error_code = Error::kPunctuationDelimiter; break;
       }
     }
   }
@@ -113,13 +113,13 @@ bool Lexer::tokenize_number_literal() {
       if(nxt_ch == '.') {
         if(std::regex_search(str.begin(), str.end(), match, float_pattern)) {
           matched = str.substr(0, match.length());
-          _tokens.emplace_back(TokenType::FLOAT_LITERAL, matched, _row, _col);
+          _tokens.emplace_back(TokenType::kFloatLiteral, matched, _row, _col);
           _pos += matched.length(); _col += matched.length();
           return true;
         }
         // might be an operator dot / dot_dot / ...
         // ignore. No suffix starts with a dot, so return now.
-        _tokens.emplace_back(TokenType::INTEGER_LITERAL, matched, _row, _col);
+        _tokens.emplace_back(TokenType::kIntegerLiteral, matched, _row, _col);
         _pos += matched.length(); _col += matched.length();
         return true;
       }
@@ -128,7 +128,7 @@ bool Lexer::tokenize_number_literal() {
     if(std::regex_search(remain.begin(), remain.end(), match, integer_suffix_pattern)) {
       matched = _src_code.substr(_pos, matched.length() + match.length());
     }
-    _tokens.emplace_back(TokenType::INTEGER_LITERAL, matched, _row, _col);
+    _tokens.emplace_back(TokenType::kIntegerLiteral, matched, _row, _col);
     _pos += matched.length(); _col += matched.length();
     return true;
   }
@@ -151,7 +151,7 @@ bool Lexer::tokenize_string_literal() {
     }
     if(_src_code[_pos] == c) {
       advance_one();
-      _tokens.emplace_back(TokenType::STRING_LITERAL, _src_code.substr(start, _pos - start), _row, _col);
+      _tokens.emplace_back(TokenType::kStringLiteral, _src_code.substr(start, _pos - start), _row, _col);
       return true;
     }
     advance_one();
@@ -163,182 +163,182 @@ bool Lexer::tokenize_string_literal() {
 bool Lexer::tokenize_punctuation_delimiter() {
   auto start = _pos; char ch = _src_code[_pos];
   auto old_row = _row, old_col = _col;
-  TokenType type = TokenType::INVALID;
+  TokenType type = TokenType::kInvalid;
   auto len = _src_code.length();
   switch(ch) {
   case '+': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::PLUS_EQ;
+      type = TokenType::kPlusEq;
       advance_one(); advance_one();
     } else {
-      type = TokenType::PLUS;
+      type = TokenType::kPlus;
       advance_one();
     }
   } break;
   case '-': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::MINUS_EQ;
+      type = TokenType::kMinusEq;
       advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '>') {
-      type = TokenType::R_ARROW;
+      type = TokenType::kRArrow;
       advance_one(); advance_one();
     } else {
-      type = TokenType::MINUS;
+      type = TokenType::kMinus;
       advance_one();
     }
   } break;
   case '*': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::STAR_EQ;
+      type = TokenType::kStarEq;
       advance_one(); advance_one();
     } else {
-      type = TokenType::STAR;
+      type = TokenType::kStar;
       advance_one();
     }
   } break;
   case '/': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::SLASH_EQ;
+      type = TokenType::kSlashEq;
       advance_one(); advance_one();
     } else {
-      type = TokenType::SLASH;
+      type = TokenType::kSlash;
       advance_one();
     }
   } break;
   case '%': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::PERCENT_EQ;
+      type = TokenType::kPercentEq;
       advance_one(); advance_one();
     } else {
-      type = TokenType::PERCENT;
+      type = TokenType::kPercent;
       advance_one();
     }
   } break;
   case '^': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::CARET_EQ;
+      type = TokenType::kCaretEq;
       advance_one(); advance_one();
     } else {
-      type = TokenType::CARET;
+      type = TokenType::kCaret;
       advance_one();
     }
   } break;
   case '!': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::NE;
+      type = TokenType::kNe;
       advance_one(); advance_one();
     } else {
-      type = TokenType::NOT;
+      type = TokenType::kNot;
       advance_one();
     }
   } break;
   case '&': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::AND_EQ;
+      type = TokenType::kAndEq;
       advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '&') {
-      type = TokenType::AND_AND;
+      type = TokenType::kAndAnd;
       advance_one(); advance_one();
     } else {
-      type = TokenType::AND;
+      type = TokenType::kAnd;
       advance_one();
     }
   } break;
   case '|': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::OR_EQ;
+      type = TokenType::kOrEq;
       advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '|') {
-      type = TokenType::OR_OR;
+      type = TokenType::kOrOr;
       advance_one(); advance_one();
     } else {
-      type = TokenType::OR;
+      type = TokenType::kOr;
       advance_one();
     }
   } break;
   case '<': {
     if(_pos + 2 < len && _src_code[_pos + 1] == '<' && _src_code[_pos + 2] == '=') {
-      type = TokenType::SHL_EQ;
+      type = TokenType::kShlEq;
       advance_one(); advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '<') {
-      type = TokenType::SHL;
+      type = TokenType::kShl;
       advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::LE;
+      type = TokenType::kLe;
       advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '-') {
-      type = TokenType::L_ARROW;
+      type = TokenType::kLArrow;
       advance_one(); advance_one();
     } else {
-      type = TokenType::LT;
+      type = TokenType::kLt;
       advance_one();
     }
   } break;
   case '>': {
     if(_pos + 2 < len && _src_code[_pos + 1] == '>' && _src_code[_pos + 2] == '=') {
-      type = TokenType::SHR_EQ;
+      type = TokenType::kShrEq;
       advance_one(); advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '>') {
-      type = TokenType::SHR;
+      type = TokenType::kShr;
       advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::GE;
+      type = TokenType::kGe;
       advance_one(); advance_one();
     } else {
-      type = TokenType::GT;
+      type = TokenType::kGt;
       advance_one();
     }
   } break;
   case '=': {
     if(_pos + 1 < len && _src_code[_pos + 1] == '=') {
-      type = TokenType::EQ_EQ;
+      type = TokenType::kEqEq;
       advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '>') {
-      type = TokenType::FAT_ARROW;
+      type = TokenType::kFatArrow;
       advance_one(); advance_one();
     } else {
-      type = TokenType::EQ;
+      type = TokenType::kEq;
       advance_one();
     }
   } break;
   case '.': {
     if(_pos + 2 < len && _src_code[_pos + 1] == '.' && _src_code[_pos + 2] == '.') {
-      type = TokenType::DOT_DOT_DOT;
+      type = TokenType::kDotDotDot;
       advance_one(); advance_one(); advance_one();
     } else if(_pos + 2 < len && _src_code[_pos + 1] == '.' && _src_code[_pos + 2] == '=') {
-      type = TokenType::DOT_DOT_EQ;
+      type = TokenType::kDotDotEq;
       advance_one(); advance_one(); advance_one();
     } else if(_pos + 1 < len && _src_code[_pos + 1] == '.') {
-      type = TokenType::DOT_DOT;
+      type = TokenType::kDotDot;
       advance_one(); advance_one();
     } else {
-      type = TokenType::DOT;
+      type = TokenType::kDot;
       advance_one();
     }
   } break;
   case ':': {
     if(_pos + 1 < len && _src_code[_pos + 1] == ':') {
-      type = TokenType::PATH_SEP;
+      type = TokenType::kPathSep;
       advance_one(); advance_one();
     } else {
-      type = TokenType::COLON;
+      type = TokenType::kColon;
       advance_one();
     }
   } break;
-  case '#': type = TokenType::POUND; advance_one(); break;
-  case '$': type = TokenType::DOLLAR; advance_one(); break;
-  case '?': type = TokenType::QUESTION; advance_one(); break;
-  case '~': type = TokenType::TILDE; advance_one(); break;
-  case '@': type = TokenType::AT; advance_one(); break;
-  case ',': type = TokenType::COMMA; advance_one(); break;
-  case ';': type = TokenType::SEMI; advance_one(); break;
-  case '_': type = TokenType::UNDERSCORE; advance_one(); break;
-  case '(': type = TokenType::L_PARENTHESIS; advance_one(); break;
-  case ')': type = TokenType::R_PARENTHESIS; advance_one(); break;
-  case '[': type = TokenType::L_SQUARE_BRACKET; advance_one(); break;
-  case ']': type = TokenType::R_SQUARE_BRACKET; advance_one(); break;
-  case '{': type = TokenType::L_CURLY_BRACE; advance_one(); break;
-  case '}': type = TokenType::R_CURLY_BRACE; advance_one(); break;
+  case '#': type = TokenType::kPound; advance_one(); break;
+  case '$': type = TokenType::kDollar; advance_one(); break;
+  case '?': type = TokenType::kQuestion; advance_one(); break;
+  case '~': type = TokenType::kTilde; advance_one(); break;
+  case '@': type = TokenType::kAt; advance_one(); break;
+  case ',': type = TokenType::kComma; advance_one(); break;
+  case ';': type = TokenType::kSemi; advance_one(); break;
+  case '_': type = TokenType::kUnderscore; advance_one(); break;
+  case '(': type = TokenType::kLParenthesis; advance_one(); break;
+  case ')': type = TokenType::kRParenthesis; advance_one(); break;
+  case '[': type = TokenType::kLSquareBracket; advance_one(); break;
+  case ']': type = TokenType::kRSquareBracket; advance_one(); break;
+  case '{': type = TokenType::kLCurlyBrace; advance_one(); break;
+  case '}': type = TokenType::kRCurlyBrace; advance_one(); break;
   default: _pos = start; _row = old_row; _col = old_col; return false;
   }
   _tokens.emplace_back(type, _src_code.substr(start, _pos - start), old_row, old_col);
@@ -354,71 +354,71 @@ bool Lexer::tokenize_keyword_identifier() {
   }
   std::string_view lexeme = _src_code.substr(start, _pos - start);
   static const std::unordered_map<std::string_view, TokenType> keywords = {
-    {"as", TokenType::AS}, {"break", TokenType::BREAK}, {"const", TokenType::CONST},
-    {"continue", TokenType::CONTINUE}, {"crate", TokenType::CRATE}, {"else", TokenType::ELSE},
-    {"enum", TokenType::ENUM}, {"extern", TokenType::EXTERN}, {"false", TokenType::FALSE},
-    {"fn", TokenType::FN}, {"for", TokenType::FOR}, {"if", TokenType::IF},
-    {"impl", TokenType::IMPL}, {"in", TokenType::IN}, {"let", TokenType::LET},
-    {"loop", TokenType::LOOP}, {"match", TokenType::MATCH}, {"mod", TokenType::MOD},
-    {"move", TokenType::MOVE}, {"mut", TokenType::MUT}, {"pub", TokenType::PUB},
-    {"ref", TokenType::REF}, {"return", TokenType::RETURN}, {"self", TokenType::SELF_OBJECT},
-    {"Self", TokenType::SELF_TYPE}, {"static", TokenType::STATIC}, {"struct", TokenType::STRUCT},
-    {"super", TokenType::SUPER}, {"trait", TokenType::TRAIT}, {"true", TokenType::TRUE},
-    {"type", TokenType::TYPE}, {"unsafe", TokenType::UNSAFE}, {"use", TokenType::USE},
-    {"where", TokenType::WHERE}, {"while", TokenType::WHILE}, {"async", TokenType::ASYNC},
-    {"await", TokenType::AWAIT}, {"dyn", TokenType::DYN},
+    {"as", TokenType::kAs}, {"break", TokenType::kBreak}, {"const", TokenType::kConst},
+    {"continue", TokenType::kContinue}, {"crate", TokenType::kCrate}, {"else", TokenType::kElse},
+    {"enum", TokenType::kEnum}, {"extern", TokenType::kExtern}, {"false", TokenType::kFalse},
+    {"fn", TokenType::kFn}, {"for", TokenType::kFor}, {"if", TokenType::kIf},
+    {"impl", TokenType::kImpl}, {"in", TokenType::kIn}, {"let", TokenType::kLet},
+    {"loop", TokenType::kLoop}, {"match", TokenType::kMatch}, {"mod", TokenType::kMod},
+    {"move", TokenType::kMove}, {"mut", TokenType::kMut}, {"pub", TokenType::kPub},
+    {"ref", TokenType::kRef}, {"return", TokenType::kReturn}, {"self", TokenType::kSelfObject},
+    {"Self", TokenType::kSelfType}, {"static", TokenType::kStatic}, {"struct", TokenType::kStruct},
+    {"super", TokenType::kSuper}, {"trait", TokenType::kTrait}, {"true", TokenType::kTrue},
+    {"type", TokenType::kType}, {"unsafe", TokenType::kUnsafe}, {"use", TokenType::kUse},
+    {"where", TokenType::kWhere}, {"while", TokenType::kWhile}, {"async", TokenType::kAsync},
+    {"await", TokenType::kAwait}, {"dyn", TokenType::kDyn},
   };
   if(auto it = keywords.find(lexeme); it != keywords.end()) {
     _tokens.emplace_back(it->second, lexeme, old_row, old_col);
   } else {
-    _tokens.emplace_back(TokenType::IDENTIFIER, lexeme, old_row, old_col);
+    _tokens.emplace_back(TokenType::kIdentifier, lexeme, old_row, old_col);
   }
   return true;
 }
 
 std::string token_type_to_string(TokenType type) {
   static const std::unordered_map<TokenType, std::string> token_names = {
-    {TokenType::INVALID, "INVALID"}, {TokenType::UNKNOWN, "UNKNOWN"}, {TokenType::END_OF_FILE, "EOF"},
-    {TokenType::AS, "AS"}, {TokenType::BREAK, "BREAK"}, {TokenType::CONST, "CONST"},
-    {TokenType::CONTINUE, "CONTINUE"}, {TokenType::CRATE, "CRATE"}, {TokenType::ELSE, "ELSE"},
-    {TokenType::ENUM, "ENUM"}, {TokenType::EXTERN, "EXTERN"}, {TokenType::FALSE, "FALSE"},
-    {TokenType::FN, "FN"}, {TokenType::FOR, "FOR"}, {TokenType::IF, "IF"},
-    {TokenType::IMPL, "IMPL"}, {TokenType::IN, "IN"}, {TokenType::LET, "LET"},
-    {TokenType::LOOP, "LOOP"}, {TokenType::MATCH, "MATCH"}, {TokenType::MOD, "MOD"},
-    {TokenType::MOVE, "MOVE"}, {TokenType::MUT, "MUT"}, {TokenType::PUB, "PUB"},
-    {TokenType::REF, "REF"}, {TokenType::RETURN, "RETURN"}, {TokenType::SELF_OBJECT, "SELF_OBJECT"},
-    {TokenType::SELF_TYPE, "SELF_TYPE"}, {TokenType::STATIC, "STATIC"}, {TokenType::STRUCT, "STRUCT"},
-    {TokenType::SUPER, "SUPER"}, {TokenType::TRAIT, "TRAIT"}, {TokenType::TRUE, "TRUE"},
-    {TokenType::TYPE, "TYPE"}, {TokenType::UNSAFE, "UNSAFE"}, {TokenType::USE, "USE"},
-    {TokenType::WHERE, "WHERE"}, {TokenType::WHILE, "WHILE"}, {TokenType::ASYNC, "ASYNC"},
-    {TokenType::AWAIT, "AWAIT"}, {TokenType::DYN, "DYN"},
-    {TokenType::IDENTIFIER, "IDENTIFIER"},
-    {TokenType::LITERAL, "LITERAL"}, {TokenType::INTEGER_LITERAL, "INTEGER_LITERAL"},
-    {TokenType::FLOAT_LITERAL, "FLOAT_LITERAL"}, {TokenType::STRING_LITERAL, "STRING_LITERAL"},
-    {TokenType::PLUS, "PLUS"}, {TokenType::MINUS, "MINUS"}, {TokenType::STAR, "STAR"},
-    {TokenType::SLASH, "SLASH"}, {TokenType::PERCENT, "PERCENT"}, {TokenType::CARET, "CARET"},
-    {TokenType::NOT, "NOT"}, {TokenType::AND, "AND"}, {TokenType::OR, "OR"},
-    {TokenType::AND_AND, "AND_AND"}, {TokenType::OR_OR, "OR_OR"}, {TokenType::SHL, "SHL"},
-    {TokenType::SHR, "SHR"}, {TokenType::PLUS_EQ, "PLUS_EQ"}, {TokenType::MINUS_EQ, "MINUS_EQ"},
-    {TokenType::STAR_EQ, "STAR_EQ"}, {TokenType::SLASH_EQ, "SLASH_EQ"}, {TokenType::PERCENT_EQ, "PERCENT_EQ"},
-    {TokenType::CARET_EQ, "CARET_EQ"}, {TokenType::AND_EQ, "AND_EQ"}, {TokenType::OR_EQ, "OR_EQ"},
-    {TokenType::SHL_EQ, "SHL_EQ"}, {TokenType::SHR_EQ, "SHR_EQ"}, {TokenType::EQ, "EQ"},
-    {TokenType::EQ_EQ, "EQ_EQ"}, {TokenType::NE, "NE"}, {TokenType::GT, "GT"},
-    {TokenType::LT, "LT"}, {TokenType::GE, "GE"}, {TokenType::LE, "LE"}, {TokenType::AT, "AT"},
-    {TokenType::UNDERSCORE, "UNDERSCORE"}, {TokenType::DOT, "DOT"}, {TokenType::DOT_DOT, "DOT_DOT"},
-    {TokenType::DOT_DOT_DOT, "DOT_DOT_DOT"}, {TokenType::DOT_DOT_EQ, "DOT_DOT_EQ"},
-    {TokenType::COMMA, "COMMA"}, {TokenType::SEMI, "SEMI"}, {TokenType::COLON, "COLON"},
-    {TokenType::PATH_SEP, "PATH_SEP"}, {TokenType::R_ARROW, "R_ARROW"}, {TokenType::FAT_ARROW, "FAT_ARROW"},
-    {TokenType::L_ARROW, "L_ARROW"}, {TokenType::POUND, "POUND"}, {TokenType::DOLLAR, "DOLLAR"},
-    {TokenType::QUESTION, "QUESTION"}, {TokenType::TILDE, "TILDE"},
-    {TokenType::L_CURLY_BRACE, "L_CURLY_BRACE"}, {TokenType::R_CURLY_BRACE, "R_CURLY_BRACE"},
-    {TokenType::L_SQUARE_BRACKET, "L_SQUARE_BRACKET"}, {TokenType::R_SQUARE_BRACKET, "R_SQUARE_BRACKET"},
-    {TokenType::L_PARENTHESIS, "L_PARENTHESIS"}, {TokenType::R_PARENTHESIS, "R_PARENTHESIS"},
+    {TokenType::kInvalid, "kInvalid"}, {TokenType::kUnknown, "kUnknown"}, {TokenType::kEndOfFile, "kEndOfFile"},
+    {TokenType::kAs, "kAs"}, {TokenType::kBreak, "kBreak"}, {TokenType::kConst, "kConst"},
+    {TokenType::kContinue, "kContinue"}, {TokenType::kCrate, "kCrate"}, {TokenType::kElse, "kElse"},
+    {TokenType::kEnum, "kEnum"}, {TokenType::kExtern, "kExtern"}, {TokenType::kFalse, "kFalse"},
+    {TokenType::kFn, "kFn"}, {TokenType::kFor, "kFor"}, {TokenType::kIf, "kIf"},
+    {TokenType::kImpl, "kImpl"}, {TokenType::kIn, "kIn"}, {TokenType::kLet, "kLet"},
+    {TokenType::kLoop, "kLoop"}, {TokenType::kMatch, "kMatch"}, {TokenType::kMod, "kMod"},
+    {TokenType::kMove, "kMove"}, {TokenType::kMut, "kMut"}, {TokenType::kPub, "kPub"},
+    {TokenType::kRef, "kRef"}, {TokenType::kReturn, "kReturn"}, {TokenType::kSelfObject, "kSelfObject"},
+    {TokenType::kSelfType, "kSelfType"}, {TokenType::kStatic, "kStatic"}, {TokenType::kStruct, "kStruct"},
+    {TokenType::kSuper, "kSuper"}, {TokenType::kTrait, "kTrait"}, {TokenType::kTrue, "kTrue"},
+    {TokenType::kType, "kType"}, {TokenType::kUnsafe, "kUnsafe"}, {TokenType::kUse, "kUse"},
+    {TokenType::kWhere, "kWhere"}, {TokenType::kWhile, "kWhile"}, {TokenType::kAsync, "kAsync"},
+    {TokenType::kAwait, "kAwait"}, {TokenType::kDyn, "kDyn"},
+    {TokenType::kIdentifier, "kIdentifier"},
+    {TokenType::kLiteral, "kLiteral"}, {TokenType::kIntegerLiteral, "kIntegerLiteral"},
+    {TokenType::kFloatLiteral, "kFloatLiteral"}, {TokenType::kStringLiteral, "kStringLiteral"},
+    {TokenType::kPlus, "kPlus"}, {TokenType::kMinus, "kMinus"}, {TokenType::kStar, "kStar"},
+    {TokenType::kSlash, "kSlash"}, {TokenType::kPercent, "kPercent"}, {TokenType::kCaret, "kCaret"},
+    {TokenType::kNot, "kNot"}, {TokenType::kAnd, "kAnd"}, {TokenType::kOr, "kOr"},
+    {TokenType::kAndAnd, "kAndAnd"}, {TokenType::kOrOr, "kOrOr"}, {TokenType::kShl, "kShl"},
+    {TokenType::kShr, "kShr"}, {TokenType::kPlusEq, "kPlusEq"}, {TokenType::kMinusEq, "kMinusEq"},
+    {TokenType::kStarEq, "kStarEq"}, {TokenType::kSlashEq, "kSlashEq"}, {TokenType::kPercentEq, "kPercentEq"},
+    {TokenType::kCaretEq, "kCaretEq"}, {TokenType::kAndEq, "kAndEq"}, {TokenType::kOrEq, "kOrEq"},
+    {TokenType::kShlEq, "kShlEq"}, {TokenType::kShrEq, "kShrEq"}, {TokenType::kEq, "kEq"},
+    {TokenType::kEqEq, "kEqEq"}, {TokenType::kNe, "kNe"}, {TokenType::kGt, "kGt"},
+    {TokenType::kLt, "kLt"}, {TokenType::kGe, "kGe"}, {TokenType::kLe, "kLe"}, {TokenType::kAt, "kAt"},
+    {TokenType::kUnderscore, "kUnderscore"}, {TokenType::kDot, "kDot"}, {TokenType::kDotDot, "kDotDot"},
+    {TokenType::kDotDotDot, "kDotDotDot"}, {TokenType::kDotDotEq, "kDotDotEq"},
+    {TokenType::kComma, "kComma"}, {TokenType::kSemi, "kSemi"}, {TokenType::kColon, "kColon"},
+    {TokenType::kPathSep, "kPathSep"}, {TokenType::kRArrow, "kRArrow"}, {TokenType::kFatArrow, "kFatArrow"},
+    {TokenType::kLArrow, "kLArrow"}, {TokenType::kPound, "kPound"}, {TokenType::kDollar, "kDollar"},
+    {TokenType::kQuestion, "kQuestion"}, {TokenType::kTilde, "kTilde"},
+    {TokenType::kLCurlyBrace, "kLCurlyBrace"}, {TokenType::kRCurlyBrace, "kRCurlyBrace"},
+    {TokenType::kLSquareBracket, "kLSquareBracket"}, {TokenType::kRSquareBracket, "kRSquareBracket"},
+    {TokenType::kLParenthesis, "kLParenthesis"}, {TokenType::kRParenthesis, "kRParenthesis"},
   };
   if(const auto it = token_names.find(type); it != token_names.end()) {
     return it->second;
   }
-  return "UNKNOWN_TOKEN";
+  return "UnknownToken";
 }
 
 }

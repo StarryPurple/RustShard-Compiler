@@ -101,7 +101,7 @@ StructStruct ->
     (‘{’ StructFields '}' | ';')
     
 StructFields ->
-    Structfield (',' StructField)* ','?
+    StructField (',' StructField)* ','?
     
 StructField ->
     IDENTIFIER ':' Type

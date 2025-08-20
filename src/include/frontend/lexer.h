@@ -9,58 +9,55 @@
 #include <iostream>
 
 namespace insomnia::rust_shard {
-
-// token type mask
 enum class TokenTypeCat : uint32_t {
-  SPECIAL     = 1 << 7,
-  KEYWORD     = 1 << 8,
-  IDENTIFIER  = 1 << 9,
-  LITERAL     = 1 << 10,
-  // LIFETIME    = 1 << 11,
-  PUNCTUATION = 1 << 12,
-  DELIMITER   = 1 << 13,
+  kSpecial = 1 << 7,
+  kKeyword = 1 << 8,
+  kIdentifier = 1 << 9,
+  kLiteral = 1 << 10,
+  // LIFETIME = 1 << 11,
+  kPunctuation = 1 << 12,
+  kDelimiter = 1 << 13,
 };
 
 enum class TokenType : uint32_t {
-  INVALID,
+  kInvalid,
 
   // special
-  UNKNOWN = static_cast<uint32_t>(TokenTypeCat::SPECIAL) + 1,
-  END_OF_FILE,
+  kUnknown = static_cast<uint32_t>(TokenTypeCat::kSpecial) + 1,
+  kEndOfFile,
 
   // keyword
-  AS = static_cast<uint32_t>(TokenTypeCat::KEYWORD) + 1,
-  BREAK, CONST, CONTINUE, CRATE, ELSE, ENUM, EXTERN, FALSE, FN, FOR, IF, IMPL, IN, LET, LOOP, MATCH, MOD,
-  MOVE, MUT, PUB, REF, RETURN, SELF_OBJECT, SELF_TYPE, STATIC, STRUCT, SUPER, TRAIT, TRUE, TYPE, UNSAFE,
-  USE, WHERE, WHILE, ASYNC, AWAIT, DYN,
+  kAs = static_cast<uint32_t>(TokenTypeCat::kKeyword) + 1,
+  kBreak, kConst, kContinue, kCrate, kElse, kEnum, kExtern, kFalse, kFn, kFor, kIf, kImpl, kIn, kLet, kLoop, kMatch, kMod,
+  kMove, kMut, kPub, kRef, kReturn, kSelfObject, kSelfType, kStatic, kStruct, kSuper, kTrait, kTrue, kType, kUnsafe,
+  kUse, kWhere, kWhile, kAsync, kAwait, kDyn,
 
   // identifier
-  IDENTIFIER = static_cast<uint32_t>(TokenTypeCat::IDENTIFIER) + 1,
+  kIdentifier = static_cast<uint32_t>(TokenTypeCat::kIdentifier) + 1,
 
   // literal
-  LITERAL = static_cast<uint32_t>(TokenTypeCat::LITERAL) + 1,
-  INTEGER_LITERAL, FLOAT_LITERAL, STRING_LITERAL,
+  kLiteral = static_cast<uint32_t>(TokenTypeCat::kLiteral) + 1,
+  kIntegerLiteral, kFloatLiteral, kStringLiteral,
 
   // lifetime
-
-  // LIFETIME = static_cast<uint32_t>(TokenTypeCat::LIFETIME) + 1,
+  // kLifetime = static_cast<uint32_t>(TokenTypeCat::kLifetime) + 1,
 
   // punctuation
-  PLUS = static_cast<uint32_t>(TokenTypeCat::PUNCTUATION) + 1,
-  MINUS, STAR, SLASH, PERCENT, CARET, NOT, AND, OR, AND_AND, OR_OR, SHL, SHR, PLUS_EQ, MINUS_EQ, STAR_EQ,
-  SLASH_EQ, PERCENT_EQ, CARET_EQ, AND_EQ, OR_EQ, SHL_EQ, SHR_EQ,EQ, EQ_EQ, NE, GT, LT, GE, LE, AT, UNDERSCORE,
-  DOT, DOT_DOT, DOT_DOT_DOT, DOT_DOT_EQ, COMMA, SEMI, COLON, PATH_SEP, R_ARROW, FAT_ARROW, L_ARROW, POUND, DOLLAR,
-  QUESTION, TILDE,
+  kPlus = static_cast<uint32_t>(TokenTypeCat::kPunctuation) + 1,
+  kMinus, kStar, kSlash, kPercent, kCaret, kNot, kAnd, kOr, kAndAnd, kOrOr, kShl, kShr, kPlusEq, kMinusEq, kStarEq,
+  kSlashEq, kPercentEq, kCaretEq, kAndEq, kOrEq, kShlEq, kShrEq, kEq, kEqEq, kNe, kGt, kLt, kGe, kLe, kAt, kUnderscore,
+  kDot, kDotDot, kDotDotDot, kDotDotEq, kComma, kSemi, kColon, kPathSep, kRArrow, kFatArrow, kLArrow, kPound, kDollar,
+  kQuestion, kTilde,
 
   // delimiter
-  L_CURLY_BRACE = static_cast<uint32_t>(TokenTypeCat::DELIMITER) + 1,
-  R_CURLY_BRACE, L_SQUARE_BRACKET, R_SQUARE_BRACKET, L_PARENTHESIS, R_PARENTHESIS,
+  kLCurlyBrace = static_cast<uint32_t>(TokenTypeCat::kDelimiter) + 1,
+  kRCurlyBrace, kLSquareBracket, kRSquareBracket, kLParenthesis, kRParenthesis,
 };
 
 std::string token_type_to_string(TokenType type);
 
 struct Token {
-  TokenType token_type = TokenType::INVALID;
+  TokenType token_type = TokenType::kInvalid;
   std::string_view lexeme;
   std::size_t row = -1, col = -1;
   Token() = default;
@@ -81,9 +78,9 @@ class Lexer {
   std::size_t _pos = 0; // points to first unhandled character
   std::size_t _row = 1, _col = 1; // exact position of _pos
   enum class Error : uint8_t {
-    SUCCESS, WHITESPACE_COMMENT, NUMBER, STRING, KW_ID, PUNC_DELIM,
+    kSuccess, kWhitespaceComment, kNumber, kString, kKeywordIdentifier, kPunctuationDelimiter,
   };
-  Error _error_code = Error::SUCCESS;
+  Error _error_code = Error::kSuccess;
 
   // forcefully advance one character
   void advance_one() {
@@ -118,23 +115,28 @@ public:
   // return false if tokenization fails (lexical/syntax error)
   void tokenize(std::string_view code);
 
-  explicit operator bool() const { return _error_code == Error::SUCCESS; }
-  [[nodiscard]] bool is_good() const { return _error_code == Error::SUCCESS; }
+  explicit operator bool() const { return _error_code == Error::kSuccess; }
+  [[nodiscard]] bool is_good() const { return _error_code == Error::kSuccess; }
   [[nodiscard]] const std::vector<Token>& tokens() const { return _tokens; }
   [[nodiscard]] std::vector<Token> release() {
-    _error_code = Error::SUCCESS;
+    _error_code = Error::kSuccess;
     _pos = 0; _row = 1; _col = 1;
     return std::move(_tokens);
   }
   [[nodiscard]] std::string error_msg() const {
     std::string spec_msg;
     switch(_error_code) {
-    case Error::SUCCESS: return "Compilation succeeded / not started";
-    case Error::KW_ID: spec_msg = "Keyword/Identifier tokenization failure."; break;
-    case Error::NUMBER: spec_msg = "Number resolution failure."; break;
-    case Error::STRING: spec_msg = "String resolution failure."; break;
-    case Error::WHITESPACE_COMMENT: spec_msg = "Whitespace/Comment resolution failure."; break;
-    case Error::PUNC_DELIM: spec_msg = "Punctuation/Delimiter resolution failure."; break;
+    case Error::kSuccess: return "Compilation succeeded / not started";
+    case Error::kKeywordIdentifier: spec_msg = "Keyword/Identifier tokenization failure.";
+      break;
+    case Error::kNumber: spec_msg = "Number resolution failure.";
+      break;
+    case Error::kString: spec_msg = "String resolution failure.";
+      break;
+    case Error::kWhitespaceComment: spec_msg = "Whitespace/Comment resolution failure.";
+      break;
+    case Error::kPunctuationDelimiter: spec_msg = "Punctuation/Delimiter resolution failure.";
+      break;
     default: throw std::runtime_error("Lexer: Unexpected error type.");
     }
     std::string common_msg = "Compile Error: Something unresolvable emerges at " +
