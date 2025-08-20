@@ -1,41 +1,68 @@
 #include "parser.h"
 #include "ast_enums.h"
 
+#define REPORT_FAILURE_AND_RETURN(FailureMessage) \
+  do { \
+    _ast_ctx->recordError( \
+      std::string("From ") + std::string(__func__) + ": " + FailureMessage \
+    ); \
+    return nullptr; \
+  } while(false)
+
+#define REPORT_PARSE_FAILURE_AND_RETURN() \
+  do { \
+    REPORT_FAILURE_AND_RETURN( \
+      "Unexpected parse failure: Failure in parsing the expected AST node." \
+    ); \
+  } while(false)
+
+#define REPORT_MISSING_TOKEN_AND_RETURN(ExpectedType) \
+  do { \
+    REPORT_FAILURE_AND_RETURN( \
+      " Unexpected parse failure: Expected puntuation " + \
+      token_type_to_string(TokenType::ExpectedType) + " not appearing." \
+    ); \
+  } while(false)
+
 #define EXPECT_CONTEXT_NOT_EMPTY() \
   do { \
     if(_ast_ctx->empty()) { \
-      recordError( \
-        std::string("From ") + std::string(__func__) + ":" + \
-        " Unexpected token drain." \
+      REPORT_FAILURE_AND_RETURN( \
+        "Unexpected token drain." \
       ); \
-      return nullptr; \
     } \
   } while(false)
 
 #define EXPECT_POINTER_NOT_EMPTY(node_pointer) \
   do { \
     if(!node_pointer) { \
-      recordError( \
-        std::string("From ") + std::string(__func__) + ":" + \
-        " Unexpected parse failure." \
+      REPORT_FAILURE_AND_RETURN( \
+        "Unexpected parse failure: Failure in parsing the expected AST node." \
       ); \
-    return nullptr; \
     } \
   } while(false)
 
-#define EXPECT_CONTEXT(ExpectedType) \
+#define CHECK_TOKEN(ExpectedType) \
+  (_ast_ctx->current().token_type == TokenType::ExpectedType)
+
+#define EXPECT_TOKEN(ExpectedType) \
   do { \
-    if(_ast_ctx->current().token_type != TokenType::##ExpectedType) { \
-      recordError( \
-        std::string("From ") + std::string(__func__) + ":" + \
-        " Unexpected token at" + \
+    if(!CHECK_TOKEN(ExpectedType)) { \
+      REPORT_FAILURE_AND_RETURN( \
+        "Unexpected token at" + \
         " row:" + std::to_string(_ast_ctx->current().row) + \
         " col:" + std::to_string(_ast_ctx->current().col) + \
         ". Expected " + #ExpectedType + \
-        ", got " + std::string(token_type_to_string(TokenType::##ExpectedType)) \
+        ", but got " + token_type_to_string(TokenType::ExpectedType) \
       ); \
-      return nullptr; \
     } \
+  } while(false)
+
+// expect and consume
+#define MATCH_TOKEN(ExpectedType) \
+  do { \
+    EXPECT_TOKEN(ExpectedType); \
+    _ast_ctx->consume(); \
   } while(false)
 
 namespace insomnia::rust_shard::ast {
@@ -44,6 +71,7 @@ class Parser::Context {
   friend Backtracker;
   std::vector<Token> _tokens;
   std::size_t _pos = 0;
+  std::vector<std::string> _errors;
 public:
   Context() = default;
   template <class T>
@@ -68,23 +96,39 @@ public:
   }
   bool empty() const { return _pos >= _tokens.size(); }
   void reset() { _pos = 0; }
+
+  const std::vector<std::string>& errors() const { return _errors; }
+  void recordError(std::string &&msg) { _errors.push_back(std::move(msg)); }
 };
 
 class Parser::Backtracker {
   Context &_ast_ctx;
-  std::size_t _pos;
+  std::size_t _pos, _err_pos;
   bool _commited;
 public:
   explicit Backtracker(Context &ast_ctx)
-  : _ast_ctx(ast_ctx), _pos(ast_ctx._pos), _commited(false) {}
+  : _ast_ctx(ast_ctx), _pos(ast_ctx._pos),
+  _err_pos(ast_ctx._errors.size()), _commited(false) {}
   ~Backtracker() {
-    if(!_commited) _ast_ctx._pos = _pos;
+    if(!_commited) rollback();
+  }
+  void rollback() {
+    _ast_ctx._pos = _pos;
+    _ast_ctx._errors.resize(_err_pos);
   }
   void commit() { _commited = true; }
 };
 
+std::string Parser::error_msg() const {
+  std::string res;
+  for(const auto &msg: _ast_ctx->errors()) {
+    res += msg;
+    res += '\n';
+  }
+  return res;
+}
+
 void Parser::parseAll(Lexer &lexer) {
-  _error_msg = "";
   _ast_ctx = std::make_unique<Context>(lexer.release());
   _crate = parseCrate();
   _is_good = static_cast<bool>(_crate);
@@ -104,51 +148,142 @@ std::unique_ptr<Crate> Parser::parseCrate() {
 
 std::unique_ptr<Item> Parser::parseItem() {
   Backtracker tracker(*_ast_ctx);
-
+  auto vi = parseVisItem();
+  EXPECT_POINTER_NOT_EMPTY(vi);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<Item>(std::move(vi));
 }
 
 std::unique_ptr<VisItem> Parser::parseVisItem() {
   Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  if(auto f = parseFunction()) {
+    tracker.commit();
+    return f;
+  }
+  if(auto t = parseTypeAlias()) {
+    tracker.commit();
+    return t;
+  }
+  if(auto s = parseStruct()) {
+    tracker.commit();
+    return s;
+  }
+  if(auto e = parseEnumeration()) {
+    tracker.commit();
+    return e;
+  }
+  if(auto c = parseConstantItem()) {
+    tracker.commit();
+    return c;
+  }
+  if(auto t = parseTrait()) {
+    tracker.commit();
+    return t;
+  }
+  if(auto i = parseImplementation()) {
+    tracker.commit();
+    return i;
+  }
+  REPORT_PARSE_FAILURE_AND_RETURN();
 }
 
 std::unique_ptr<Function> Parser::parseFunction() {
   Backtracker tracker(*_ast_ctx);
-
+  bool is_const = false;
+  if(CHECK_TOKEN(CONST)) {
+    is_const = true;
+    _ast_ctx->consume();
+  }
+  MATCH_TOKEN(FN);
+  EXPECT_TOKEN(IDENTIFIER);
+  auto ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+  MATCH_TOKEN(L_PARENTHESIS);
+  auto fp_opt = parseFunctionParameters();
+  MATCH_TOKEN(R_PARENTHESIS);
+  std::unique_ptr<Type> t_opt;
+  if(CHECK_TOKEN(R_ARROW)) {
+    _ast_ctx->consume();
+    t_opt = parseType();
+    EXPECT_POINTER_NOT_EMPTY(t_opt);
+  }
+  std::unique_ptr<BlockExpression> be_opt;
+  if(CHECK_TOKEN(SEMI)) {
+    _ast_ctx->consume();
+  } else {
+    be_opt = parseBlockExpression();
+    EXPECT_POINTER_NOT_EMPTY(be_opt);
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<Function>(
+    is_const, ident, std::move(fp_opt), std::move(t_opt), std::move(be_opt)
+  );
 }
 
 std::unique_ptr<FunctionParameters> Parser::parseFunctionParameters() {
   Backtracker tracker(*_ast_ctx);
-
+  // SP ','? {')'} | (SP ',')? FP (',' FP)* ','? {')'}
+  auto sp = parseSelfParam();
+  std::vector<std::unique_ptr<FunctionParam>> fps;
+  if(sp) {
+    bool has_comma = CHECK_TOKEN(COMMA);
+    if(has_comma) _ast_ctx->consume();
+    if(CHECK_TOKEN(R_PARENTHESIS)) {
+      // SP ','? {')'}
+      tracker.commit();
+      return std::make_unique<FunctionParameters>(std::move(sp), std::move(fps));
+    }
+    // should have FP
+    if(!has_comma) REPORT_MISSING_TOKEN_AND_RETURN(COMMA);
+  }
+  auto fp1 = parseFunctionParam();
+  EXPECT_POINTER_NOT_EMPTY(fp1);
+  fps.push_back(std::move(fp1));
+  while(!CHECK_TOKEN(R_PARENTHESIS)) {
+    bool has_comma = CHECK_TOKEN(COMMA);
+    if(has_comma) _ast_ctx->consume();
+    if(CHECK_TOKEN(R_PARENTHESIS)) break;
+    if(!has_comma) REPORT_MISSING_TOKEN_AND_RETURN(COMMA);
+    auto fp = parseFunctionParam();
+    EXPECT_POINTER_NOT_EMPTY(fp);
+    fps.push_back(std::move(fp));
+  }
+  if(!sp && fps.empty())
+    REPORT_FAILURE_AND_RETURN("FunctionParameters: expected some params, but got nothing.");
   tracker.commit();
-  return nullptr;
+  return std::make_unique<FunctionParameters>(std::move(sp), std::move(fps));
 }
 
 std::unique_ptr<FunctionParam> Parser::parseFunctionParam() {
   Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  if(auto fpp = parseFunctionParamPattern()) {
+    tracker.commit();
+    return fpp;
+  }
+  if(auto fpt = parseFunctionParamType()) {
+    tracker.commit();
+    return fpt;
+  }
+  REPORT_PARSE_FAILURE_AND_RETURN();
 }
 
 std::unique_ptr<FunctionParamPattern> Parser::parseFunctionParamPattern() {
   Backtracker tracker(*_ast_ctx);
-
+  auto pnta = parsePatternNoTopAlt();
+  EXPECT_POINTER_NOT_EMPTY(pnta);
+  MATCH_TOKEN(COLON);
+  auto t = parseType();
+  EXPECT_POINTER_NOT_EMPTY(t);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<FunctionParamPattern>(std::move(pnta), std::move(t));
 }
 
 std::unique_ptr<FunctionParamType> Parser::parseFunctionParamType() {
   Backtracker tracker(*_ast_ctx);
-
+  auto t = parseType();
+  EXPECT_POINTER_NOT_EMPTY(t);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<FunctionParamType>(std::move(t));
 }
 
 std::unique_ptr<SelfParam> Parser::parseSelfParam() {
@@ -909,6 +1044,11 @@ std::unique_ptr<PathPattern> Parser::parsePathPattern() {
 
 }
 
+#undef REPORT_FAILURE_COMMON
+#undef REPORT_PARSE_FAILURE_AND_RETURN
+#undef REPORT_MISSING_TOKEN_AND_RETURN
 #undef EXPECT_CONTEXT_NOT_EMPTY
 #undef EXPECT_POINTER_NOT_EMPTY
-#undef EXPECT_CONTEXT
+#undef CHECK_TOKEN
+#undef EXPECT_TOKEN
+#undef MATCH_TOKEN

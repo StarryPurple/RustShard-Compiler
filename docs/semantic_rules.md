@@ -46,12 +46,12 @@ FunctionParam ->
       FunctionParamPattern 
     | FunctionParamType
 
-FunctionParamType ->
-    Type
-
 # No unsafe "..."
 FunctionParamPattern ->
     PatternNoTopAlt ':' Type
+
+FunctionParamType ->
+    Type
     
 SelfParam ->
     '&'? "mut"? "self" (':' Type)?

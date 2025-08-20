@@ -376,8 +376,8 @@ bool Lexer::tokenize_keyword_identifier() {
   return true;
 }
 
-std::string_view token_type_to_string(TokenType type) {
-  static const std::unordered_map<TokenType, std::string_view> token_names = {
+std::string token_type_to_string(TokenType type) {
+  static const std::unordered_map<TokenType, std::string> token_names = {
     {TokenType::INVALID, "INVALID"}, {TokenType::UNKNOWN, "UNKNOWN"}, {TokenType::END_OF_FILE, "EOF"},
     {TokenType::AS, "AS"}, {TokenType::BREAK, "BREAK"}, {TokenType::CONST, "CONST"},
     {TokenType::CONTINUE, "CONTINUE"}, {TokenType::CRATE, "CRATE"}, {TokenType::ELSE, "ELSE"},

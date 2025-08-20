@@ -57,7 +57,7 @@ enum class TokenType : uint32_t {
   R_CURLY_BRACE, L_SQUARE_BRACKET, R_SQUARE_BRACKET, L_PARENTHESIS, R_PARENTHESIS,
 };
 
-std::string_view token_type_to_string(TokenType type);
+std::string token_type_to_string(TokenType type);
 
 struct Token {
   TokenType token_type = TokenType::INVALID;

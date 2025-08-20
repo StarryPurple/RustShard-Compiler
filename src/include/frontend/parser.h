@@ -14,13 +14,6 @@ class Parser {
   bool _is_good = false;
   std::unique_ptr<Context> _ast_ctx;
   std::unique_ptr<Crate> _crate;
-  std::string _error_msg;
-
-  // record? report? ...
-  void recordError(const std::string &msg) {
-    _error_msg += msg;
-    _error_msg += '\n';
-  }
 
   // returns an empty pointer as failure signal.
 
@@ -34,7 +27,7 @@ public:
 
   explicit operator bool() const { return _is_good; }
   bool is_good() const { return _is_good; }
-  const std::string& error_msg() const { return _error_msg; }
+  std::string error_msg() const;
 };
 
 }
