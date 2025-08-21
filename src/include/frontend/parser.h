@@ -21,7 +21,7 @@ class Parser {
 
   // Pratt Expression Parsing helper functions.
 
-  std::unique_ptr<Expression> Parser::parsePrattExpression(int precedence);
+  std::unique_ptr<Expression> parseInfixExpression(int precedence);
   std::unique_ptr<Expression> parsePrefixExpression();
 
   std::unique_ptr<Crate> parseCrate();
@@ -62,32 +62,16 @@ class Parser {
   std::unique_ptr<TypePathSegment> parseTypePathSegment();
   std::unique_ptr<PathIdentSegment> parsePathIdentSegment();
   std::unique_ptr<Expression> parseExpression();
-  std::unique_ptr<ExpressionWithoutBlock> parseExpressionWithoutBlock();
   std::unique_ptr<LiteralExpression> parseLiteralExpression();
   std::unique_ptr<PathExpression> parsePathExpression();
   std::unique_ptr<PathInExpression> parsePathInExpression();
   std::unique_ptr<PathExprSegment> parsePathExprSegment();
-  std::unique_ptr<OperatorExpression> parseOperatorExpression();
-  std::unique_ptr<BorrowExpression> parseBorrowExpression();
-  std::unique_ptr<DereferenceExpression> parseDereferenceExpression();
-  std::unique_ptr<NegationExpression> parseNegationExpression();
-  std::unique_ptr<ArithmeticOrLogicalExpression>
-  parseArithmeticOrLogicalExpression();
-  std::unique_ptr<ComparisonExpression> parseComparisonExpression();
-  std::unique_ptr<LazyBooleanExpression> parseLazyBooleanExpression();
-  std::unique_ptr<TypeCastExpression> parseTypeCastExpression();
-  std::unique_ptr<AssignmentExpression> parseAssignmentExpression();
-  std::unique_ptr<CompoundAssignmentExpression>
-  parseCompoundAssignmentExpression();
-  std::unique_ptr<GroupedExpression> parseGroupedExpression();
   std::unique_ptr<ArrayExpression> parseArrayExpression();
   std::unique_ptr<ArrayElements> parseArrayElements();
   std::unique_ptr<ExplicitArrayElements> parseExplicitArrayElements();
   std::unique_ptr<RepeatedArrayElements> parseRepeatedArrayElements();
   std::unique_ptr<IndexExpression> parseIndexExpression(std::unique_ptr<Expression> &&lft);
-  std::unique_ptr<TupleExpression> parseTupleExpression();
-  std::unique_ptr<TupleElements> parseTupleElements();
-  std::unique_ptr<TupleIndexingExpression> parseTupleIndexingExpression();
+  std::unique_ptr<TupleIndexingExpression> parseTupleIndexingExpression(std::unique_ptr<Expression> &&lft);
   std::unique_ptr<StructExpression> parseStructExpression();
   std::unique_ptr<StructExprFields> parseStructExprFields();
   std::unique_ptr<StructExprField> parseStructExprField();

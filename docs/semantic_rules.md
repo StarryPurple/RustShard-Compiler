@@ -306,7 +306,8 @@ StructExprFields ->
 
 # Identifier only is not supported now.
 StructExprField ->
-    (IDENTIFIER | TUPLE_INDEX) ':' Expression
+      NamedStructExprField
+    | IndexStructExprField
 
 NamedStructExprField ->
     IDENTIFIER ':' Expression
@@ -318,7 +319,7 @@ IndexStructExprField ->
 #    ".." Expression
     
 CallExpression ->
-    Expression '( CallParams? ')'
+    Expression '(' CallParams? ')'
 
 CallParams ->
     Expression (',' Expression)* ','?

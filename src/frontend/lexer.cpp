@@ -30,7 +30,7 @@ void Lexer::tokenize(std::string_view code) {
     } else if(ch == '\'' || ch == '\"') { // TODO: C / Raw String
       // Character / String
       if(!tokenize_string_literal()) {
-        _error_code = Error::kString; break;
+        _error_code = Error::kCharString; break;
       }
     } else if(is_alpha(ch) ||
       (ch == '_' && _pos + 1 < src_len &&
@@ -139,7 +139,9 @@ bool is_escape(char ch) { return ch == '\n' || ch == '\r' || ch == '\t' || ch ==
 
 bool Lexer::tokenize_string_literal() {
   auto start = _pos, old_row = _row, old_col = _col;
-  char c = _src_code[_pos]; advance_one();
+  char c = _src_code[_pos];
+  TokenType tp = (c == '\"' ? TokenType::kStringLiteral : TokenType::kCharLiteral);
+  advance_one();
   while(_pos < _src_code.length()) {
     if(_src_code[_pos] == '\\') {
       if(_pos + 2 >= _src_code.length()) {
@@ -151,7 +153,8 @@ bool Lexer::tokenize_string_literal() {
     }
     if(_src_code[_pos] == c) {
       advance_one();
-      _tokens.emplace_back(TokenType::kStringLiteral, _src_code.substr(start, _pos - start), _row, _col);
+      if(c == '\'' && _pos - start != 2) return false; // Not a valid char
+      _tokens.emplace_back(tp, _src_code.substr(start, _pos - start), _row, _col);
       return true;
     }
     advance_one();

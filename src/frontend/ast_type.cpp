@@ -18,7 +18,7 @@ bool ExprType::operator==(const ExprType &other) const  {
 
 std::shared_ptr<ExprType> ExprType::remove_alias() const {
   auto ptr = shared_from_this();
-  while(ptr->get_kind() == TypeKind::ALIAS) {
+  while(ptr->get_kind() == TypeKind::kAlias) {
     ptr = std::static_pointer_cast<const AliasType>(ptr)->get_type();
   }
   return std::const_pointer_cast<ExprType>(ptr);

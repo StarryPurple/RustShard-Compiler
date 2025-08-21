@@ -531,7 +531,7 @@ private:
   TypePrime _prime;
   std::variant<
     char,
-    std::string_view,
+    std::string,
     std::int64_t,
     std::uint64_t,
     float,
@@ -821,12 +821,12 @@ class TupleIndexingExpression : public ExpressionWithoutBlock {
 public:
   TupleIndexingExpression(
     std::unique_ptr<Expression> &&expr,
-    std::uintptr_t index
+    std::uint64_t index
   ): _expr(std::move(expr)), _index(index) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
-  std::uintptr_t _index;
+  std::uint64_t _index;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
   EXPOSE_FIELD_CONST_REFERENCE(index, _index)
@@ -884,12 +884,12 @@ public:
 class IndexStructExprField : public StructExprField {
 public:
   IndexStructExprField(
-    std::size_t index,
+    std::uint64_t index,
     std::unique_ptr<Expression> &&expr
   ): _index(index), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  std::size_t _index;
+  std::uint64_t _index;
   std::unique_ptr<Expression> _expr;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(index, _index)

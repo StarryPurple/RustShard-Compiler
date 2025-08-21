@@ -37,7 +37,7 @@ enum class TokenType : uint32_t {
 
   // literal
   kLiteral = static_cast<uint32_t>(TokenTypeCat::kLiteral) + 1,
-  kIntegerLiteral, kFloatLiteral, kStringLiteral,
+  kIntegerLiteral, kFloatLiteral, kStringLiteral, kCharLiteral,
 
   // lifetime
   // kLifetime = static_cast<uint32_t>(TokenTypeCat::kLifetime) + 1,
@@ -54,23 +54,23 @@ enum class TokenType : uint32_t {
   kRCurlyBrace, kLSquareBracket, kRSquareBracket, kLParenthesis, kRParenthesis,
 };
 
-TokenTypeCat get_token_category(TokenType type) {
+inline TokenTypeCat get_token_category(TokenType type) {
   return static_cast<TokenTypeCat>(static_cast<uint32_t>(type) & 0xff00);
 }
 
 std::string token_type_to_string(TokenType type);
 
 struct Token {
-  TokenType token_type = TokenType::kInvalid;
+  TokenType type = TokenType::kInvalid;
   std::string_view lexeme;
   std::size_t row = -1, col = -1;
   Token() = default;
   Token(TokenType _token_type, std::string_view _lexeme, std::size_t _row, std::size_t _col)
-    : token_type(_token_type), lexeme(_lexeme), row(_row), col(_col) {}
+    : type(_token_type), lexeme(_lexeme), row(_row), col(_col) {}
 
   friend std::ostream& operator<<(std::ostream &os, const Token &token) {
     os << token.row << ' ' << token.col << ' '
-       << token_type_to_string(token.token_type) << ' '
+       << token_type_to_string(token.type) << ' '
        << token.lexeme;
     return os;
   }
@@ -82,7 +82,7 @@ class Lexer {
   std::size_t _pos = 0; // points to first unhandled character
   std::size_t _row = 1, _col = 1; // exact position of _pos
   enum class Error : uint8_t {
-    kSuccess, kWhitespaceComment, kNumber, kString, kKeywordIdentifier, kPunctuationDelimiter,
+    kSuccess, kWhitespaceComment, kNumber, kCharString, kKeywordIdentifier, kPunctuationDelimiter,
   };
   Error _error_code = Error::kSuccess;
 
@@ -135,7 +135,7 @@ public:
       break;
     case Error::kNumber: spec_msg = "Number resolution failure.";
       break;
-    case Error::kString: spec_msg = "String resolution failure.";
+    case Error::kCharString: spec_msg = "Character/String resolution failure.";
       break;
     case Error::kWhitespaceComment: spec_msg = "Whitespace/Comment resolution failure.";
       break;

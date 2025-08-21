@@ -3,6 +3,8 @@
 #include "lexer.h"
 
 namespace rs = insomnia::rust_shard;
+
+// Change TKT enum content to start with 'k' and use PascalCase
 using TKT = rs::TokenType;
 
 std::vector<std::pair<TKT, std::string>> get_token_pairs(const std::string &source_code) {
@@ -10,7 +12,7 @@ std::vector<std::pair<TKT, std::string>> get_token_pairs(const std::string &sour
   EXPECT_TRUE(lexer.is_good()) << lexer.error_msg();
   std::vector<std::pair<TKT, std::string>> res;
   for(auto &token: lexer.tokens()) {
-    res.emplace_back(token.token_type, std::string(token.lexeme));
+    res.emplace_back(token.type, std::string(token.lexeme));
   }
   return res;
 }
@@ -34,9 +36,9 @@ std::vector<std::pair<TKT, std::string>> get_token_pairs(const std::string &sour
 TEST_LEXER_SUCCESS(KeywordsAndIdentifiers,
   "let mut my_var: i32 = true;",
   ({
-    {TKT::LET, "let"}, {TKT::MUT, "mut"}, {TKT::IDENTIFIER, "my_var"},
-    {TKT::COLON, ":"}, {TKT::IDENTIFIER, "i32"}, {TKT::EQ, "="},
-    {TKT::TRUE, "true"}, {TKT::SEMI, ";"}
+    {TKT::kLet, "let"}, {TKT::kMut, "mut"}, {TKT::kIdentifier, "my_var"},
+    {TKT::kColon, ":"}, {TKT::kIdentifier, "i32"}, {TKT::kEq, "="},
+    {TKT::kTrue, "true"}, {TKT::kSemi, ";"}
   }));
 
 TEST_LEXER_SUCCESS(AllKeywords,
@@ -44,147 +46,147 @@ TEST_LEXER_SUCCESS(AllKeywords,
   "let loop match mod move mut pub ref return self Self super trait true type "
   "unsafe use where while async await dyn",
   ({
-    {TKT::AS, "as"}, {TKT::BREAK, "break"}, {TKT::CONST, "const"},
-    {TKT::CONTINUE, "continue"}, {TKT::CRATE, "crate"}, {TKT::ELSE, "else"},
-    {TKT::ENUM, "enum"}, {TKT::EXTERN, "extern"}, {TKT::FALSE, "false"},
-    {TKT::FN, "fn"}, {TKT::FOR, "for"}, {TKT::IF, "if"},
-    {TKT::IMPL, "impl"}, {TKT::IN, "in"}, {TKT::LET, "let"},
-    {TKT::LOOP, "loop"}, {TKT::MATCH, "match"}, {TKT::MOD, "mod"},
-    {TKT::MOVE, "move"}, {TKT::MUT, "mut"}, {TKT::PUB, "pub"},
-    {TKT::REF, "ref"}, {TKT::RETURN, "return"}, {TKT::SELF_OBJECT, "self"},
-    {TKT::SELF_TYPE, "Self"}, {TKT::SUPER, "super"}, {TKT::TRAIT, "trait"},
-    {TKT::TRUE, "true"}, {TKT::TYPE, "type"}, {TKT::UNSAFE, "unsafe"},
-    {TKT::USE, "use"}, {TKT::WHERE, "where"}, {TKT::WHILE, "while"},
-    {TKT::ASYNC, "async"}, {TKT::AWAIT, "await"}, {TKT::DYN, "dyn"}
+    {TKT::kAs, "as"}, {TKT::kBreak, "break"}, {TKT::kConst, "const"},
+    {TKT::kContinue, "continue"}, {TKT::kCrate, "crate"}, {TKT::kElse, "else"},
+    {TKT::kEnum, "enum"}, {TKT::kExtern, "extern"}, {TKT::kFalse, "false"},
+    {TKT::kFn, "fn"}, {TKT::kFor, "for"}, {TKT::kIf, "if"},
+    {TKT::kImpl, "impl"}, {TKT::kIn, "in"}, {TKT::kLet, "let"},
+    {TKT::kLoop, "loop"}, {TKT::kMatch, "match"}, {TKT::kMod, "mod"},
+    {TKT::kMove, "move"}, {TKT::kMut, "mut"}, {TKT::kPub, "pub"},
+    {TKT::kRef, "ref"}, {TKT::kReturn, "return"}, {TKT::kSelfObject, "self"},
+    {TKT::kSelfType, "Self"}, {TKT::kSuper, "super"}, {TKT::kTrait, "trait"},
+    {TKT::kTrue, "true"}, {TKT::kType, "type"}, {TKT::kUnsafe, "unsafe"},
+    {TKT::kUse, "use"}, {TKT::kWhere, "where"}, {TKT::kWhile, "while"},
+    {TKT::kAsync, "async"}, {TKT::kAwait, "await"}, {TKT::kDyn, "dyn"}
   }));
 
 TEST_LEXER_SUCCESS(AllPunctuations,
   "+ - * / % ^ ! & | && || << >> += -= *= /= %= ^= &= |= <<= >>= = == != > < >= <= "
   "@ _ . ... .. ..= , ; : :: -> => <- # $ ? ~ ( ) [ ] { }",
   ({
-    {TKT::PLUS, "+"}, {TKT::MINUS, "-"}, {TKT::STAR, "*"}, {TKT::SLASH, "/"},
-    {TKT::PERCENT, "%"}, {TKT::CARET, "^"}, {TKT::NOT, "!"}, {TKT::AND, "&"},
-    {TKT::OR, "|"}, {TKT::AND_AND, "&&"}, {TKT::OR_OR, "||"}, {TKT::SHL, "<<"},
-    {TKT::SHR, ">>"}, {TKT::PLUS_EQ, "+="}, {TKT::MINUS_EQ, "-="}, {TKT::STAR_EQ, "*="},
-    {TKT::SLASH_EQ, "/="}, {TKT::PERCENT_EQ, "%="}, {TKT::CARET_EQ, "^="},
-    {TKT::AND_EQ, "&="}, {TKT::OR_EQ, "|="}, {TKT::SHL_EQ, "<<="}, {TKT::SHR_EQ, ">>="},
-    {TKT::EQ, "="}, {TKT::EQ_EQ, "=="}, {TKT::NE, "!="}, {TKT::GT, ">"}, {TKT::LT, "<"},
-    {TKT::GE, ">="}, {TKT::LE, "<="}, {TKT::AT, "@"}, {TKT::UNDERSCORE, "_"},
-    {TKT::DOT, "."}, {TKT::DOT_DOT_DOT, "..."}, {TKT::DOT_DOT, ".."},
-    {TKT::DOT_DOT_EQ, "..="}, {TKT::COMMA, ","}, {TKT::SEMI, ";"}, {TKT::COLON, ":"},
-    {TKT::PATH_SEP, "::"}, {TKT::R_ARROW, "->"}, {TKT::FAT_ARROW, "=>"},
-    {TKT::L_ARROW, "<-"}, {TKT::POUND, "#"}, {TKT::DOLLAR, "$"}, {TKT::QUESTION, "?"},
-    {TKT::TILDE, "~"}, {TKT::L_PARENTHESIS, "("}, {TKT::R_PARENTHESIS, ")"},
-    {TKT::L_SQUARE_BRACKET, "["}, {TKT::R_SQUARE_BRACKET, "]"}, {TKT::L_CURLY_BRACE, "{"}, {TKT::R_CURLY_BRACE, "}"}
+    {TKT::kPlus, "+"}, {TKT::kMinus, "-"}, {TKT::kStar, "*"}, {TKT::kSlash, "/"},
+    {TKT::kPercent, "%"}, {TKT::kCaret, "^"}, {TKT::kNot, "!"}, {TKT::kAnd, "&"},
+    {TKT::kOr, "|"}, {TKT::kAndAnd, "&&"}, {TKT::kOrOr, "||"}, {TKT::kShl, "<<"},
+    {TKT::kShr, ">>"}, {TKT::kPlusEq, "+="}, {TKT::kMinusEq, "-="}, {TKT::kStarEq, "*="},
+    {TKT::kSlashEq, "/="}, {TKT::kPercentEq, "%="}, {TKT::kCaretEq, "^="},
+    {TKT::kAndEq, "&="}, {TKT::kOrEq, "|="}, {TKT::kShlEq, "<<="}, {TKT::kShrEq, ">>="},
+    {TKT::kEq, "="}, {TKT::kEqEq, "=="}, {TKT::kNe, "!="}, {TKT::kGt, ">"}, {TKT::kLt, "<"},
+    {TKT::kGe, ">="}, {TKT::kLe, "<="}, {TKT::kAt, "@"}, {TKT::kUnderscore, "_"},
+    {TKT::kDot, "."}, {TKT::kDotDotDot, "..."}, {TKT::kDotDot, ".."},
+    {TKT::kDotDotEq, "..="}, {TKT::kComma, ","}, {TKT::kSemi, ";"}, {TKT::kColon, ":"},
+    {TKT::kPathSep, "::"}, {TKT::kRArrow, "->"}, {TKT::kFatArrow, "=>"},
+    {TKT::kLArrow, "<-"}, {TKT::kPound, "#"}, {TKT::kDollar, "$"}, {TKT::kQuestion, "?"},
+    {TKT::kTilde, "~"}, {TKT::kLParenthesis, "("}, {TKT::kRParenthesis, ")"},
+    {TKT::kLSquareBracket, "["}, {TKT::kRSquareBracket, "]"}, {TKT::kLCurlyBrace, "{"}, {TKT::kRCurlyBrace, "}"}
   }));
 
 // --- Numeric Literals ---
 TEST_LEXER_SUCCESS(DecimalNumbers,
   "let n = 123_456; let f = 1.2345;",
   ({
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "n"}, {TKT::EQ, "="},
-    {TKT::INTEGER_LITERAL, "123_456"}, {TKT::SEMI, ";"},
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "f"}, {TKT::EQ, "="},
-    {TKT::FLOAT_LITERAL, "1.2345"}, {TKT::SEMI, ";"}
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "n"}, {TKT::kEq, "="},
+    {TKT::kIntegerLiteral, "123_456"}, {TKT::kSemi, ";"},
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "f"}, {TKT::kEq, "="},
+    {TKT::kFloatLiteral, "1.2345"}, {TKT::kSemi, ";"}
   }));
 
 TEST_LEXER_SUCCESS(IntegerSuffix,
   "let a = 123u32; let b = 456_isize;",
   ({
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "a"}, {TKT::EQ, "="},
-    {TKT::INTEGER_LITERAL, "123u32"}, {TKT::SEMI, ";"},
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "b"}, {TKT::EQ, "="},
-    {TKT::INTEGER_LITERAL, "456_isize"}, {TKT::SEMI, ";"}
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "a"}, {TKT::kEq, "="},
+    {TKT::kIntegerLiteral, "123u32"}, {TKT::kSemi, ";"},
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "b"}, {TKT::kEq, "="},
+    {TKT::kIntegerLiteral, "456_isize"}, {TKT::kSemi, ";"}
   }));
 
 // --- String Literals ---
 TEST_LEXER_SUCCESS(StringWithEscapes,
   "let s = \"hello\\nworld\";",
   ({
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "s"}, {TKT::EQ, "="},
-    {TKT::STRING_LITERAL, "\"hello\\nworld\""}, {TKT::SEMI, ";"}
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "s"}, {TKT::kEq, "="},
+    {TKT::kStringLiteral, "\"hello\\nworld\""}, {TKT::kSemi, ";"}
   }));
 
 // --- Operators and Delimiters ---
 TEST_LEXER_SUCCESS(ArithmeticOperators,
   "a + b - c * d / e % f",
   ({
-    {TKT::IDENTIFIER, "a"}, {TKT::PLUS, "+"}, {TKT::IDENTIFIER, "b"},
-    {TKT::MINUS, "-"}, {TKT::IDENTIFIER, "c"}, {TKT::STAR, "*"},
-    {TKT::IDENTIFIER, "d"}, {TKT::SLASH, "/"}, {TKT::IDENTIFIER, "e"},
-    {TKT::PERCENT, "%"}, {TKT::IDENTIFIER, "f"}
+    {TKT::kIdentifier, "a"}, {TKT::kPlus, "+"}, {TKT::kIdentifier, "b"},
+    {TKT::kMinus, "-"}, {TKT::kIdentifier, "c"}, {TKT::kStar, "*"},
+    {TKT::kIdentifier, "d"}, {TKT::kSlash, "/"}, {TKT::kIdentifier, "e"},
+    {TKT::kPercent, "%"}, {TKT::kIdentifier, "f"}
   }));
 
 TEST_LEXER_SUCCESS(ComparisonOperators,
   "a == b != c < d > e <= f >= g",
   ({
-    {TKT::IDENTIFIER, "a"}, {TKT::EQ_EQ, "=="}, {TKT::IDENTIFIER, "b"},
-    {TKT::NE, "!="}, {TKT::IDENTIFIER, "c"}, {TKT::LT, "<"},
-    {TKT::IDENTIFIER, "d"}, {TKT::GT, ">"}, {TKT::IDENTIFIER, "e"},
-    {TKT::LE, "<="}, {TKT::IDENTIFIER, "f"}, {TKT::GE, ">="},
-    {TKT::IDENTIFIER, "g"}
+    {TKT::kIdentifier, "a"}, {TKT::kEqEq, "=="}, {TKT::kIdentifier, "b"},
+    {TKT::kNe, "!="}, {TKT::kIdentifier, "c"}, {TKT::kLt, "<"},
+    {TKT::kIdentifier, "d"}, {TKT::kGt, ">"}, {TKT::kIdentifier, "e"},
+    {TKT::kLe, "<="}, {TKT::kIdentifier, "f"}, {TKT::kGe, ">="},
+    {TKT::kIdentifier, "g"}
   }));
 
 TEST_LEXER_SUCCESS(CompoundOperators,
   "a += b; c *= d; e /= f; g %= h; i ^= j;",
   ({
-    {TKT::IDENTIFIER, "a"}, {TKT::PLUS_EQ, "+="}, {TKT::IDENTIFIER, "b"}, {TKT::SEMI, ";"},
-    {TKT::IDENTIFIER, "c"}, {TKT::STAR_EQ, "*="}, {TKT::IDENTIFIER, "d"}, {TKT::SEMI, ";"},
-    {TKT::IDENTIFIER, "e"}, {TKT::SLASH_EQ, "/="}, {TKT::IDENTIFIER, "f"}, {TKT::SEMI, ";"},
-    {TKT::IDENTIFIER, "g"}, {TKT::PERCENT_EQ, "%="}, {TKT::IDENTIFIER, "h"}, {TKT::SEMI, ";"},
-    {TKT::IDENTIFIER, "i"}, {TKT::CARET_EQ, "^="}, {TKT::IDENTIFIER, "j"}, {TKT::SEMI, ";"}
+    {TKT::kIdentifier, "a"}, {TKT::kPlusEq, "+="}, {TKT::kIdentifier, "b"}, {TKT::kSemi, ";"},
+    {TKT::kIdentifier, "c"}, {TKT::kStarEq, "*="}, {TKT::kIdentifier, "d"}, {TKT::kSemi, ";"},
+    {TKT::kIdentifier, "e"}, {TKT::kSlashEq, "/="}, {TKT::kIdentifier, "f"}, {TKT::kSemi, ";"},
+    {TKT::kIdentifier, "g"}, {TKT::kPercentEq, "%="}, {TKT::kIdentifier, "h"}, {TKT::kSemi, ";"},
+    {TKT::kIdentifier, "i"}, {TKT::kCaretEq, "^="}, {TKT::kIdentifier, "j"}, {TKT::kSemi, ";"}
   }));
 
 TEST_LEXER_SUCCESS(MiscOperatorsAndDelimiters,
   "let a: Vec<i32> = vec![1, 2, 3];",
   ({
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "a"}, {TKT::COLON, ":"},
-    {TKT::IDENTIFIER, "Vec"}, {TKT::LT, "<"}, {TKT::IDENTIFIER, "i32"},
-    {TKT::GT, ">"}, {TKT::EQ, "="}, {TKT::IDENTIFIER, "vec"},
-    {TKT::NOT, "!"}, {TKT::L_SQUARE_BRACKET, "["}, {TKT::INTEGER_LITERAL, "1"},
-    {TKT::COMMA, ","}, {TKT::INTEGER_LITERAL, "2"}, {TKT::COMMA, ","},
-    {TKT::INTEGER_LITERAL, "3"}, {TKT::R_SQUARE_BRACKET, "]"}, {TKT::SEMI, ";"}
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "a"}, {TKT::kColon, ":"},
+    {TKT::kIdentifier, "Vec"}, {TKT::kLt, "<"}, {TKT::kIdentifier, "i32"},
+    {TKT::kGt, ">"}, {TKT::kEq, "="}, {TKT::kIdentifier, "vec"},
+    {TKT::kNot, "!"}, {TKT::kLSquareBracket, "["}, {TKT::kIntegerLiteral, "1"},
+    {TKT::kComma, ","}, {TKT::kIntegerLiteral, "2"}, {TKT::kComma, ","},
+    {TKT::kIntegerLiteral, "3"}, {TKT::kRSquareBracket, "]"}, {TKT::kSemi, ";"}
   }));
 
 // --- Comments and Whitespace ---
 TEST_LEXER_SUCCESS(SingleLineComment,
   "let x = 1; // This is a comment\nlet y = 2;",
   ({
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "x"}, {TKT::EQ, "="},
-    {TKT::INTEGER_LITERAL, "1"}, {TKT::SEMI, ";"},
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "y"}, {TKT::EQ, "="},
-    {TKT::INTEGER_LITERAL, "2"}, {TKT::SEMI, ";"}
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "x"}, {TKT::kEq, "="},
+    {TKT::kIntegerLiteral, "1"}, {TKT::kSemi, ";"},
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "y"}, {TKT::kEq, "="},
+    {TKT::kIntegerLiteral, "2"}, {TKT::kSemi, ";"}
   }));
 
 TEST_LEXER_SUCCESS(MultiLineComment,
   "let a = 1; /* This is a nested /*\nmulti-/*li*/ne\nco*/mment. */ let b = 2;",
   ({
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "a"}, {TKT::EQ, "="},
-    {TKT::INTEGER_LITERAL, "1"}, {TKT::SEMI, ";"},
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "b"}, {TKT::EQ, "="},
-    {TKT::INTEGER_LITERAL, "2"}, {TKT::SEMI, ";"}
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "a"}, {TKT::kEq, "="},
+    {TKT::kIntegerLiteral, "1"}, {TKT::kSemi, ";"},
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "b"}, {TKT::kEq, "="},
+    {TKT::kIntegerLiteral, "2"}, {TKT::kSemi, ";"}
   }));
 
 // "1.2.foo()" is valid, so I decide not to check what's after the second dot in lexer.
 TEST_LEXER_SUCCESS(ConfusingNumberLiteral,
   "let s = 1.2.3;",
   ({
-    {TKT::LET, "let"}, {TKT::IDENTIFIER, "s"}, {TKT::EQ, "="},
-    {TKT::FLOAT_LITERAL, "1.2"}, {TKT::DOT, "."}, {TKT::INTEGER_LITERAL, "3"},
-    {TKT::SEMI, ";"}
+    {TKT::kLet, "let"}, {TKT::kIdentifier, "s"}, {TKT::kEq, "="},
+    {TKT::kFloatLiteral, "1.2"}, {TKT::kDot, "."}, {TKT::kIntegerLiteral, "3"},
+    {TKT::kSemi, ";"}
   }));
 
 TEST_LEXER_SUCCESS(
   NumberWithDot,
   "let num = 123.foo;",
   ({
-    {TKT::LET, "let"},
-    {TKT::IDENTIFIER, "num"},
-    {TKT::EQ, "="},
-    {TKT::INTEGER_LITERAL, "123"},
-    {TKT::DOT, "."},
-    {TKT::IDENTIFIER, "foo"},
-    {TKT::SEMI, ";"}
+    {TKT::kLet, "let"},
+    {TKT::kIdentifier, "num"},
+    {TKT::kEq, "="},
+    {TKT::kIntegerLiteral, "123"},
+    {TKT::kDot, "."},
+    {TKT::kIdentifier, "foo"},
+    {TKT::kSemi, ";"}
   }));
 
 // --- Error Cases ---
