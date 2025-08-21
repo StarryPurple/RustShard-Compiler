@@ -1,6 +1,8 @@
 #include "parser.h"
 #include "ast_enums.h"
 
+#include <unordered_map>
+
 #define REPORT_FAILURE_AND_RETURN(FailureMessage) \
   do { \
     _ast_ctx->recordError( \
@@ -709,7 +711,7 @@ std::unique_ptr<PathIdentSegment> Parser::parsePathIdentSegment() {
 }
 
 enum class Precedence {
-  kLowest = 0,          // termination defence
+  kLowest = 0,          // termination & default defence
   kAssignment = 1,      // =, +=, -=, etc.
   kTypeCast = 2,        // as
   kRange = 3,           // .., ..=
@@ -725,25 +727,285 @@ enum class Precedence {
   kHighest = 13,        // defence
 };
 
-std::unique_ptr<Expression> Parser::parsePrattExpression(int precedence) {
+std::map<TokenType, int> prefix_precedence = {
+  // Unary prefix operators' precedence
+  {TokenType::kMinus,     static_cast<int>(Precedence::kPrefix)},
+  {TokenType::kNot,       static_cast<int>(Precedence::kPrefix)},
+  {TokenType::kStar,      static_cast<int>(Precedence::kPrefix)}, // Dereference
+  {TokenType::kAnd,       static_cast<int>(Precedence::kPrefix)}, // Borrow `&`
+  {TokenType::kAndAnd,    static_cast<int>(Precedence::kPrefix)}, // Borrow `&&`
 
+  // These keywords act as expression starters
+  {TokenType::kReturn,    static_cast<int>(Precedence::kLowest)},
+  {TokenType::kBreak,     static_cast<int>(Precedence::kLowest)},
+  {TokenType::kContinue,  static_cast<int>(Precedence::kLowest)},
+  {TokenType::kUnderscore,static_cast<int>(Precedence::kLowest)},
+};
+
+std::map<TokenType, int> infix_precedence = {
+    // Member access and function calls
+    {TokenType::kLParenthesis,     static_cast<int>(Precedence::kCallAndMember)}, // ()
+    {TokenType::kLSquareBracket,   static_cast<int>(Precedence::kCallAndMember)}, // []
+    {TokenType::kDot,              static_cast<int>(Precedence::kCallAndMember)}, // .
+    {TokenType::kPathSep,          static_cast<int>(Precedence::kCallAndMember)}, // ::
+
+    // Multiplicative
+    {TokenType::kStar,        static_cast<int>(Precedence::kMultiplicative)},
+    {TokenType::kSlash,       static_cast<int>(Precedence::kMultiplicative)},
+    {TokenType::kPercent,     static_cast<int>(Precedence::kMultiplicative)},
+
+    // Additive
+    {TokenType::kPlus,        static_cast<int>(Precedence::kAdditive)},
+    {TokenType::kMinus,       static_cast<int>(Precedence::kAdditive)},
+
+    // Shift
+    {TokenType::kShl,         static_cast<int>(Precedence::kShift)},
+    {TokenType::kShr,         static_cast<int>(Precedence::kShift)},
+
+    // Bitwise
+    {TokenType::kAnd,         static_cast<int>(Precedence::kBitwise)},
+    {TokenType::kOr,          static_cast<int>(Precedence::kBitwise)},
+    {TokenType::kCaret,       static_cast<int>(Precedence::kBitwise)},
+
+    // Comparison
+    {TokenType::kEqEq,        static_cast<int>(Precedence::kComparison)},
+    {TokenType::kNe,          static_cast<int>(Precedence::kComparison)},
+    {TokenType::kGt,          static_cast<int>(Precedence::kComparison)},
+    {TokenType::kLt,          static_cast<int>(Precedence::kComparison)},
+    {TokenType::kGe,          static_cast<int>(Precedence::kComparison)},
+    {TokenType::kLe,          static_cast<int>(Precedence::kComparison)},
+
+    // Logical
+    {TokenType::kAndAnd,      static_cast<int>(Precedence::kLogicalAnd)},
+    {TokenType::kOrOr,        static_cast<int>(Precedence::kLogicalOr)},
+
+    // Type casting
+    {TokenType::kAs,          static_cast<int>(Precedence::kTypeCast)},
+
+    // Range
+    {TokenType::kDotDot,      static_cast<int>(Precedence::kRange)},
+    {TokenType::kDotDotDot,   static_cast<int>(Precedence::kRange)},
+    {TokenType::kDotDotEq,    static_cast<int>(Precedence::kRange)},
+
+    // Assignment
+    {TokenType::kEq,          static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kPlusEq,      static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kMinusEq,     static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kStarEq,      static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kSlashEq,     static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kPercentEq,   static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kCaretEq,     static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kAndEq,       static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kOrEq,        static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kShlEq,       static_cast<int>(Precedence::kAssignment)},
+    {TokenType::kShrEq,       static_cast<int>(Precedence::kAssignment)},
+};
+
+Operator token_to_operator(TokenType type) {
+  static const std::unordered_map<TokenType, Operator> fmap = {
+    // Arithmetic Operators
+    {TokenType::kPlus,    Operator::kAdd},
+    {TokenType::kMinus,   Operator::kSub},
+    {TokenType::kStar,    Operator::kMul},
+    {TokenType::kSlash,   Operator::kDiv},
+    {TokenType::kPercent, Operator::kMod},
+    {TokenType::kCaret,   Operator::kPow},
+
+    // Compound Assignment Operators
+    {TokenType::kPlusEq,   Operator::kAddAssign},
+    {TokenType::kMinusEq,  Operator::kSubAssign},
+    {TokenType::kStarEq,   Operator::kMulAssign},
+    {TokenType::kSlashEq,  Operator::kDivAssign},
+    {TokenType::kPercentEq,Operator::kModAssign},
+    {TokenType::kCaretEq,  Operator::kPowAssign},
+
+    // Logical and Comparison Operators
+    {TokenType::kAnd,      Operator::kAnd},
+    {TokenType::kOr,       Operator::kOr},
+    {TokenType::kNot,      Operator::kNot},
+    {TokenType::kAndAnd,   Operator::kLogicalAnd},
+    {TokenType::kOrOr,     Operator::kLogicalOr},
+    {TokenType::kEqEq,     Operator::kEq},
+    {TokenType::kNe,       Operator::kNe},
+    {TokenType::kGt,       Operator::kGt},
+    {TokenType::kLt,       Operator::kLt},
+    {TokenType::kGe,       Operator::kGe},
+    {TokenType::kLe,       Operator::kLe},
+
+    // Bitwise Operators
+    // Note: kAnd, kOr, and kCaret have dual use with logical/arithmetic.
+    // The parser's context (e.g., in a bitwise expression context)
+    // determines the specific operator. This map provides the general
+    // mapping. The specific bitwise assignments are unambiguous.
+    {TokenType::kShl,      Operator::kShl},
+    {TokenType::kShr,      Operator::kShr},
+    {TokenType::kAndEq,    Operator::kBitwiseAndAssign},
+    {TokenType::kOrEq,     Operator::kBitwiseOrAssign},
+    {TokenType::kShlEq,    Operator::kShlAssign},
+    {TokenType::kShrEq,    Operator::kShrAssign},
+
+    // Special Assignment
+    {TokenType::kEq,       Operator::kAssign},
+
+    // Pointer/Dereference
+    // kStar and kAnd are context-dependent for their pointer meaning.
+    // The parser must determine if they are kDeref/kRef or kMul/kBitwiseAnd
+    // based on their position (prefix vs. infix).
+};
+
+  if (auto it = fmap.find(type); it != fmap.end()) {
+    return it->second;
+  }
+  return Operator::kInvalid;
+}
+
+std::unique_ptr<Expression> Parser::parsePrattExpression(int precedence) {
+  auto lft = parsePrefixExpression();
+  EXPECT_POINTER_NOT_EMPTY(lft);
+  while(infix_precedence.contains(_ast_ctx->current().token_type) &&
+    infix_precedence[_ast_ctx->current().token_type] > precedence) {
+    auto type = _ast_ctx->current().token_type;
+    int new_pred = infix_precedence[type];
+    _ast_ctx->consume();
+    switch(type) {
+      // prefix: field, func call, index field...?
+    case TokenType::kDot: {
+      lft = parseFieldExpression(std::move(lft));
+    } break;
+    case TokenType::kLParenthesis: {
+      lft = parseCallExpression(std::move(lft));
+    } break;
+    case TokenType::kLSquareBracket: {
+      lft = parseIndexExpression(std::move(lft));
+    } break;
+      // infix
+    case TokenType::kPlus: case TokenType::kMinus: case TokenType::kStar:
+    case TokenType::kSlash: case TokenType::kPercent: case TokenType::kCaret:
+    case TokenType::kAnd: case TokenType::kOr: case TokenType::kShl:
+    case TokenType::kShr: {
+      auto rht = parsePrattExpression(new_pred);
+      EXPECT_POINTER_NOT_EMPTY(rht);
+      lft = std::make_unique<ArithmeticOrLogicalExpression>(token_to_operator(type), std::move(lft), std::move(rht));
+    } break;
+    case TokenType::kEqEq: case TokenType::kNe: case TokenType::kGt:
+    case TokenType::kLt: case TokenType::kGe: case TokenType::kLe: {
+      auto rht = parsePrattExpression(new_pred);
+      EXPECT_POINTER_NOT_EMPTY(rht);
+      lft = std::make_unique<ComparisonExpression>(token_to_operator(type), std::move(lft), std::move(rht));
+    } break;
+    case TokenType::kAndAnd: case TokenType::kOrOr: {
+      auto rht = parsePrattExpression(new_pred);
+      EXPECT_POINTER_NOT_EMPTY(rht);
+      lft = std::make_unique<LazyBooleanExpression>(token_to_operator(type), std::move(lft), std::move(rht));
+    } break;
+    case TokenType::kEq: {
+      auto rht = parsePrattExpression(new_pred - 1); // right associative
+      EXPECT_POINTER_NOT_EMPTY(rht);
+      lft = std::make_unique<AssignmentExpression>(std::move(lft), std::move(rht));
+    } break;
+    case TokenType::kPlusEq: case TokenType::kMinusEq: case TokenType::kStarEq:
+    case TokenType::kSlashEq: case TokenType::kPercentEq: case TokenType::kCaretEq:
+    case TokenType::kAndEq: case TokenType::kOrEq: case TokenType::kShlEq:
+    case TokenType::kShrEq: {
+      auto rht = parsePrattExpression(new_pred - 1); // right associative
+      EXPECT_POINTER_NOT_EMPTY(rht);
+      lft = std::make_unique<CompoundAssignmentExpression>(token_to_operator(type), std::move(lft), std::move(rht));
+    } break;
+    case TokenType::kAs: {
+      auto tnb = parseTypeNoBounds();
+      EXPECT_POINTER_NOT_EMPTY(tnb);
+      lft = std::make_unique<TypeCastExpression>(std::move(lft), std::move(tnb));
+    } break;
+    case TokenType::kDotDot: case TokenType::kDotDotDot: case TokenType::kDotDotEq: {
+      lft = parseRangeExpression(std::move(lft), token_to_operator(type));
+    } break;
+    default:
+      REPORT_FAILURE_AND_RETURN(
+        "Unexpected infix operator token: " + token_type_to_string(type)
+      );
+    }
+  }
+  EXPECT_POINTER_NOT_EMPTY(lft);
+  return lft;
 }
 
 std::unique_ptr<Expression> Parser::parsePrefixExpression() {
-
-}
-
-
-std::unique_ptr<Expression> Parser::parseInfixExpression(
-  std::unique_ptr<Expression> &&lft, int precedence) {
-
+  EXPECT_CONTEXT_NOT_EMPTY();
+  auto ctt = _ast_ctx->current().token_type; // current token type
+  auto ctc = get_token_category(ctt); // current token type category
+  if(ctc == TokenTypeCat::kLiteral || ctt == TokenType::kTrue || ctt == TokenType::kFalse) {
+    _ast_ctx->consume();
+    return parseLiteralExpression();
+  }
+  if(ctc == TokenTypeCat::kIdentifier) {
+    return parsePathExpression();
+  }
+  switch(ctt) {
+    // unary
+  case TokenType::kMinus: case TokenType::kNot: {
+    _ast_ctx->consume();
+    auto expr = parsePrattExpression(static_cast<int>(Precedence::kPrefix));
+    EXPECT_POINTER_NOT_EMPTY(expr);
+    return std::make_unique<NegationExpression>(token_to_operator(ctt), std::move(expr));
+  }
+  case TokenType::kStar: {
+    _ast_ctx->consume();
+    auto expr = parsePrattExpression(static_cast<int>(Precedence::kPrefix));
+    EXPECT_POINTER_NOT_EMPTY(expr);
+    return std::make_unique<DereferenceExpression>(std::move(expr));
+  }
+  case TokenType::kAnd: {
+    _ast_ctx->consume();
+    bool is_mut = false;
+    if(CHECK_TOKEN(kMut)) {
+      is_mut = true;
+      _ast_ctx->consume();
+    }
+    auto expr = parsePrattExpression(static_cast<int>(Precedence::kPrefix));
+    EXPECT_POINTER_NOT_EMPTY(expr);
+    return std::make_unique<BorrowExpression>(is_mut, std::move(expr));
+  }
+  case TokenType::kAndAnd: {
+    _ast_ctx->consume(); // "&&" is one token
+    bool is_mut = false;
+    if(CHECK_TOKEN(kMut)) {
+      is_mut = true;
+      _ast_ctx->consume();
+    }
+    auto expr = parsePrattExpression(static_cast<int>(Precedence::kPrefix));
+    EXPECT_POINTER_NOT_EMPTY(expr);
+    return std::make_unique<BorrowExpression>(false, std::make_unique<BorrowExpression>(is_mut, std::move(expr)));
+  }
+    // keywords and punctuations
+  case TokenType::kUnderscore: return parseUnderscoreExpression();
+  case TokenType::kBreak: return parseBreakExpression();
+  case TokenType::kContinue: return parseContinueExpression();
+  case TokenType::kReturn: return parseReturnExpression();
+  case TokenType::kIf: return parseIfExpression();
+  case TokenType::kLoop: return parseLoopExpression();
+  case TokenType::kWhile: return parsePredicateLoopExpression();
+  case TokenType::kMatch: return parseMatchExpression();
+  case TokenType::kLCurlyBrace: return parseBlockExpression();
+  case TokenType::kLParenthesis: {
+    if(_ast_ctx->peek(1).token_type == TokenType::kRParenthesis) {
+      return parseTupleExpression(); // unit type "()"
+    }
+    auto expr = parsePrattExpression(static_cast<int>(Precedence::kLowest));
+    EXPECT_POINTER_NOT_EMPTY(expr);
+    return std::make_unique<GroupedExpression>(std::move(expr));
+  }
+  case TokenType::kLSquareBracket: return parseArrayExpression();
+  default: REPORT_FAILURE_AND_RETURN("Unexpected token in expression:" + token_type_to_string(ctt));
+  }
+  REPORT_FAILURE_AND_RETURN("Unexpected token in expression:" + token_type_to_string(ctt));
 }
 
 std::unique_ptr<Expression> Parser::parseExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  auto e = parsePrattExpression(static_cast<int>(Precedence::kLowest));
+  EXPECT_POINTER_NOT_EMPTY(e);
   tracker.commit();
-  return nullptr;
+  return e;
 }
 
 std::unique_ptr<ExpressionWithoutBlock> Parser::parseExpressionWithoutBlock() {
@@ -886,7 +1148,7 @@ std::unique_ptr<RepeatedArrayElements> Parser::parseRepeatedArrayElements() {
   return nullptr;
 }
 
-std::unique_ptr<IndexExpression> Parser::parseIndexExpression() {
+std::unique_ptr<IndexExpression> Parser::parseIndexExpression(std::unique_ptr<Expression> &&lft) {
   Backtracker tracker(*_ast_ctx);
 
   tracker.commit();
@@ -949,7 +1211,7 @@ std::unique_ptr<IndexStructExprField> Parser::parseIndexStructExprField() {
   return nullptr;
 }
 
-std::unique_ptr<CallExpression> Parser::parseCallExpression() {
+std::unique_ptr<CallExpression> Parser::parseCallExpression(std::unique_ptr<Expression> &&lft) {
   Backtracker tracker(*_ast_ctx);
 
   tracker.commit();
@@ -970,7 +1232,7 @@ std::unique_ptr<MethodCallExpression> Parser::parseMethodCallExpression() {
   return nullptr;
 }
 
-std::unique_ptr<FieldExpression> Parser::parseFieldExpression() {
+std::unique_ptr<FieldExpression> Parser::parseFieldExpression(std::unique_ptr<Expression> &&lft) {
   Backtracker tracker(*_ast_ctx);
 
   tracker.commit();
@@ -991,7 +1253,7 @@ std::unique_ptr<BreakExpression> Parser::parseBreakExpression() {
   return nullptr;
 }
 
-std::unique_ptr<RangeExpression> Parser::parseRangeExpression() {
+std::unique_ptr<RangeExpression> Parser::parseRangeExpression(std::unique_ptr<Expression> &&expr, Operator oper) {
   Backtracker tracker(*_ast_ctx);
 
   tracker.commit();

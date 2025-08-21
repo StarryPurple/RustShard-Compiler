@@ -581,20 +581,18 @@ private:
   // Intentional blank.
 };
 
+// Always 1 ref.
 class BorrowExpression : public OperatorExpression {
 public:
   BorrowExpression(
-    int ref_cnt,
     bool is_mut,
     std::unique_ptr<Expression> &&expr
-  ): _ref_cnt(ref_cnt), _is_mut(is_mut), _expr(std::move(expr)) {}
+  ): _is_mut(is_mut), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  int _ref_cnt; // 0/1/2
   bool _is_mut;
   std::unique_ptr<Expression> _expr;
 public:
-  EXPOSE_FIELD_CONST_REFERENCE(ref_cnt, _ref_cnt)
   EXPOSE_FIELD_CONST_REFERENCE(is_mut, _is_mut)
   EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
@@ -614,15 +612,15 @@ public:
 class NegationExpression : public OperatorExpression {
 public:
   NegationExpression(
-    bool is_neg,
+    Operator oper,
     std::unique_ptr<Expression> &&expr
-  ): _is_neg(is_neg), _expr(std::move(expr)) {}
+  ): _oper(oper), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  bool _is_neg; // true for neg '-', false for not '!'
+  Operator _oper;
   std::unique_ptr<Expression> _expr;
 public:
-  EXPOSE_FIELD_CONST_REFERENCE(is_neg, _is_neg)
+  EXPOSE_FIELD_CONST_REFERENCE(oper, _oper)
   EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
 
@@ -709,13 +707,16 @@ public:
 class CompoundAssignmentExpression : public OperatorExpression {
 public:
   CompoundAssignmentExpression(
+    Operator oper,
     std::unique_ptr<Expression> &&expr1,
     std::unique_ptr<Expression> &&expr2
-  ): _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
+  ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
+  Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
 public:
+  EXPOSE_FIELD_CONST_REFERENCE(oper, _oper);
   EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
   EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
 };

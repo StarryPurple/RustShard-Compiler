@@ -2,58 +2,56 @@
 #define INSOMNIA_AST_ENUMS_H
 
 namespace insomnia::rust_shard::ast {
-
 enum class Operator {
-  INVALID,
+  kInvalid,
 
   // Arithmetic Operators
-  ADD,      // TokenType::PLUS
-  SUB,      // TokenType::MINUS
-  MUL,      // TokenType::STAR
-  DIV,      // TokenType::SLASH
-  MOD,      // TokenType::PERCENT
-  POW,      // TokenType::CARET  (Often represented by `^` in other languages, though Rust uses `*` for multiplication, so this might be for bitwise XOR)
+  kAdd, // TokenType::kPlus
+  kSub, // TokenType::kMinus
+  kMul, // TokenType::kStar
+  kDiv, // TokenType::kSlash
+  kMod, // TokenType::kPercent
+  kPow, // TokenType::kCaret
 
   // Compound Assignment Operators
-  ADD_ASSIGN, // TokenType::PLUS_EQ
-  SUB_ASSIGN, // TokenType::MINUS_EQ
-  MUL_ASSIGN, // TokenType::STAR_EQ
-  DIV_ASSIGN, // TokenType::SLASH_EQ
-  MOD_ASSIGN, // TokenType::PERCENT_EQ
-  POW_ASSIGN, // TokenType::CARET_EQ
+  kAddAssign, // TokenType::kPlusEq
+  kSubAssign, // TokenType::kMinusEq
+  kMulAssign, // TokenType::kStarEq
+  kDivAssign, // TokenType::kSlashEq
+  kModAssign, // TokenType::kPercentEq
+  kPowAssign, // TokenType::kCaretEq
 
   // Logical and Comparison Operators
-  AND,      // TokenType::AND
-  OR,       // TokenType::OR
-  NOT,      // TokenType::NOT
-  LOGICAL_AND, // TokenType::AND_AND
-  LOGICAL_OR,  // TokenType::OR_OR
-  EQ,       // TokenType::EQ_EQ
-  NE,       // TokenType::NE
-  GT,       // TokenType::GT
-  LT,       // TokenType::LT
-  GE,       // TokenType::GE
-  LE,       // TokenType::LE
+  kAnd,        // TokenType::kAnd
+  kOr,         // TokenType::kOr
+  kNot,        // TokenType::kNot
+  kLogicalAnd, // TokenType::kAndAnd
+  kLogicalOr,  // TokenType::kOrOr
+  kEq,         // TokenType::kEqEq
+  kNe,         // TokenType::kNe
+  kGt,         // TokenType::kGt
+  kLt,         // TokenType::kLt
+  kGe,         // TokenType::kGe
+  kLe,         // TokenType::kLe
 
   // Bitwise Operators
-  BITWISE_AND, // TokenType::AND
-  BITWISE_OR,  // TokenType::OR
-  BITWISE_XOR, // TokenType::CARET
-  SHL,         // TokenType::SHL
-  SHR,         // TokenType::SHR
-  BITWISE_AND_ASSIGN, // TokenType::AND_EQ
-  BITWISE_OR_ASSIGN,  // TokenType::OR_EQ
-  SHL_ASSIGN,         // TokenType::SHL_EQ
-  SHR_ASSIGN,         // TokenType::SHR_EQ
+  kBitwiseAnd,       // TokenType::kAnd
+  kBitwiseOr,        // TokenType::kOr
+  kBitwiseXor,       // TokenType::kCaret
+  kShl,              // TokenType::kShl
+  kShr,              // TokenType::kShr
+  kBitwiseAndAssign, // TokenType::kAndEq
+  kBitwiseOrAssign,  // TokenType::kOrEq
+  kShlAssign,        // TokenType::kShlEq
+  kShrAssign,        // TokenType::kShrEq
 
   // Special Assignment
-  ASSIGN,   // TokenType::EQ
+  kAssign, // TokenType::kEq
 
   // Pointer/Dereference
-  DEREF,    // TokenType::STAR (Can also be multiplication)
-  REF,      // TokenType::AND (Can also be bitwise AND)
+  kDeref, // TokenType::kStar
+  kRef,   // TokenType::kAnd
 };
-
 }
 
 #endif // INSOMNIA_AST_ENUMS_H

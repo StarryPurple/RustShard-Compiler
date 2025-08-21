@@ -54,6 +54,10 @@ enum class TokenType : uint32_t {
   kRCurlyBrace, kLSquareBracket, kRSquareBracket, kLParenthesis, kRParenthesis,
 };
 
+TokenTypeCat get_token_category(TokenType type) {
+  return static_cast<TokenTypeCat>(static_cast<uint32_t>(type) & 0xff00);
+}
+
 std::string token_type_to_string(TokenType type);
 
 struct Token {
