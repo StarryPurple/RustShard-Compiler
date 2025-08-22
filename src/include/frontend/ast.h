@@ -509,6 +509,7 @@ public:
 class Expression : public BasicNode {
 public:
   Expression() = default;
+  virtual bool has_block() const = 0;
 private:
   // Intentional blank.
 };
@@ -516,6 +517,7 @@ private:
 class ExpressionWithoutBlock : public Expression {
 public:
   ExpressionWithoutBlock() = default;
+  bool has_block() const override { return false; }
 private:
   // Intentional blank.
 };
@@ -1076,6 +1078,7 @@ private:
 class ExpressionWithBlock : public Expression {
 public:
   ExpressionWithBlock() = default;
+  bool has_block() const override { return true; }
 private:
   // Intentional blank.
 };
@@ -1371,17 +1374,14 @@ private:
 class ReferencePattern : public PatternWithoutRange {
 public:
   ReferencePattern(
-    int ref_cnt,
     bool is_mut,
     std::unique_ptr<PatternWithoutRange> &&pattern
-  ): _ref_cnt(ref_cnt), _is_mut(is_mut), _pattern(std::move(pattern)) {}
+  ): _is_mut(is_mut), _pattern(std::move(pattern)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  int _ref_cnt;
   bool _is_mut;
   std::unique_ptr<PatternWithoutRange> _pattern;
 public:
-  EXPOSE_FIELD_CONST_REFERENCE(ref_cnt, _ref_cnt)
   EXPOSE_FIELD_CONST_REFERENCE(is_mut, _is_mut)
   EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
 };

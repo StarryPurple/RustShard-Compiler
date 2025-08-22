@@ -953,8 +953,20 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence) {
       EXPECT_POINTER_NOT_EMPTY(tnb);
       lft = std::make_unique<TypeCastExpression>(std::move(lft), std::move(tnb));
     } break;
-    case TokenType::kDotDot: case TokenType::kDotDotDot: case TokenType::kDotDotEq: {
-      lft = parseRangeExpression(std::move(lft), token_to_operator(type));
+    case TokenType::kDotDot: {
+      _ast_ctx->consume();
+      auto expr = parseExpression();
+      if(!expr) {
+        lft = std::make_unique<RangeFromExpr>(std::move(lft));
+      } else {
+        lft = std::make_unique<RangeExpr>(std::move(lft), std::move(expr));
+      }
+    } break;
+    case TokenType::kDotDotEq: {
+      _ast_ctx->consume();
+      auto expr = parseExpression();
+      EXPECT_POINTER_NOT_EMPTY(expr);;
+      lft = std::make_unique<RangeInclusiveExpr>(std::move(lft), std::move(expr));
     } break;
     default:
       REPORT_FAILURE_AND_RETURN(
@@ -1013,6 +1025,23 @@ std::unique_ptr<Expression> Parser::parsePrefixExpression() {
     EXPECT_POINTER_NOT_EMPTY(expr);
     // the first layer has no qualifier.
     return std::make_unique<BorrowExpression>(false, std::make_unique<BorrowExpression>(is_mut, std::move(expr)));
+  }
+  case TokenType::kDotDot: {
+    // RangeFullExpr/RangeToExpr
+    _ast_ctx->consume();
+    auto expr = parseExpression();
+    if(!expr) {
+      return std::make_unique<RangeFullExpr>();
+    } else {
+      return std::make_unique<RangeToExpr>(std::move(expr));
+    }
+  }
+  case TokenType::kDotDotEq: {
+    // RangeToInclusiveExpr
+    _ast_ctx->consume();
+    auto expr = parseExpression();
+    EXPECT_POINTER_NOT_EMPTY(expr);
+    return std::make_unique<RangeToInclusiveExpr>(std::move(expr));
   }
     // keywords and punctuations
   case TokenType::kUnderscore: return parseUnderscoreExpression();
@@ -1342,345 +1371,538 @@ std::unique_ptr<IndexStructExprField> Parser::parseIndexStructExprField() {
 
 std::unique_ptr<CallExpression> Parser::parseCallExpression(std::unique_ptr<Expression> &&lft) {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kLParenthesis);
+  auto cp_opt = parseCallParams();
+  MATCH_TOKEN(kRParenthesis);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<CallExpression>(std::move(lft), std::move(cp_opt));
 }
 
 std::unique_ptr<CallParams> Parser::parseCallParams() {
   Backtracker tracker(*_ast_ctx);
-
+  std::vector<std::unique_ptr<Expression>> exprs;
+  auto expr1 = parseExpression();
+  EXPECT_POINTER_NOT_EMPTY(expr1);
+  exprs.push_back(std::move(expr1));
+  while(!CHECK_TOKEN(kRParenthesis)) {
+    bool has_comma = CHECK_TOKEN(kComma);
+    if(has_comma) _ast_ctx->consume();
+    if(CHECK_TOKEN(kRParenthesis)) break;;
+    if(!has_comma) REPORT_MISSING_TOKEN_AND_RETURN(kComma);
+    auto expr = parseExpression();
+    EXPECT_POINTER_NOT_EMPTY(expr);
+    exprs.push_back(std::move(expr));
+  }
   tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<MethodCallExpression> Parser::parseMethodCallExpression() {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<FieldExpression> Parser::parseFieldExpression(std::unique_ptr<Expression> &&lft) {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  return std::make_unique<CallParams>(std::move(exprs));
 }
 
 std::unique_ptr<ContinueExpression> Parser::parseContinueExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kContinue);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<ContinueExpression>();
 }
 
 std::unique_ptr<BreakExpression> Parser::parseBreakExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kBreak);
+  auto expr_opt = parseExpression();
   tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<RangeExpression> Parser::parseRangeExpression(std::unique_ptr<Expression> &&expr, Operator oper) {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<RangeExpr> Parser::parseRangeExpr() {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<RangeFromExpr> Parser::parseRangeFromExpr() {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<RangeToExpr> Parser::parseRangeToExpr() {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<RangeFullExpr> Parser::parseRangeFullExpr() {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<RangeInclusiveExpr> Parser::parseRangeInclusiveExpr() {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<RangeToInclusiveExpr> Parser::parseRangeToInclusiveExpr() {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  return std::make_unique<BreakExpression>(std::move(expr_opt));
 }
 
 std::unique_ptr<ReturnExpression> Parser::parseReturnExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kReturn);
+  auto expr_opt = parseExpression();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<ReturnExpression>(std::move(expr_opt));
 }
 
 std::unique_ptr<UnderscoreExpression> Parser::parseUnderscoreExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kUnderscore);
   tracker.commit();
-  return nullptr;
-}
-
-std::unique_ptr<ExpressionWithBlock> Parser::parseExpressionWithBlock() {
-  Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  return std::make_unique<UnderscoreExpression>();
 }
 
 std::unique_ptr<BlockExpression> Parser::parseBlockExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kLCurlyBrace);
+  auto ss_opt = parseStatements();
+  MATCH_TOKEN(kRCurlyBrace);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<BlockExpression>(std::move(ss_opt));
 }
 
 std::unique_ptr<Statements> Parser::parseStatements() {
   Backtracker tracker(*_ast_ctx);
-
+  std::vector<std::unique_ptr<Statement>> ss;
+  while(!CHECK_TOKEN(kRCurlyBrace)) {
+    auto s = parseStatement();
+    if(!s) break;
+    ss.push_back(std::move(s));
+  }
+  std::unique_ptr<ExpressionWithoutBlock> ewb;
+  if(!CHECK_TOKEN(kRCurlyBrace)) {
+    ewb = std::unique_ptr<ExpressionWithoutBlock>(dynamic_cast<ExpressionWithoutBlock*>(parseExpression().release()));
+    EXPECT_POINTER_NOT_EMPTY(ewb);
+  }
+  EXPECT_TOKEN(kRCurlyBrace);
+  if(ss.empty() && !ewb) {
+    REPORT_FAILURE_AND_RETURN("An empty block");
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<Statements>(std::move(ss), std::move(ewb));
 }
 
 std::unique_ptr<Statement> Parser::parseStatement() {
   Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  if(auto e = parseEmptyStatement()) {
+    tracker.commit();
+    return e;
+  }
+  if(auto i = parseItemStatement()) {
+    tracker.commit();
+    return i;
+  }
+  if(auto l = parseLetStatement()) {
+    tracker.commit();
+    return l;
+  }
+  if(auto e = parseExpressionStatement()) {
+    tracker.commit();
+    return e;
+  }
+  REPORT_PARSE_FAILURE_AND_RETURN();
 }
 
 std::unique_ptr<EmptyStatement> Parser::parseEmptyStatement() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kSemi);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<EmptyStatement>();
 }
 
 std::unique_ptr<ItemStatement> Parser::parseItemStatement() {
   Backtracker tracker(*_ast_ctx);
-
+  auto i = parseItem();
+  EXPECT_POINTER_NOT_EMPTY(i);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<ItemStatement>(std::move(i));
 }
 
 std::unique_ptr<LetStatement> Parser::parseLetStatement() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kLet);
+  auto pnta = parsePatternNoTopAlt();
+  EXPECT_POINTER_NOT_EMPTY(pnta);
+  std::unique_ptr<Type> t;
+  if(CHECK_TOKEN(kColon)) {
+    _ast_ctx->consume();
+    t = parseType();
+    EXPECT_POINTER_NOT_EMPTY(t);
+  }
+  std::unique_ptr<Expression> e;
+  if(CHECK_TOKEN(kEq)) {
+    _ast_ctx->consume();
+    e = parseExpression();
+    EXPECT_POINTER_NOT_EMPTY(e);
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<LetStatement>(std::move(pnta), std::move(t), std::move(e));
 }
 
 std::unique_ptr<ExpressionStatement> Parser::parseExpressionStatement() {
   Backtracker tracker(*_ast_ctx);
-
+  auto expr = parseExpression();
+  if(expr->has_block()) {
+    if(CHECK_TOKEN(kSemi)) _ast_ctx->consume();
+  } else {
+    MATCH_TOKEN(kSemi);
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<ExpressionStatement>(std::move(expr));
 }
 
 std::unique_ptr<LoopExpression> Parser::parseLoopExpression() {
   Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  if(auto i = parseInfiniteLoopExpression()) {
+    tracker.commit();
+    return i;
+  }
+  if(auto p = parsePredicateLoopExpression()) {
+    tracker.commit();
+    return p;
+  }
+  REPORT_PARSE_FAILURE_AND_RETURN();
 }
 
 std::unique_ptr<InfiniteLoopExpression> Parser::parseInfiniteLoopExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kLoop);
+  auto be = parseBlockExpression();
+  EXPECT_POINTER_NOT_EMPTY(be);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<InfiniteLoopExpression>(std::move(be));
 }
 
 std::unique_ptr<PredicateLoopExpression> Parser::parsePredicateLoopExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kWhile);
+  auto c = parseConditions();
+  EXPECT_POINTER_NOT_EMPTY(c);
+  auto be = parseBlockExpression();
+  EXPECT_POINTER_NOT_EMPTY(be);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<PredicateLoopExpression>(std::move(c), std::move(be));
 }
 
 std::unique_ptr<IfExpression> Parser::parseIfExpression() {
   Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  MATCH_TOKEN(kIf);
+  auto c = parseConditions();
+  EXPECT_POINTER_NOT_EMPTY(c);
+  auto be = parseBlockExpression();
+  EXPECT_POINTER_NOT_EMPTY(be);
+  if(!CHECK_TOKEN(kElse)) {
+    tracker.commit();
+    return std::make_unique<IfExpression>(
+      std::move(c), std::move(be)
+    );
+  }
+  if(auto b = parseBlockExpression()) {
+    tracker.commit();
+    return std::make_unique<IfExpression>(
+      std::move(c), std::move(be), std::move(b)
+    );
+  }
+  if(auto i = parseIfExpression()) {
+    tracker.commit();
+    return std::make_unique<IfExpression>(
+      std::move(c), std::move(be), std::move(i)
+    );
+  }
+  REPORT_PARSE_FAILURE_AND_RETURN();
 }
 
 std::unique_ptr<Conditions> Parser::parseConditions() {
   Backtracker tracker(*_ast_ctx);
-
+  auto expr = parseExpression();
+  EXPECT_POINTER_NOT_EMPTY(expr);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<Conditions>(std::move(expr));
 }
 
 std::unique_ptr<MatchExpression> Parser::parseMatchExpression() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kMatch);
+  auto expr = parseExpression();
+  EXPECT_POINTER_NOT_EMPTY(expr);
+  MATCH_TOKEN(kLCurlyBrace);
+  auto ma = parseMatchArms();
+  MATCH_TOKEN(kRCurlyBrace);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<MatchExpression>(std::move(expr), std::move(ma));
 }
 
 std::unique_ptr<MatchArms> Parser::parseMatchArms() {
   Backtracker tracker(*_ast_ctx);
-
+  std::vector<std::pair<std::unique_ptr<MatchArm>, std::unique_ptr<Expression>>> arms;
+  while(CHECK_TOKEN(kRCurlyBrace)) {
+    auto arm = parseMatchArm();
+    EXPECT_POINTER_NOT_EMPTY(arm);
+    MATCH_TOKEN(kFatArrow);
+    auto expr = parseExpression();
+    arms.emplace_back(std::move(arm), std::move(expr));
+    bool has_comma = CHECK_TOKEN(kComma);
+    if(has_comma) _ast_ctx->consume();
+    if(CHECK_TOKEN(kRCurlyBrace)) break;
+    if(!expr->has_block()) REPORT_MISSING_TOKEN_AND_RETURN(kComma);
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<MatchArms>(std::move(arms));
 }
 
 std::unique_ptr<MatchArm> Parser::parseMatchArm() {
   Backtracker tracker(*_ast_ctx);
-
+  auto p = parsePattern();
+  EXPECT_POINTER_NOT_EMPTY(p);
+  auto g = parseMatchArmGuard();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<MatchArm>(std::move(p), std::move(g));
 }
 
 std::unique_ptr<MatchArmGuard> Parser::parseMatchArmGuard() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kIf);
+  auto expr = parseExpression();
+  EXPECT_POINTER_NOT_EMPTY(expr);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<MatchArmGuard>(std::move(expr));
 }
 
 std::unique_ptr<Pattern> Parser::parsePattern() {
   Backtracker tracker(*_ast_ctx);
-
+  if(CHECK_TOKEN(kOr)) _ast_ctx->consume();
+  std::vector<std::unique_ptr<PatternNoTopAlt>> ps;
+  auto p1 = parsePatternNoTopAlt();
+  EXPECT_POINTER_NOT_EMPTY(p1);
+  ps.push_back(std::move(p1));
+  while(CHECK_TOKEN(kOr)) {
+    _ast_ctx->consume();
+    auto p = parsePatternNoTopAlt();
+    ps.push_back(std::move(p));
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<Pattern>(std::move(ps));
 }
 
 std::unique_ptr<PatternNoTopAlt> Parser::parsePatternNoTopAlt() {
   Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  if(auto p = parsePatternWithoutRange()) {
+    tracker.commit();
+    return p;
+  }
+  REPORT_PARSE_FAILURE_AND_RETURN();
 }
 
 std::unique_ptr<PatternWithoutRange> Parser::parsePatternWithoutRange() {
   Backtracker tracker(*_ast_ctx);
-
-  tracker.commit();
-  return nullptr;
+  if(auto l = parseLiteralPattern()) {
+    tracker.commit();
+    return l;
+  }
+  if(auto i = parseIdentifierPattern()) {
+    tracker.commit();
+    return i;
+  }
+  if(auto w = parseWildcardPattern()) {
+    tracker.commit();
+    return w;
+  }
+  if(auto r = parseReferencePattern()) {
+    tracker.commit();
+    return r;
+  }
+  if(auto s = parseStructPattern()) {
+    tracker.commit();
+    return s;
+  }
+  if(auto t = parseTuplePattern()) {
+    tracker.commit();
+    return t;
+  }
+  if(auto g = parseGroupedPattern()) {
+    tracker.commit();
+    return g;
+  }
+  if(auto s = parseSlicePattern()) {
+    tracker.commit();
+    return s;
+  }
+  if(auto p = parsePathPattern()) {
+    tracker.commit();
+    return p;
+  }
+  REPORT_PARSE_FAILURE_AND_RETURN();
 }
 
 std::unique_ptr<LiteralPattern> Parser::parseLiteralPattern() {
   Backtracker tracker(*_ast_ctx);
-
+  bool is_neg = false;
+  if(CHECK_TOKEN(kMinus)) {
+    _ast_ctx->consume();
+    is_neg = true;
+  }
+  auto l = parseLiteralExpression();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<LiteralPattern>(is_neg, std::move(l));
 }
 
 std::unique_ptr<IdentifierPattern> Parser::parseIdentifierPattern() {
   Backtracker tracker(*_ast_ctx);
-
+  bool is_ref = false;
+  if(CHECK_TOKEN(kRef)) {
+    _ast_ctx->consume();
+    is_ref = true;
+  }
+  bool is_mut = false;
+  if(CHECK_TOKEN(kMut)) {
+    _ast_ctx->consume();
+    is_mut = true;
+  }
+  EXPECT_TOKEN(kIdentifier);
+  auto ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+  std::unique_ptr<PatternNoTopAlt> p_opt;
+  if(CHECK_TOKEN(kAt)) {
+    _ast_ctx->consume();
+    p_opt = parsePatternNoTopAlt();
+    EXPECT_POINTER_NOT_EMPTY(p_opt);
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<IdentifierPattern>(is_ref, is_mut, ident, std::move(p_opt));
 }
 
 std::unique_ptr<WildcardPattern> Parser::parseWildcardPattern() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kUnderscore);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<WildcardPattern>();
 }
 
 std::unique_ptr<ReferencePattern> Parser::parseReferencePattern() {
   Backtracker tracker(*_ast_ctx);
-
+  if(!CHECK_TOKEN(kAnd) && !CHECK_TOKEN(kAndAnd)) {
+    REPORT_FAILURE_AND_RETURN("Not a reference");
+  }
+  bool is_one = CHECK_TOKEN(kAnd);
+  _ast_ctx->consume();
+  bool is_mut = false;
+  if(CHECK_TOKEN(kMut)) {
+    _ast_ctx->consume();
+    is_mut = true;
+  }
+  auto p = parsePatternWithoutRange();
+  EXPECT_POINTER_NOT_EMPTY(p);
   tracker.commit();
-  return nullptr;
+  if(is_one) {
+    return std::make_unique<ReferencePattern>(is_mut, std::move(p));
+  } else {
+    return std::make_unique<ReferencePattern>(false, std::make_unique<ReferencePattern>(is_mut, std::move(p)));
+  }
 }
 
 std::unique_ptr<StructPattern> Parser::parseStructPattern() {
   Backtracker tracker(*_ast_ctx);
-
+  auto p = parsePathInExpression();
+  EXPECT_POINTER_NOT_EMPTY(p);
+  MATCH_TOKEN(kLCurlyBrace);
+  auto s_opt = parseStructPatternElements();
+  MATCH_TOKEN(kRCurlyBrace);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<StructPattern>(std::move(p), std::move(s_opt));
 }
 
 std::unique_ptr<StructPatternElements> Parser::parseStructPatternElements() {
   Backtracker tracker(*_ast_ctx);
-
+  auto ss = parseStructPatternFields();
+  EXPECT_POINTER_NOT_EMPTY(ss);
+  if(CHECK_TOKEN(kComma)) _ast_ctx->consume();
   tracker.commit();
-  return nullptr;
+  return std::make_unique<StructPatternElements>(std::move(ss));
 }
 
 std::unique_ptr<StructPatternFields> Parser::parseStructPatternFields() {
   Backtracker tracker(*_ast_ctx);
-
+  std::vector<std::unique_ptr<StructPatternField>> ss;
+  auto s1 = parseStructPatternField();
+  EXPECT_POINTER_NOT_EMPTY(s1);
+  ss.push_back(std::move(s1));
+  while(CHECK_TOKEN(kComma)) {
+    _ast_ctx->consume();
+    auto s = parseStructPatternField();
+    EXPECT_POINTER_NOT_EMPTY(s);
+    ss.push_back(std::move(s));
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<StructPatternFields>(std::move(ss));
 }
 
 std::unique_ptr<StructPatternField> Parser::parseStructPatternField() {
   Backtracker tracker(*_ast_ctx);
-
+  EXPECT_TOKEN(kIdentifier);
+  auto ident = _ast_ctx->current().lexeme;
+  _ast_ctx->consume();
+  MATCH_TOKEN(kColon);
+  auto p = parsePattern();
+  EXPECT_POINTER_NOT_EMPTY(p);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<StructPatternField>(ident, std::move(p));
 }
 
 std::unique_ptr<TuplePattern> Parser::parseTuplePattern() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kLParenthesis);
+  auto t = parseTuplePatternItems();
+  MATCH_TOKEN(kRParenthesis);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<TuplePattern>(std::move(t));
 }
 
 std::unique_ptr<TuplePatternItems> Parser::parseTuplePatternItems() {
   Backtracker tracker(*_ast_ctx);
-
+  std::vector<std::unique_ptr<Pattern>> ps;
+  auto p1 = parsePattern();
+  EXPECT_POINTER_NOT_EMPTY(p1);
+  ps.push_back(std::move(p1));
+  MATCH_TOKEN(kComma);
+  if(CHECK_TOKEN(kRParenthesis)) {
+    tracker.commit();
+    return std::make_unique<TuplePatternItems>(std::move(ps));
+  }
+  p1 = parsePattern();
+  EXPECT_POINTER_NOT_EMPTY(p1);
+  ps.push_back(std::move(p1));
+  while(!CHECK_TOKEN(kRParenthesis)) {
+    bool has_comma = CHECK_TOKEN(kComma);
+    if(has_comma) _ast_ctx->consume();
+    if(CHECK_TOKEN(kRParenthesis)) break;
+    if(!has_comma) REPORT_MISSING_TOKEN_AND_RETURN(kComma);
+    auto p = parsePattern();
+    EXPECT_POINTER_NOT_EMPTY(p);
+    ps.push_back(std::move(p));
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<TuplePatternItems>(std::move(ps));
 }
 
 std::unique_ptr<GroupedPattern> Parser::parseGroupedPattern() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kLParenthesis);
+  auto p = parsePattern();
+  EXPECT_POINTER_NOT_EMPTY(p);
+  MATCH_TOKEN(kRParenthesis);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<GroupedPattern>(std::move(p));
 }
 
 std::unique_ptr<SlicePattern> Parser::parseSlicePattern() {
   Backtracker tracker(*_ast_ctx);
-
+  MATCH_TOKEN(kLSquareBracket);
+  auto s_opt = parseSlicePatternItems();
+  MATCH_TOKEN(kRSquareBracket);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<SlicePattern>(std::move(s_opt));
 }
 
 std::unique_ptr<SlicePatternItems> Parser::parseSlicePatternItems() {
   Backtracker tracker(*_ast_ctx);
-
+  std::vector<std::unique_ptr<Pattern>> ps;
+  auto p1 = parsePattern();
+  EXPECT_POINTER_NOT_EMPTY(p1);
+  ps.push_back(std::move(p1));
+  while(!CHECK_TOKEN(kRSquareBracket)) {
+    bool has_comma = CHECK_TOKEN(kComma);
+    if(has_comma) _ast_ctx->consume();
+    if(CHECK_TOKEN(kRSquareBracket)) break;
+    if(!has_comma) REPORT_MISSING_TOKEN_AND_RETURN(kComma);
+    auto p = parsePattern();
+    EXPECT_POINTER_NOT_EMPTY(p);
+    ps.push_back(std::move(p));
+  }
   tracker.commit();
-  return nullptr;
+  return std::make_unique<SlicePatternItems>(std::move(ps));
 }
 
 std::unique_ptr<PathPattern> Parser::parsePathPattern() {
   Backtracker tracker(*_ast_ctx);
-
+  auto p = parsePathExpression();
+  EXPECT_POINTER_NOT_EMPTY(p);
   tracker.commit();
-  return nullptr;
+  return std::make_unique<PathPattern>(std::move(p));
 }
 
 }

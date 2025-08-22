@@ -375,7 +375,7 @@ ExpressionWithBlock ->
     | IfExpression              # "if" "else"
     | MatchExpression           # "match" ... implement later
 
-BlockExpression -> '{' Statements? '}'
+# BlockExpression -> '{' Statements? '}'
 
 # I modified it.
 # Statements ->
@@ -500,11 +500,6 @@ StructPatternField ->
    #  TUPLE_INDEX ':' Pattern
     | IDENTIFIER ':' Pattern
    #| "ref"? "mut"? IDENTIFIER
-
-IndexStructPatternField ->
-    TUPLE_INDEX ':' Pattern
-
-NamedStr
 
 TuplePattern ->
     '(' TuplePatternItems? ')'
