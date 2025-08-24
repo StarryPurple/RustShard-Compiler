@@ -14,7 +14,7 @@
 #define REPORT_PARSE_FAILURE_AND_RETURN() \
   do { \
     REPORT_FAILURE_AND_RETURN( \
-      "Unexpected parse failure: Failure in parsing the expected AST node." \
+      "Unexpected parse failure." \
     ); \
   } while(false)
 
@@ -39,7 +39,7 @@
   do { \
     if(!node_pointer) { \
       REPORT_FAILURE_AND_RETURN( \
-        "Unexpected parse failure: Failure in parsing the expected AST node." \
+        "Unexpected parse failure: Unrecognized possibility." \
       ); \
     } \
   } while(false)
@@ -69,39 +69,7 @@
 
 namespace insomnia::rust_shard::ast {
 
-class Parser::Context {
-  friend Backtracker;
-  std::vector<Token> _tokens;
-  std::size_t _pos = 0;
-  std::vector<std::string> _errors;
-public:
-  Context() = default;
-  template <class T>
-  explicit Context(T &&tokens, std::size_t pos = 0)
-    : _tokens(std::forward<T>(tokens)), _pos(pos) {}
-  // returns a default token with token_type == INVALID if fails.
-  Token peek(std::size_t diff = 1) const {
-    if(_pos + diff >= _tokens.size())
-      return Token{};
-    return _tokens[_pos + diff];
-  }
-  // returns a default token with token_type == INVALID if fails.
-  Token current() const {
-    if(_pos >= _tokens.size())
-      return Token{};
-    return _tokens[_pos];
-  }
-  void consume() {
-    if(_pos >= _tokens.size())
-      throw std::runtime_error("ASTContext consume out of range.");
-    _pos++;
-  }
-  bool empty() const { return _pos >= _tokens.size(); }
-  void reset() { _pos = 0; }
 
-  const std::vector<std::string>& errors() const { return _errors; }
-  void recordError(std::string &&msg) { _errors.push_back(std::move(msg)); }
-};
 
 class Parser::Backtracker {
   Context &_ast_ctx;
@@ -112,11 +80,11 @@ public:
   : _ast_ctx(ast_ctx), _pos(ast_ctx._pos),
   _err_pos(ast_ctx._errors.size()), _commited(false) {}
   ~Backtracker() {
-    if(!_commited) rollback();
-  }
-  void rollback() {
-    _ast_ctx._pos = _pos;
-    _ast_ctx._errors.resize(_err_pos);
+    if(!_commited) {
+      _ast_ctx._pos = _pos;
+    } else {
+      _ast_ctx._errors.resize(_err_pos);
+    }
   }
   void commit() { _commited = true; }
 };
@@ -130,8 +98,8 @@ std::string Parser::error_msg() const {
   return res;
 }
 
-void Parser::parseAll(Lexer &lexer) {
-  _ast_ctx = std::make_unique<Context>(lexer.release());
+void Parser::parseAll(const Lexer &lexer) {
+  _ast_ctx = std::make_unique<Context>(lexer.tokens());
   _crate = parseCrate();
   _is_good = static_cast<bool>(_crate);
 }
@@ -322,6 +290,10 @@ std::unique_ptr<Type> Parser::parseType() {
 
 std::unique_ptr<TypeNoBounds> Parser::parseTypeNoBounds() {
   Backtracker tracker(*_ast_ctx);
+  if(auto t = parseTypePath()) {
+    tracker.commit();
+    return t;
+  }
   if(auto p = parseParenthesizedType()) {
     tracker.commit();
     return p;
@@ -878,7 +850,6 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence) {
     infix_precedence[_ast_ctx->current().type] > precedence) {
     auto type = _ast_ctx->current().type;
     int new_pred = infix_precedence[type];
-    _ast_ctx->consume();
     switch(type) {
       // prefix: field, func call, index field...?
     case TokenType::kDot: {
@@ -920,22 +891,26 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence) {
     case TokenType::kSlash: case TokenType::kPercent: case TokenType::kCaret:
     case TokenType::kAnd: case TokenType::kOr: case TokenType::kShl:
     case TokenType::kShr: {
+      _ast_ctx->consume();
       auto rht = parseInfixExpression(new_pred);
       EXPECT_POINTER_NOT_EMPTY(rht);
       lft = std::make_unique<ArithmeticOrLogicalExpression>(token_to_operator(type), std::move(lft), std::move(rht));
     } break;
     case TokenType::kEqEq: case TokenType::kNe: case TokenType::kGt:
     case TokenType::kLt: case TokenType::kGe: case TokenType::kLe: {
+      _ast_ctx->consume();
       auto rht = parseInfixExpression(new_pred);
       EXPECT_POINTER_NOT_EMPTY(rht);
       lft = std::make_unique<ComparisonExpression>(token_to_operator(type), std::move(lft), std::move(rht));
     } break;
     case TokenType::kAndAnd: case TokenType::kOrOr: {
+      _ast_ctx->consume();
       auto rht = parseInfixExpression(new_pred);
       EXPECT_POINTER_NOT_EMPTY(rht);
       lft = std::make_unique<LazyBooleanExpression>(token_to_operator(type), std::move(lft), std::move(rht));
     } break;
     case TokenType::kEq: {
+      _ast_ctx->consume();
       auto rht = parseInfixExpression(new_pred - 1); // right associative
       EXPECT_POINTER_NOT_EMPTY(rht);
       lft = std::make_unique<AssignmentExpression>(std::move(lft), std::move(rht));
@@ -944,6 +919,7 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence) {
     case TokenType::kSlashEq: case TokenType::kPercentEq: case TokenType::kCaretEq:
     case TokenType::kAndEq: case TokenType::kOrEq: case TokenType::kShlEq:
     case TokenType::kShrEq: {
+      _ast_ctx->consume();
       auto rht = parseInfixExpression(new_pred - 1); // right associative
       EXPECT_POINTER_NOT_EMPTY(rht);
       lft = std::make_unique<CompoundAssignmentExpression>(token_to_operator(type), std::move(lft), std::move(rht));
@@ -983,7 +959,6 @@ std::unique_ptr<Expression> Parser::parsePrefixExpression() {
   auto ctt = _ast_ctx->current().type; // current token type
   auto ctc = get_token_category(ctt); // current token type category
   if(ctc == TokenTypeCat::kLiteral || ctt == TokenType::kTrue || ctt == TokenType::kFalse) {
-    _ast_ctx->consume();
     return parseLiteralExpression();
   }
   if(ctc == TokenTypeCat::kIdentifier) {
@@ -1108,6 +1083,7 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
   using Prime = insomnia::rust_shard::type::TypePrime;
   Backtracker tracker(*_ast_ctx);
   auto current_token = _ast_ctx->current();
+  _ast_ctx->consume();
   switch (current_token.type) {
   case TokenType::kIntegerLiteral: {
     auto lexeme = current_token.lexeme;
@@ -1517,6 +1493,7 @@ std::unique_ptr<LetStatement> Parser::parseLetStatement() {
 std::unique_ptr<ExpressionStatement> Parser::parseExpressionStatement() {
   Backtracker tracker(*_ast_ctx);
   auto expr = parseExpression();
+  EXPECT_POINTER_NOT_EMPTY(expr);
   if(expr->has_block()) {
     if(CHECK_TOKEN(kSemi)) _ast_ctx->consume();
   } else {
@@ -1572,6 +1549,7 @@ std::unique_ptr<IfExpression> Parser::parseIfExpression() {
       std::move(c), std::move(be)
     );
   }
+  _ast_ctx->consume(); // "else"
   if(auto b = parseBlockExpression()) {
     tracker.commit();
     return std::make_unique<IfExpression>(
@@ -1717,6 +1695,7 @@ std::unique_ptr<LiteralPattern> Parser::parseLiteralPattern() {
     is_neg = true;
   }
   auto l = parseLiteralExpression();
+  EXPECT_POINTER_NOT_EMPTY(l);
   tracker.commit();
   return std::make_unique<LiteralPattern>(is_neg, std::move(l));
 }

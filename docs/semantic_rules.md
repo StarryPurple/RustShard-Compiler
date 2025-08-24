@@ -63,7 +63,8 @@ Type ->
     
     
 TypeNoBounds ->
-      ParenthesizedType
+      TypePath
+    | ParenthesizedType
     | TupleType
     | ReferenceType
     | ArrayType

@@ -470,7 +470,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(asso_items, _asso_items)
 };
 
-class TypePath : public BasicNode {
+class TypePath : public TypeNoBounds {
 public:
   explicit TypePath(
     std::vector<std::unique_ptr<TypePathSegment>> &&segments
@@ -747,7 +747,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(elements_opt, _elements_opt)
 };
 
-class ArrayElements : public Expression {
+class ArrayElements : public BasicNode {
 public:
   ArrayElements() = default;
 private:
@@ -807,7 +807,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(elems_opt, _elems_opt)
 };
 
-class TupleElements : public Expression {
+class TupleElements : public BasicNode {
 public:
   explicit TupleElements(
     std::vector<std::unique_ptr<Expression>> &&expr_list
@@ -849,7 +849,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(fields_opt, _fields_opt)
 };
 
-class StructExprFields : public Expression {
+class StructExprFields : public BasicNode {
 public:
   explicit StructExprFields(
     std::vector<std::unique_ptr<StructExprField>> &&fields
@@ -861,7 +861,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(fields, _fields)
 };
 
-class StructExprField : public Expression {
+class StructExprField : public BasicNode {
 public:
   StructExprField() = default;
 private:
