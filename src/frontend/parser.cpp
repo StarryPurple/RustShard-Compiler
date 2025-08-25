@@ -1151,7 +1151,12 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
   }
   case TokenType::kStringLiteral: {
     tracker.commit();
-    return std::make_unique<LiteralExpression>(Prime::kString, std::string(current_token.lexeme));
+    auto lexeme = current_token.lexeme;
+    std::size_t l = 0, r = lexeme.length() - 1;
+    while(lexeme[l] != '\"' && lexeme[l] != '\'') ++l;
+    while(lexeme[r] != '\"' && lexeme[r] != '\'') --r;
+    lexeme = lexeme.substr(l + 1, r - l - 1);
+    return std::make_unique<LiteralExpression>(Prime::kString, std::string(lexeme));
   }
   case TokenType::kCharLiteral: {
     tracker.commit();

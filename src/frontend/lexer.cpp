@@ -27,8 +27,12 @@ void Lexer::tokenize(std::string_view code) {
       if(!tokenize_number_literal()) {
         _error_code = Error::kNumber; break;
       }
-    } else if(ch == '\'' || ch == '\"') { // TODO: C / Raw String
+    } else if(ch == '\'' || ch == '\"' ||
+        (ch == 'b' && _pos + 1 < src_len && (code[_pos + 1] == '\'' || code[_pos + 1] == '\"')
+      )) {
+      // TODO: Raw String
       // Character / String
+      // if(ch == 'b') advance_one();
       if(!tokenize_string_literal()) {
         _error_code = Error::kCharString; break;
       }
@@ -139,6 +143,7 @@ bool is_escape(char ch) { return ch == '\n' || ch == '\r' || ch == '\t' || ch ==
 
 bool Lexer::tokenize_string_literal() {
   auto start = _pos, old_row = _row, old_col = _col;
+  if(_src_code[_pos] == 'b') advance_one();
   char c = _src_code[_pos];
   TokenType tp = (c == '\"' ? TokenType::kStringLiteral : TokenType::kCharLiteral);
   advance_one();

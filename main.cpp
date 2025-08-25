@@ -23,12 +23,17 @@ int main() {
   std::string source_code = read_file(path);
   try {
     Lexer lexer(source_code);
-    Parser parser(lexer);
-    if(!parser) {
-      std::cout << parser.error_msg() << std::endl;
-      std::cout << '\n' << "Parse failed." << std::endl;
+    if(!lexer) {
+      std::cout << lexer.error_msg() << std::endl;
+      std::cout << "\nTokenization failed." << std::endl;
     } else {
-      std::cout << "Parse all fine." << std::endl;
+      Parser parser(lexer);
+      if(!parser) {
+        std::cout << parser.error_msg() << std::endl;
+        std::cout << "\nParse failed." << std::endl;
+      } else {
+        std::cout << "Parse all fine." << std::endl;
+      }
     }
   } catch(std::runtime_error &e) {
     std::cout << e.what() << std::endl;
