@@ -859,7 +859,8 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence) {
         auto lexeme = _ast_ctx->current().lexeme;
         auto index = resolve_integer(lexeme);
         _ast_ctx->consume(); // index
-        return std::make_unique<TupleIndexingExpression>(std::move(lft), index);
+        lft = std::make_unique<TupleIndexingExpression>(std::move(lft), index);
+        break;
       }
       // method call (PathExprSegment) / field access (IDENTIFIER)
       // PathExprSegment can be a single identifier, so:
@@ -870,21 +871,23 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence) {
         _ast_ctx->consume();
         auto params_opt = parseCallParams();
         MATCH_TOKEN(kRParenthesis);
-        return std::make_unique<MethodCallExpression>(std::move(lft), std::move(segment), std::move(params_opt));
+        lft = std::make_unique<MethodCallExpression>(std::move(lft), std::move(segment), std::move(params_opt));
+        break;
       }
       // field access
       auto ident = segment->ident()->ident();
-      if(ident == "super" || ident == "self" || ident == "Self" || ident == "crate" || ident == "$crate") {
+      if(ident == "super" || ident == "self" || ident == "Self" || ident == "crate") {
         REPORT_FAILURE_AND_RETURN("FieldExpression: keyword as field");
       }
-      return std::make_unique<FieldExpression>(std::move(lft), ident);
-    }
-    break;
+      lft = std::make_unique<FieldExpression>(std::move(lft), ident);
+    } break;
     case TokenType::kLParenthesis: {
       lft = parseCallExpression(std::move(lft));
+      EXPECT_POINTER_NOT_EMPTY(lft);
     } break;
     case TokenType::kLSquareBracket: {
       lft = parseIndexExpression(std::move(lft));
+      EXPECT_POINTER_NOT_EMPTY(lft);
     } break;
       // infix
     case TokenType::kPlus: case TokenType::kMinus: case TokenType::kStar:
@@ -925,6 +928,7 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence) {
       lft = std::make_unique<CompoundAssignmentExpression>(token_to_operator(type), std::move(lft), std::move(rht));
     } break;
     case TokenType::kAs: {
+      _ast_ctx->consume();
       auto tnb = parseTypeNoBounds();
       EXPECT_POINTER_NOT_EMPTY(tnb);
       lft = std::make_unique<TypeCastExpression>(std::move(lft), std::move(tnb));
@@ -961,7 +965,16 @@ std::unique_ptr<Expression> Parser::parsePrefixExpression() {
   if(ctc == TokenTypeCat::kLiteral || ctt == TokenType::kTrue || ctt == TokenType::kFalse) {
     return parseLiteralExpression();
   }
+  if(ctt == TokenType::kSelfObject) {
+    return parsePathExpression();
+  }
   if(ctc == TokenTypeCat::kIdentifier) {
+    auto nxt_type = _ast_ctx->peek(1).type;
+    auto prv_type = _ast_ctx->prev(1).type;
+    if(nxt_type == TokenType::kLCurlyBrace &&
+      prv_type != TokenType::kIf && prv_type != TokenType::kMatch && prv_type != TokenType::kWhile) {
+      return parseStructExpression();
+    }
     return parsePathExpression();
   }
   switch(ctt) {
@@ -1036,7 +1049,7 @@ std::unique_ptr<Expression> Parser::parsePrefixExpression() {
       _ast_ctx->consume();
       return std::make_unique<TupleExpression>(std::unique_ptr<TupleElements>());
     }
-    auto expr1 = parseInfixExpression(static_cast<int>(Precedence::kLowest));
+    auto expr1 = parseExpression();
     EXPECT_POINTER_NOT_EMPTY(expr1);
     if(CHECK_TOKEN(kRParenthesis)) {
       // grouped expression
@@ -1153,14 +1166,18 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     tracker.commit();
     auto lexeme = current_token.lexeme;
     std::size_t l = 0, r = lexeme.length() - 1;
-    while(lexeme[l] != '\"' && lexeme[l] != '\'') ++l;
-    while(lexeme[r] != '\"' && lexeme[r] != '\'') --r;
+    while(lexeme[l] != '\"') ++l;
+    while(lexeme[r] != '\"') --r;
     lexeme = lexeme.substr(l + 1, r - l - 1);
     return std::make_unique<LiteralExpression>(Prime::kString, std::string(lexeme));
   }
   case TokenType::kCharLiteral: {
     tracker.commit();
-    return std::make_unique<LiteralExpression>(Prime::kChar, current_token.lexeme.front());
+    auto lexeme = current_token.lexeme;
+    std::size_t l = 0;
+    while(lexeme[l] != '\'') ++l;
+    char ch = lexeme[l + 1];
+    return std::make_unique<LiteralExpression>(Prime::kChar, ch);
   }
   case TokenType::kTrue: {
     tracker.commit();
@@ -1574,6 +1591,10 @@ std::unique_ptr<Conditions> Parser::parseConditions() {
   Backtracker tracker(*_ast_ctx);
   auto expr = parseExpression();
   EXPECT_POINTER_NOT_EMPTY(expr);
+  if(dynamic_cast<StructExpression*>(expr.get())) {
+    // code should not reach here: already prohibited in parsePrefixExpression.
+    REPORT_FAILURE_AND_RETURN("Condition should not be a struct expression");
+  }
   tracker.commit();
   return std::make_unique<Conditions>(std::move(expr));
 }
@@ -1583,6 +1604,10 @@ std::unique_ptr<MatchExpression> Parser::parseMatchExpression() {
   MATCH_TOKEN(kMatch);
   auto expr = parseExpression();
   EXPECT_POINTER_NOT_EMPTY(expr);
+  if(dynamic_cast<StructExpression*>(expr.get())) {
+    // code should not reach here: already prohibited in parsePrefixExpression.
+    REPORT_FAILURE_AND_RETURN("Condition should not be a struct expression");
+  }
   MATCH_TOKEN(kLCurlyBrace);
   auto ma = parseMatchArms();
   MATCH_TOKEN(kRCurlyBrace);

@@ -25,6 +25,10 @@ class Parser {
       if(_pos + diff >= _tokens.size()) return Token{};
       return _tokens[_pos + diff];
     }
+    Token prev(std::size_t diff = 1) const {
+      if(_pos < diff) return Token{};
+      return _tokens[_pos - diff];
+    }
     // returns a default token with token_type == INVALID if fails.
     Token current() const {
       if(_pos >= _tokens.size()) return Token{};

@@ -1,3 +1,12 @@
+/*
+Test Package: Semantic-1
+Test Target: loop
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Success
+Comment: loop test, nested while loops with conditional logic
+*/
+
 fn main() {
     let mut combos = 0u32;
     let mut x = 0u32;
@@ -16,4 +25,5 @@ fn main() {
         x += 1;
     }
     let _ = combos;
+    exit(0);
 }

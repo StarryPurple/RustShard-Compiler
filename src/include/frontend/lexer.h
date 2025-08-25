@@ -143,7 +143,7 @@ public:
       break;
     default: throw std::runtime_error("Lexer: Unexpected error type.");
     }
-    std::string common_msg = "Compile Error: Something unresolvable emerges at " +
+    std::string common_msg = "Compile error(lexer): Something unresolvable emerges at " +
       std::to_string(_row) + ':' + std::to_string(_col);
     return common_msg + ": " + spec_msg;
   }

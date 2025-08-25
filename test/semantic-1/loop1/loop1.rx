@@ -1,3 +1,12 @@
+/*
+Test Package: Semantic-1
+Test Target: loop
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Success
+Comment: loop test, basic while loop with continue statement
+*/
+
 fn main() {
     let mut total = 0u32;
     let mut n = 0u32;
@@ -10,4 +19,5 @@ fn main() {
         n += 1;
     }
     let _ = total;
+    exit(0);
 }

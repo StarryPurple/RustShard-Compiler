@@ -1,3 +1,12 @@
+/*
+Test Package: Semantic-1
+Test Target: if
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Fail
+Comment: if statement test, missing closing brace syntax error
+*/
+
 fn main() {
     let mut n = 0;
     if n < 3 {

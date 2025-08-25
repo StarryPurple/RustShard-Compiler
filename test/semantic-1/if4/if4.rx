@@ -1,3 +1,12 @@
+/*
+Test Package: Semantic-1
+Test Target: if
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Success
+Comment: if statement test, if-else if-else chain
+*/
+
 fn main() {
     let temperature = 25;
     if temperature > 30 {
@@ -7,4 +16,5 @@ fn main() {
     } else {
         let status_ = "mild";
     }
+    exit(0);
 }

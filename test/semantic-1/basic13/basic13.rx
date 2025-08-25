@@ -1,10 +1,21 @@
+/*
+Test Package: Semantic-1
+Test Target: basic
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Fail
+Comment: basic test, function missing return value and global variable outside function
+*/
+
 fn main() {
-    let mut buf = Buffer::build(8);
-    for i in 0..10 {
-        buf.write(i as i32);
+    let mut buf: Buffer = Buffer::build();
+    let mut i: i32 = 0;
+    while (i < 10) {
+        buf.write(i);
     }
     let checksum = buf.sum();
-    let _anchor = checksum;
+    let anchor = checksum;
+    exit(0);
 }
 
 struct Buffer {
@@ -13,8 +24,8 @@ struct Buffer {
 }
 
 impl Buffer {
-    fn build(size: usize) -> Self {
-        Buffer { store: [0; 8], head: 0 }
+    fn build() -> Self {
+        Buffer { store: [0; SIZE], head: 0 }
     }
 
     fn write(&mut self, value: i32) {
@@ -23,22 +34,18 @@ impl Buffer {
     }
 
     fn sum(&self) -> i32 {
-        let mut total = 0;
-        for v in self.store {
-            total += v;
+        let mut total: i32 = 0;
+        let mut i: i32 = 0;
+        while (i < 8) {
+            total += v[i];
+            i += 1;
         }
         total
-    }
-}
-
-impl Iterator for Buffer {
-    type Item = i32;
-    fn next(&mut self) -> Option<i32> {
-        Some(0)
     }
 }
 
 fn swap(a: i32, b: i32) -> i32 {
 }
 
-let outside = 5; 
+const SIZE: usize = 8;
+let outside = 5;

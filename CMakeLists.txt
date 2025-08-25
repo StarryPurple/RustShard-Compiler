@@ -3,43 +3,18 @@ project(RustShardCompiler)
 
 set(CMAKE_CXX_STANDARD 20)
 
-# end to end
-add_executable(main)
-
-target_sources(main
-    PRIVATE
-    main.cpp
+add_library(frontend_lib STATIC
     src/frontend/ast_type.cpp
     src/frontend/lexer.cpp
     src/frontend/parser.cpp
     src/frontend/ast_recursive_visitor.cpp
 )
-target_include_directories(main
-    PRIVATE
-    src/include/common
+target_include_directories(frontend_lib PUBLIC
     src/include/frontend
 )
 
+add_executable(main main.cpp)
+target_link_libraries(main PRIVATE frontend_lib)
 
-# gtest
-find_package(GTest REQUIRED)
-
-add_library(lexer src/frontend/lexer.cpp)
-target_include_directories(lexer PUBLIC src/include/frontend)
-add_executable(lexer_gtest test/lexer/lexer_gtest.cpp)
-target_link_libraries(lexer_gtest PRIVATE GTest::gtest_main GTest::gtest)
-target_link_libraries(lexer_gtest PRIVATE lexer)
-set_target_properties(lexer_gtest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/lexer")
-
-add_library(ast_type src/frontend/ast_type.cpp)
-target_include_directories(ast_type PUBLIC src/include/frontend)
-add_executable(ast_type_gtest test/ast/type_gtest.cpp)
-target_link_libraries(ast_type_gtest PRIVATE GTest::gtest_main GTest::gtest)
-target_link_libraries(ast_type_gtest PRIVATE ast_type)
-set_target_properties(ast_type_gtest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/ast")
-
-# ctest
 enable_testing()
-
-add_test(NAME lexer_ctest COMMAND $<TARGET_FILE:lexer_gtest>)
-add_test(NAME ast_type_ctest COMMAND $<TARGET_FILE:ast_type_gtest>)
+add_subdirectory(test)

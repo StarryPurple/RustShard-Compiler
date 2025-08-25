@@ -24,15 +24,15 @@ int main() {
   try {
     Lexer lexer(source_code);
     if(!lexer) {
-      std::cout << lexer.error_msg() << std::endl;
-      std::cout << "\nTokenization failed." << std::endl;
+      std::cout << "Fail" << std::endl;
+      std::cerr << lexer.error_msg() << std::endl;
     } else {
       Parser parser(lexer);
       if(!parser) {
-        std::cout << parser.error_msg() << std::endl;
-        std::cout << "\nParse failed." << std::endl;
+        std::cout << "Fail" << std::endl;
+        std::cerr << "Parser error." << std::endl;
       } else {
-        std::cout << "Parse all fine." << std::endl;
+        std::cout << "Success" << std::endl;
       }
     }
   } catch(std::runtime_error &e) {

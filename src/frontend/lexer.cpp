@@ -158,7 +158,7 @@ bool Lexer::tokenize_string_literal() {
     }
     if(_src_code[_pos] == c) {
       advance_one();
-      if(c == '\'' && _pos - start != 2) return false; // Not a valid char
+      if(c == '\'' && _pos - start != 3) return false; // Not a valid char
       _tokens.emplace_back(tp, _src_code.substr(start, _pos - start), _row, _col);
       return true;
     }

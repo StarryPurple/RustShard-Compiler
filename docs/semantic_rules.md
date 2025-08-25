@@ -434,7 +434,7 @@ Conditions ->
     Expression #except StructExpression#
 
 MatchExpression ->
-    "match" Expression #expect StructExpression#
+    "match" Expression #except StructExpression#
     '{' MatchArms? '}'
 
 MatchArms ->

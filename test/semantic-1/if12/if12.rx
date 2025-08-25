@@ -1,3 +1,12 @@
+/*
+Test Package: Semantic-1
+Test Target: if
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Fail
+Comment: if statement test, undefined variable in assignment
+*/
+
 fn main() {
     let mut data = 4;
     if data > 2 {
@@ -7,4 +16,5 @@ fn main() {
         data += 1;
     }
     data = data + value;
+    exit(0);
 }

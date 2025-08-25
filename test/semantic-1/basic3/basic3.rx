@@ -1,28 +1,40 @@
+/*
+Test Package: Semantic-1
+Test Target: basic
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Fail
+Comment: basic test, variable shadowing and mutability error
+*/
+
 fn main() {
-    let mut numbers = [1, 2, 3, 4, 5, 6, 7];
-    let length = numbers.len();
-    let mut index = 0;
-    while index < length {
-        let index = index;
+    let mut numbers: [i32; 7] = [1, 2, 3, 4, 5, 6, 7];
+    let length: usize = numbers.len();
+    let mut index: usize = 0;
+    while (index < length) {
+        let index: usize = index;
         numbers[index] = numbers[index] * 2;
         index += 1;
     }
 
-    let total = sum_slice(&numbers);
-    let mut temp = total;
+    let total: i32 = sum_array(&numbers);
+    let mut temp: i32 = total;
     loop {
-        if temp == 0 {
+        if (temp == 0) {
             break;
         }
         temp -= 1;
     }
-    let _done = temp;
+    let done: i32 = temp;
+    exit(0);
 }
 
-fn sum_slice(slice: &[i32]) -> i32 {
-    let mut subtotal = 0;
-    for v in slice {
-        subtotal += *v;
+fn sum_array(slice: &[i32; 7]) -> i32 {
+    let mut subtotal: i32 = 0;
+    let mut i: usize = 0;
+    while (i < slice.len()) {
+        subtotal += slice[i];
+        i += 1;
     }
     subtotal
 }

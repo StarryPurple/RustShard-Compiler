@@ -1,7 +1,17 @@
+/*
+Test Package: Semantic-1
+Test Target: loop
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Fail
+Comment: loop test, syntax error - invalid tuple pattern in while condition
+*/
+
 fn main() {
     let i = 0;
     let j = 0;
     while (i, j) < 3 {
         let _ = i + j;
     }
+    exit(0);
 }

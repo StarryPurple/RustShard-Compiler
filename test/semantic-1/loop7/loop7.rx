@@ -1,3 +1,12 @@
+/*
+Test Package: Semantic-1
+Test Target: loop
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Fail
+Comment: loop test, break statement outside of loop context
+*/
+
 fn main() {
     let mut i = 0u32;
     while i < 3 {
@@ -5,4 +14,5 @@ fn main() {
         i += 1;
     }
     break;
+    exit(0);
 }
