@@ -53,8 +53,8 @@ class Parser {
 
   // Pratt Expression Parsing helper functions.
 
-  std::unique_ptr<Expression> parseInfixExpression(int precedence);
-  std::unique_ptr<Expression> parsePrefixExpression();
+  std::unique_ptr<Expression> parseInfixExpression(int precedence, TokenType delim);
+  std::unique_ptr<Expression> parsePrefixExpression(TokenType delim);
 
   std::unique_ptr<Crate> parseCrate();
   std::unique_ptr<Item> parseItem();
@@ -93,7 +93,7 @@ class Parser {
   std::unique_ptr<TypePath> parseTypePath();
   std::unique_ptr<TypePathSegment> parseTypePathSegment();
   std::unique_ptr<PathIdentSegment> parsePathIdentSegment();
-  std::unique_ptr<Expression> parseExpression();
+  std::unique_ptr<Expression> parseExpression(TokenType delim = TokenType::kInvalid);
   std::unique_ptr<LiteralExpression> parseLiteralExpression();
   std::unique_ptr<PathExpression> parsePathExpression();
   std::unique_ptr<PathInExpression> parsePathInExpression();

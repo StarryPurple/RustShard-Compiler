@@ -1,0 +1,19 @@
+/*
+Test Package: Semantic-1
+Test Target: expr
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Fail
+Comment: Expression error: Invalid return expression - missing semicolon after return value
+*/
+
+// Error: Invalid return expression - missing semicolon after return value
+fn calculate() -> i32 {
+    let x = 42;
+    return x  // Missing semicolon after return value
+}
+
+fn main() {
+    printInt(calculate());
+    exit(0);
+}

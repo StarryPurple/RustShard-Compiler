@@ -1,0 +1,32 @@
+{
+    "active": 1,
+    "cmp": [
+        "compileexitcode"
+    ],
+    "compileexitcode": -1,
+    "compilememorylimit": 256,
+    "compiletimelimit": 15,
+    "exitcode": 0,
+    "id": 592715,
+    "input_path": "src/expr19/expr19.in",
+    "input_visible": 1,
+    "metainfo": {
+        "caseauthor": "Wenxin Zheng",
+        "comment": "Expression error: Trailing comma in function call - combines call, literal, operator, and grouped expressions",
+        "lastmodified": "2025-08-08"
+    },
+    "name": "expr19",
+    "name_visible": 1,
+    "output_path": "src/expr19/expr19.out",
+    "output_visible": 1,
+    "provide": [
+        "compilestderr",
+        "compileexitcode"
+    ],
+    "runtimelimit": -1,
+    "runtimememorylimit": 256,
+    "source_path": "src/expr19/expr19.rx",
+    "source_visible": 1,
+    "stage_id": 7454,
+    "stage_name": "semantic-1"
+}

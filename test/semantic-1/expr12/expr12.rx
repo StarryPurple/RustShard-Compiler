@@ -1,0 +1,18 @@
+/*
+Test Package: Semantic-1
+Test Target: expr
+Author: Wenxin Zheng
+Time: 2025-08-08
+Verdict: Fail
+Comment: Expression error: Invalid if expression - missing opening brace after condition
+*/
+
+// Error: Invalid if expression - missing opening brace after condition
+fn main() {
+    let x = 10;
+    if x > 5  // Missing opening brace {
+        printInt(x);
+    
+    exit(0);
+}
+}

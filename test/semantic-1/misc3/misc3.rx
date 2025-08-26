@@ -1,0 +1,7 @@
+
+
+impl FibState {
+    fn new() -> FibState {
+        FibState { prev: 0, curr: 1 }
+    }
+}
