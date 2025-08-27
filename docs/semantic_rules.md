@@ -376,7 +376,7 @@ ExpressionWithBlock ->
     | IfExpression              # "if" "else"
     | MatchExpression           # "match" ... implement later
 
-# BlockExpression -> '{' Statements? '}'
+BlockExpression -> '{' Statements? '}'
 
 # I modified it.
 # Statements ->

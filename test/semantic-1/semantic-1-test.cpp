@@ -109,8 +109,7 @@ int main(int argc, char *argv[]) {
   std::cout << "\n" << std::string(40, '=') << std::endl;
   std::cout << "Test Summary" << std::endl;
   std::cout << std::string(40, '=') << std::endl;
-  for(const auto &r : results) {
-    if(r.status == "FAIL" && r.expected == "Success" && r.actual == "Fail")
+  for(const auto &r : results) if(r.status == "FAIL") {
     std::cout << "[" << r.status << "] " << r.name << " (Expected: " << r.expected << ", Actual: " << r.actual << ")" <<
       std::endl;
   }

@@ -1,6 +1,6 @@
 #include "ast_type.h"
 
-namespace insomnia::rust_shard::type {
+namespace insomnia::rust_shard::sem_type {
 
 std::size_t ExprType::hash() const {
   std::size_t seed = 0;
@@ -16,7 +16,7 @@ bool ExprType::operator==(const ExprType &other) const  {
   return self_ptr->equals_impl(*other_ptr);
 }
 
-std::shared_ptr<ExprType> ExprType::remove_alias() const {
+TypePtr ExprType::remove_alias() const {
   auto ptr = shared_from_this();
   while(ptr->get_kind() == TypeKind::kAlias) {
     ptr = std::static_pointer_cast<const AliasType>(ptr)->get_type();

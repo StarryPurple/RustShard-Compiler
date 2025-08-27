@@ -3,11 +3,6 @@
 
 namespace insomnia::rust_shard::ast {
 
-class BasicVisitor;
-class RecursiveVisitor;
-
-class BasicNode;
-
 class Crate;
 class Item;
 class VisItem;

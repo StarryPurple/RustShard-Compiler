@@ -1,5 +1,4 @@
 #include "parser.h"
-#include "ast_enums.h"
 
 #include <unordered_map>
 
@@ -1098,7 +1097,7 @@ std::unique_ptr<Expression> Parser::parseExpression(TokenType delim) {
 }
 
 std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
-  using Prime = insomnia::rust_shard::type::TypePrime;
+  using Prime = insomnia::rust_shard::sem_type::TypePrime;
   Backtracker tracker(*_ast_ctx);
   auto current_token = _ast_ctx->current();
   _ast_ctx->consume();

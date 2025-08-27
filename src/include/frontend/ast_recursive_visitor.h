@@ -4,9 +4,9 @@
 #include "ast_visitor.h"
 
 #define ISM_RS_PRE_VISIT_METHOD(Node) \
-  virtual void preVisit(Node &) {}
+  virtual void preVisit(Node &node) {}
 #define ISM_RS_POST_VISIT_METHOD(Node) \
-  virtual void postVisit(Node &) {}
+  virtual void postVisit(Node &node) {}
 #define ISM_RS_VISIT_METHOD(Node) \
   void visit(Node &node) override;
 
@@ -16,12 +16,12 @@ class RecursiveVisitor : public BasicVisitor {
 public:
   void traverse(Crate &crate);
 protected:
-  INSOMNIA_RUST_SHARD_AST_VISITABLE_NODES_LIST(ISM_RS_PRE_VISIT_METHOD)
-  INSOMNIA_RUST_SHARD_AST_VISITABLE_NODES_LIST(ISM_RS_POST_VISIT_METHOD)
-private:
   // better call "traverse" here rather than "visit"
 
   INSOMNIA_RUST_SHARD_AST_VISITABLE_NODES_LIST(ISM_RS_VISIT_METHOD)
+  INSOMNIA_RUST_SHARD_AST_VISITABLE_NODES_LIST(ISM_RS_PRE_VISIT_METHOD)
+  INSOMNIA_RUST_SHARD_AST_VISITABLE_NODES_LIST(ISM_RS_POST_VISIT_METHOD)
+
 };
 
 }

@@ -6,7 +6,7 @@
 
 #include "ast_type.h"
 
-using namespace insomnia::rust_shard::type;
+using namespace insomnia::rust_shard::sem_type;
 
 class AstTypeTest : public ::testing::Test {
   protected:

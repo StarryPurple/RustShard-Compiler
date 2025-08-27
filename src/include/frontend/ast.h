@@ -11,7 +11,7 @@
  *   // maybe I should change this naming rule...
  *   (A -> B*) std::vector<std::unique_ptr<B>> _b;
  *   (A -> B+) std::vector<std::unique_ptr<B>> _b;
- *   (A -> (B C)*) struct Group { B b; C c; }; std::vector<Group> _groups;
+ *   (A -> (B C)*) struct Group { B obj_b; C obj_c; }; std::vector<Group> _groups;
  */
 // the builtin type for TUPLE_INDEX is not fixed... Maybe fix it someday.
 #ifndef INSOMNIA_AST_H
@@ -22,8 +22,7 @@
 #include <vector>
 
 #include "ast_fwd.h"
-#include "ast_type.h"
-#include "ast_enums.h"
+#include "ast_defs.h"
 #include "ast_visitor.h"
 
 namespace insomnia::rust_shard::ast {
@@ -31,20 +30,20 @@ namespace insomnia::rust_shard::ast {
 #define EXPOSE_FIELD_CONST_REFERENCE(func_name, field_name) \
   auto func_name() const -> const decltype(field_name) & { return field_name; }
 
-class BasicNode {
-public:
-  virtual ~BasicNode() = default;
-  virtual void accept(BasicVisitor &visitor) = 0;
-};
-
 class Crate : public BasicNode {
 public:
   explicit Crate(std::vector<std::unique_ptr<Item>> &&items) : _items(std::move(items)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Item>> _items;
+  std::unique_ptr<Scope> _scope;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(items, _items)
+  EXPOSE_FIELD_CONST_REFERENCE(scope, _scope);
+
+  void set_scope(std::unique_ptr<Scope> scope) {
+    _scope = std::move(scope);
+  }
 };
 
 class Item : public BasicNode {
@@ -155,7 +154,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
-class Type : public BasicNode {
+class Type : public BasicNode, public TypeInfo {
 public:
   Type() = default;
 private:
@@ -429,7 +428,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type_opt, _type_opt)
 };
 
-class Implementation : public VisItem {
+class Implementation : public VisItem, public Scope {
 public:
   Implementation() = default;
 private:
@@ -506,7 +505,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
 };
 
-class Expression : public BasicNode {
+class Expression : public BasicNode, public TypeInfo {
 public:
   Expression() = default;
   virtual bool has_block() const = 0;
@@ -523,7 +522,7 @@ private:
 };
 
 class LiteralExpression : public ExpressionWithoutBlock {
-  using TypePrime = insomnia::rust_shard::type::TypePrime;
+  using TypePrime = insomnia::rust_shard::sem_type::TypePrime;
 public:
   template <class Spec>
   explicit LiteralExpression(TypePrime prime, Spec &&spec)
@@ -1091,8 +1090,14 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Statements> _stmts_opt;
+  std::unique_ptr<Scope> _scope;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(stmts_opt, _stmts_opt)
+  EXPOSE_FIELD_CONST_REFERENCE(scope, _scope);
+
+  void set_scope(std::unique_ptr<Scope> scope) {
+    _scope = std::move(scope);
+  }
 };
 
 class Statements : public BasicNode {
@@ -1274,7 +1279,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(arms, _arms)
 };
 
-class MatchArm : public BasicNode {
+class MatchArm : public BasicNode, public Scope {
 public:
   MatchArm(
     std::unique_ptr<Pattern> &&pattern,
@@ -1284,9 +1289,15 @@ public:
 private:
   std::unique_ptr<Pattern> _pattern;
   std::unique_ptr<MatchArmGuard> _guard_opt;
+  std::unique_ptr<Scope> _scope;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
   EXPOSE_FIELD_CONST_REFERENCE(guard_opt, _guard_opt)
+  EXPOSE_FIELD_CONST_REFERENCE(scope, _scope);
+
+  void set_scope(std::unique_ptr<Scope> scope) {
+    _scope = std::move(scope);
+  }
 };
 
 class MatchArmGuard : public BasicNode {

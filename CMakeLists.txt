@@ -8,8 +8,10 @@ add_library(frontend_lib STATIC
     src/frontend/lexer.cpp
     src/frontend/parser.cpp
     src/frontend/ast_recursive_visitor.cpp
+    src/frontend/syntax_check.cpp
 )
 target_include_directories(frontend_lib PUBLIC
+    src/include/common
     src/include/frontend
 )
 
