@@ -7,6 +7,7 @@ class Crate;
 class Item;
 class VisItem;
 class Function;
+class FunctionBodyExpr;
 class FunctionParameters;
 class FunctionParam;
 class FunctionParamPattern;
@@ -128,6 +129,7 @@ class PathPattern;
   M(Item) \
   M(VisItem) \
   M(Function) \
+  M(FunctionBodyExpr) \
   M(FunctionParameters) \
   M(FunctionParam) \
   M(FunctionParamPattern) \
@@ -246,6 +248,7 @@ class PathPattern;
   M(Crate) \
   M(Item) \
   M(Function) \
+  M(FunctionBodyExpr) \
   M(FunctionParameters) \
   M(FunctionParamPattern) \
   M(FunctionParamType) \

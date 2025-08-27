@@ -70,22 +70,22 @@ public:
     std::string_view ident,
     std::unique_ptr<FunctionParameters> &&params_opt,
     std::unique_ptr<Type> &&res_type_opt,
-    std::unique_ptr<BlockExpression> &&expr_opt
+    std::unique_ptr<FunctionBodyExpr> &&body_opt
   ): _is_const(is_const), _ident(ident), _params_opt(std::move(params_opt)),
-  _res_type_opt(std::move(res_type_opt)), _expr_opt(std::move(expr_opt)) {}
+  _res_type_opt(std::move(res_type_opt)), _body_opt(std::move(body_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_const;
   std::string_view _ident;
   std::unique_ptr<FunctionParameters> _params_opt;
   std::unique_ptr<Type> _res_type_opt;
-  std::unique_ptr<BlockExpression> _expr_opt;
+  std::unique_ptr<FunctionBodyExpr> _body_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(is_const, _is_const)
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
   EXPOSE_FIELD_CONST_REFERENCE(params_opt, _params_opt)
   EXPOSE_FIELD_CONST_REFERENCE(res_type_opt, _res_type_opt)
-  EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_opt)
+  EXPOSE_FIELD_CONST_REFERENCE(body_opt, _body_opt)
 };
 
 class FunctionParameters : public BasicNode {
@@ -1082,7 +1082,7 @@ private:
   // Intentional blank.
 };
 
-class BlockExpression : public ExpressionWithBlock {
+class BlockExpression : public ExpressionWithBlock, public ScopeInfo {
 public:
   explicit BlockExpression(
     std::unique_ptr<Statements> &&stmts_opt
@@ -1090,14 +1090,20 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Statements> _stmts_opt;
-  std::unique_ptr<Scope> _scope;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(stmts_opt, _stmts_opt)
-  EXPOSE_FIELD_CONST_REFERENCE(scope, _scope);
+};
 
-  void set_scope(std::unique_ptr<Scope> scope) {
-    _scope = std::move(scope);
-  }
+class FunctionBodyExpr : public ExpressionWithBlock, public ScopeInfo {
+public:
+  explicit FunctionBodyExpr(
+    std::unique_ptr<Statements> &&stmts_opt
+  ): _stmts_opt(std::move(stmts_opt)) {}
+  void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+private:
+  std::unique_ptr<Statements> _stmts_opt;
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(stmts_opt, _stmts_opt)
 };
 
 class Statements : public BasicNode {
@@ -1279,7 +1285,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(arms, _arms)
 };
 
-class MatchArm : public BasicNode, public Scope {
+class MatchArm : public BasicNode, public ScopeInfo {
 public:
   MatchArm(
     std::unique_ptr<Pattern> &&pattern,
@@ -1289,15 +1295,9 @@ public:
 private:
   std::unique_ptr<Pattern> _pattern;
   std::unique_ptr<MatchArmGuard> _guard_opt;
-  std::unique_ptr<Scope> _scope;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(pattern, _pattern)
   EXPOSE_FIELD_CONST_REFERENCE(guard_opt, _guard_opt)
-  EXPOSE_FIELD_CONST_REFERENCE(scope, _scope);
-
-  void set_scope(std::unique_ptr<Scope> scope) {
-    _scope = std::move(scope);
-  }
 };
 
 class MatchArmGuard : public BasicNode {

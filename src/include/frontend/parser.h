@@ -60,6 +60,7 @@ class Parser {
   std::unique_ptr<Item> parseItem();
   std::unique_ptr<VisItem> parseVisItem();
   std::unique_ptr<Function> parseFunction();
+  std::unique_ptr<FunctionBodyExpr> parseFunctionBodyExpr();
   std::unique_ptr<FunctionParameters> parseFunctionParameters();
   std::unique_ptr<FunctionParam> parseFunctionParam();
   std::unique_ptr<FunctionParamPattern> parseFunctionParamPattern();

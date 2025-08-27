@@ -9,6 +9,7 @@
 
 #include "ast_type.h"
 #include "ast_type.h"
+#include "ast_type.h"
 
 namespace insomnia::rust_shard::sem_type {
 
@@ -21,6 +22,7 @@ class StructType;
 class TupleType;
 class SliceType;
 class AliasType;
+class FunctionType;
 
 using TypePtr = std::shared_ptr<ExprType>;
 
@@ -39,6 +41,7 @@ enum class TypeKind {
   kSlice,
   kAlias, // redundant...
   kEnum,
+  kFunction,
 };
 
 // referred to boost::hash_combine
@@ -48,7 +51,7 @@ class ExprType : public std::enable_shared_from_this<ExprType> {
 public:
   ExprType(bool is_mut, TypeKind kind) : _is_mut(is_mut), _kind(kind) {}
   virtual ~ExprType() = default;
-  TypeKind get_kind() const { return _kind; } // type of this layer
+  TypeKind kind() const { return _kind; } // type of this layer
   bool is_mut() const { return _is_mut; }
   bool operator==(const ExprType &other) const;
   bool operator!=(const ExprType &other) const { return !(*this == other); }
@@ -68,7 +71,7 @@ class PrimitiveType : public ExprType {
 public:
   PrimitiveType(TypePrime prime, bool is_mut)
   : ExprType(is_mut, TypeKind::kPrimitive), _prime(prime) {}
-  TypePrime get_prime() const { return _prime; }
+  TypePrime prime() const { return _prime; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -80,7 +83,7 @@ class ArrayType : public ExprType {
 public:
   ArrayType(TypePtr type, std::size_t length, bool is_mut)
   : ExprType(is_mut, TypeKind::kArray), _type(std::move(type)), _length(length) {}
-  TypePtr get_type() const { return _type; }
+  TypePtr type() const { return _type; }
   std::size_t length() const { return _length; }
   void combine_hash(std::size_t &seed) const override;
 protected:
@@ -94,7 +97,7 @@ class ReferenceType : public ExprType {
 public:
   ReferenceType(TypePtr type, bool is_mut)
   : ExprType(is_mut, TypeKind::kReference), _type(std::move(type)) {}
-  TypePtr get_type() const { return _type; }
+  TypePtr type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -110,11 +113,11 @@ public:
     bool is_mut
   ): ExprType(is_mut, TypeKind::kStruct),
   _ident(std::move(ident)), _fields(std::move(fields)) {}
-  const std::string& get_ident() const { return _ident; }
+  const std::string& ident() const { return _ident; }
   const std::map<
     std::string,
     TypePtr
-  >& get_fields() const { return _fields; }
+  >& fields() const { return _fields; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -127,7 +130,7 @@ class TupleType : public ExprType {
 public:
   TupleType(std::vector<TypePtr> &&members, bool is_mut)
   : ExprType(is_mut, TypeKind::kTuple), _members(std::move(members)) {}
-  const std::vector<TypePtr>& get_members() const { return _members; }
+  const std::vector<TypePtr>& members() const { return _members; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -139,7 +142,7 @@ class SliceType : public ExprType {
 public:
   SliceType(TypePtr type, bool is_mut)
   : ExprType(is_mut, TypeKind::kSlice), _type(std::move(type)) {}
-  TypePtr get_type() const { return _type; }
+  TypePtr type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -151,7 +154,7 @@ class AliasType : public ExprType {
 public:
   explicit AliasType(std::string ident, TypePtr type)
   : ExprType(false, TypeKind::kAlias), _ident(std::move(ident)), _type(std::move(type)) {}
-  TypePtr get_type() const { return _type; }
+  TypePtr type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -168,17 +171,34 @@ public:
     bool is_mut
   ): ExprType(is_mut, TypeKind::kEnum), _ident(std::move(ident)),
   _variants(std::move(variants)) {}
-  const std::string& get_ident() const { return _ident; }
+  const std::string& ident() const { return _ident; }
   const std::map<
     std::string,
     TypePtr
-  >& get_variants() const { return _variants; }
+  >& variants() const { return _variants; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
   std::string _ident;
   std::map<std::string, TypePtr> _variants;
+};
+
+class FunctionType : public ExprType {
+public:
+  FunctionType(
+    std::string ident,
+    std::vector<TypePtr> &&params
+  ): ExprType(false, TypeKind::kFunction), _ident(std::move(ident)),
+  _params(std::move(params)) {}
+  const std::string& ident() const { return _ident; }
+  const std::vector<TypePtr>& params() const { return _params; }
+  void combine_hash(std::size_t &seed) const override;
+protected:
+  bool equals_impl(const ExprType &other) const override;
+private:
+  std::string _ident;
+  std::vector<TypePtr> _params;
 };
 
 class TypePool {

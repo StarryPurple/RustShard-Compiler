@@ -35,20 +35,24 @@ public:
     _scopes.pop_back();
   }
   void visit(Function &node) override {
-    RecursiveVisitor::preVisit(node); // no need
+    // RecursiveVisitor::preVisit(node); // no need
     // function name register
     add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction
     });
     // function body block: into the scope first
-    if(node.expr_opt()) {
-      node.expr_opt()->set_scope(std::make_unique<Scope>());
-      _scopes.push_back(node.expr_opt()->scope().get());
-      if(node.params_opt()) node.params_opt()->accept(*this);
+    if(node.body_opt()) {
+      node.body_opt()->set_scope(std::make_unique<Scope>());
+      _scopes.push_back(node.body_opt()->scope().get());
+      if(node.params_opt()) {
+        for(const auto &param: node.params_opt()->func_params()) {
+
+        }
+      }
     }
     if(node.res_type_opt()) node.res_type_opt()->accept(*this);
 
-    RecursiveVisitor::postVisit(node); // no need
+    // RecursiveVisitor::postVisit(node); // no need
   }
 
 private:

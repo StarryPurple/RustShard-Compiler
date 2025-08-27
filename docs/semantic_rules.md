@@ -28,7 +28,10 @@ VisItem ->
 Function ->
     "const"? "fn" IDENTIFIER #GenericParams?#
     '(' FunctionParameters? ')'
-    ("->" Type)? #WhereClause?# (BlockExpression | ';')
+    ("->" Type)? #WhereClause?# (FunctionBodyExpr | ';')
+    
+FunctionBodyExpr -> 
+    '{' Statements '}'
     
 # GenericParams -> ...
 
@@ -376,7 +379,8 @@ ExpressionWithBlock ->
     | IfExpression              # "if" "else"
     | MatchExpression           # "match" ... implement later
 
-BlockExpression -> '{' Statements? '}'
+BlockExpression ->
+    '{' Statements? '}'
 
 # I modified it.
 # Statements ->

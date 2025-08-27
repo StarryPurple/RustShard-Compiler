@@ -25,7 +25,13 @@ void RecursiveVisitor::visit(Function &node) {
   preVisit(node);
   if(node.params_opt()) node.params_opt()->accept(*this);
   if(node.res_type_opt()) node.res_type_opt()->accept(*this);
-  if(node.expr_opt()) node.expr_opt()->accept(*this);
+  if(node.body_opt()) node.body_opt()->accept(*this);
+  postVisit(node);
+}
+
+void RecursiveVisitor::visit(FunctionBodyExpr &node) {
+  preVisit(node);
+  if(node.stmts_opt()) node.stmts_opt()->accept(*this);
   postVisit(node);
 }
 

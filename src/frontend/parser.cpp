@@ -156,6 +156,16 @@ std::unique_ptr<VisItem> Parser::parseVisItem() {
   REPORT_PARSE_FAILURE_AND_RETURN();
 }
 
+std::unique_ptr<FunctionBodyExpr> Parser::parseFunctionBodyExpr() {
+  Backtracker tracker(*_ast_ctx);
+  MATCH_TOKEN(kLCurlyBrace);
+  auto ss_opt = parseStatements();
+  MATCH_TOKEN(kRCurlyBrace);
+  tracker.commit();
+  return std::make_unique<FunctionBodyExpr>(std::move(ss_opt));
+}
+
+
 std::unique_ptr<Function> Parser::parseFunction() {
   Backtracker tracker(*_ast_ctx);
   bool is_const = false;
@@ -176,11 +186,11 @@ std::unique_ptr<Function> Parser::parseFunction() {
     t_opt = parseType();
     EXPECT_POINTER_NOT_EMPTY(t_opt);
   }
-  std::unique_ptr<BlockExpression> be_opt;
+  std::unique_ptr<FunctionBodyExpr> be_opt;
   if(CHECK_TOKEN(kSemi)) {
     _ast_ctx->consume();
   } else {
-    be_opt = parseBlockExpression();
+    be_opt = parseFunctionBodyExpr();
     EXPECT_POINTER_NOT_EMPTY(be_opt);
   }
   tracker.commit();

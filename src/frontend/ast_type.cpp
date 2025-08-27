@@ -18,8 +18,8 @@ bool ExprType::operator==(const ExprType &other) const  {
 
 TypePtr ExprType::remove_alias() const {
   auto ptr = shared_from_this();
-  while(ptr->get_kind() == TypeKind::kAlias) {
-    ptr = std::static_pointer_cast<const AliasType>(ptr)->get_type();
+  while(ptr->kind() == TypeKind::kAlias) {
+    ptr = std::static_pointer_cast<const AliasType>(ptr)->type();
   }
   return std::const_pointer_cast<ExprType>(ptr);
 }
@@ -36,7 +36,7 @@ void PrimitiveType::combine_hash(std::size_t &seed) const {
 }
 
 bool PrimitiveType::equals_impl(const ExprType &other) const {
-  return _prime == static_cast<const PrimitiveType&>(other).get_prime();
+  return _prime == static_cast<const PrimitiveType&>(other).prime();
 }
 
 void ArrayType::combine_hash(std::size_t &seed) const {
@@ -49,7 +49,7 @@ void ArrayType::combine_hash(std::size_t &seed) const {
 bool ArrayType::equals_impl(const ExprType &other) const {
   const auto &other_array = static_cast<const ArrayType&>(other);
   if(_length != other_array.length()) return false;
-  return *_type == *other_array.get_type();
+  return *_type == *other_array.type();
 }
 
 void ReferenceType::combine_hash(std::size_t &seed) const {
@@ -59,7 +59,7 @@ void ReferenceType::combine_hash(std::size_t &seed) const {
 }
 
 bool ReferenceType::equals_impl(const ExprType &other) const {
-  return *_type == *static_cast<const ReferenceType&>(other).get_type();
+  return *_type == *static_cast<const ReferenceType&>(other).type();
 }
 
 void StructType::combine_hash(std::size_t &seed) const {
@@ -75,8 +75,8 @@ void StructType::combine_hash(std::size_t &seed) const {
 
 bool StructType::equals_impl(const ExprType &other) const {
   const auto &other_struct = static_cast<const StructType&>(other);
-  if(_ident != other_struct.get_ident()) return false;
-  const auto &other_fields = other_struct.get_fields();
+  if(_ident != other_struct.ident()) return false;
+  const auto &other_fields = other_struct.fields();
   if(_fields.size() != other_fields.size()) return false;
   for(auto it = _fields.begin(), other_it = other_fields.begin();
     other_it != other_fields.end(); ++it, ++other_it) {
@@ -94,7 +94,7 @@ void TupleType::combine_hash(std::size_t &seed) const {
 
 bool TupleType::equals_impl(const ExprType &other) const {
   const auto &other_tuple = static_cast<const TupleType&>(other);
-  const auto &other_members = other_tuple.get_members();
+  const auto &other_members = other_tuple.members();
   if(_members.size() != other_members.size()) return false;
   for(auto it = _members.begin(), other_it = other_members.begin();
     it != _members.end(); ++it, ++other_it) {
@@ -110,7 +110,7 @@ void SliceType::combine_hash(std::size_t &seed) const {
 }
 
 bool SliceType::equals_impl(const ExprType &other) const {
-  return *_type == *static_cast<const SliceType&>(other).get_type();
+  return *_type == *static_cast<const SliceType&>(other).type();
 }
 
 void AliasType::combine_hash(std::size_t &seed) const {
@@ -121,7 +121,7 @@ void AliasType::combine_hash(std::size_t &seed) const {
 bool AliasType::equals_impl(const ExprType &other) const {
   throw std::runtime_error("Compiler type error: Trying to check alias equality.");
   // code should not reach here. But, just in case...
-  return *_type == *static_cast<const AliasType&>(other).get_type();
+  return *_type == *static_cast<const AliasType&>(other).type();
 }
 
 void EnumType::combine_hash(std::size_t &seed) const {
@@ -129,7 +129,7 @@ void EnumType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
-  for(auto &[name, type]: _variants) {
+  for(const auto &[name, type]: _variants) {
     combine_hash_impl(seed, static_cast<std::size_t>(hasher(name)));
     type->combine_hash(seed);
   }
@@ -137,8 +137,8 @@ void EnumType::combine_hash(std::size_t &seed) const {
 
 bool EnumType::equals_impl(const ExprType &other) const {
   const auto &other_struct = static_cast<const EnumType&>(other);
-  if(_ident != other_struct.get_ident()) return false;
-  const auto &other_variants = other_struct.get_variants();
+  if(_ident != other_struct.ident()) return false;
+  const auto &other_variants = other_struct.variants();
   if(_variants.size() != other_variants.size()) return false;
   for(auto it = _variants.begin(), other_it = other_variants.begin();
     other_it != other_variants.end(); ++it, ++other_it) {
@@ -147,6 +147,27 @@ bool EnumType::equals_impl(const ExprType &other) const {
     }
   return true;
 }
+
+void FunctionType::combine_hash(std::size_t &seed) const {
+  static constexpr std::hash<std::string> hasher;
+  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+  combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
+  for(const auto &type: _params)
+    type->combine_hash(seed);
+}
+
+bool FunctionType::equals_impl(const ExprType &other) const {
+  const auto &other_func = static_cast<const FunctionType&>(other);
+  if(_ident != other_func.ident()) return false;
+  const auto &other_params = other_func.params();
+  if(_params.size() != other_params.size()) return false;
+  for(auto it = _params.begin(), other_it = other_params.begin();
+    it != _params.end(); ++it, ++other_it) {
+    if(**it != **other_it) return false;
+  }
+  return true;
+}
+
 
 
 }

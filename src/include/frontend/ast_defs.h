@@ -121,6 +121,17 @@ private:
   std::vector<std::string> _errors;
 };
 
+class ScopeInfo {
+public:
+  void set_scope(std::unique_ptr<Scope> scope) {
+    _scope = std::move(scope);
+  }
+private:
+  std::unique_ptr<Scope> _scope;
+public:
+  const std::unique_ptr<Scope>& scope() const { return _scope; }
+};
+
 }
 
 #endif // INSOMNIA_AST_DEFS_H
