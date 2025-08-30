@@ -6,14 +6,18 @@
 #include <regex>
 #include <stdexcept>
 
-// Include your core compiler headers
 #include "ast.h"
 #include "parser.h"
 #include "lexer.h"
+#include "syntax_check.h"
 
 namespace fs = std::filesystem;
-using Lexer  = insomnia::rust_shard::Lexer;
-using Parser = insomnia::rust_shard::ast::Parser;
+namespace rs = insomnia::rust_shard;
+using Lexer  = rs::Lexer;
+using Parser = rs::ast::Parser;
+
+using ErrorRecorder   = rs::ast::ErrorRecorder;
+using SymbolCollector = rs::ast::SymbolCollector;
 
 struct TestResult {
   std::string name;
@@ -22,7 +26,6 @@ struct TestResult {
   std::string actual;
 };
 
-// 重用之前的函数，无需修改
 std::string read_file(const fs::path &path) {
   std::ifstream file(path);
   if(!file.is_open()) {
@@ -49,6 +52,15 @@ std::string run_compiler_logic(const std::string &source_code) {
 
     Parser parser(lexer);
     if(!parser) return "Fail";
+
+
+    auto err_recorder = std::make_unique<ErrorRecorder>();
+    SymbolCollector symbol_collector(err_recorder.get());
+
+    auto ast = parser.release_tree();
+    ast.traverse(symbol_collector);
+    if(err_recorder->has_error()) return "Fail";
+
 
     return "Success";
   } catch(const std::runtime_error &e) {

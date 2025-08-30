@@ -58,7 +58,7 @@ void RecursiveVisitor::visit(FunctionParamType &node) {
 
 void RecursiveVisitor::visit(SelfParam &node) {
   preVisit(node);
-  node.type()->accept(*this);
+  if(node.type_opt()) node.type_opt()->accept(*this);
   postVisit(node);
 }
 

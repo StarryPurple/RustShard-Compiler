@@ -168,6 +168,4 @@ bool FunctionType::equals_impl(const ExprType &other) const {
   return true;
 }
 
-
-
 }

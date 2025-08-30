@@ -2,6 +2,7 @@
 #define INSOMNIA_PARSER_H
 #include "ast.h"
 #include "lexer.h"
+#include "ast_recursive_visitor.h"
 
 #define PARSE_FUNCTION_GEN_METHOD(Node) \
   std::unique_ptr<Node> parse##Node();
@@ -9,40 +10,19 @@
 namespace insomnia::rust_shard::ast {
 
 class Parser {
+public:
+  Parser();
+  ~Parser();
+  explicit Parser(const Lexer &lexer);
+  void parseAll(const Lexer &lexer);
+  explicit operator bool() const { return _is_good; }
+  bool is_good() const { return _is_good; }
+  std::string error_msg() const;
+  ASTTree release_tree();
+
+private:
   class Backtracker;
-  class Context {
-    friend Backtracker;
-    std::vector<Token> _tokens;
-    std::size_t _pos = 0;
-    std::vector<std::string> _errors;
-  public:
-    Context() = default;
-    template <class T>
-    explicit Context(T &&tokens, std::size_t pos = 0)
-      : _tokens(std::forward<T>(tokens)), _pos(pos) {}
-    // returns a default token with token_type == INVALID if fails.
-    Token peek(std::size_t diff = 1) const {
-      if(_pos + diff >= _tokens.size()) return Token{};
-      return _tokens[_pos + diff];
-    }
-    Token prev(std::size_t diff = 1) const {
-      if(_pos < diff) return Token{};
-      return _tokens[_pos - diff];
-    }
-    // returns a default token with token_type == INVALID if fails.
-    Token current() const {
-      if(_pos >= _tokens.size()) return Token{};
-      return _tokens[_pos];
-    }
-    void consume() {
-      if(_pos >= _tokens.size())
-        throw std::runtime_error("ASTContext consume out of range.");
-      _pos++;
-    }
-    bool empty() const { return _pos >= _tokens.size(); }
-    const std::vector<std::string>& errors() const { return _errors; }
-    void recordError(std::string &&msg) { _errors.push_back(std::move(msg)); }
-  };
+  class Context;
   bool _is_good = false;
   std::unique_ptr<Context> _ast_ctx;
   std::unique_ptr<Crate> _crate;
@@ -149,17 +129,6 @@ class Parser {
   std::unique_ptr<SlicePattern> parseSlicePattern();
   std::unique_ptr<SlicePatternItems> parseSlicePatternItems();
   std::unique_ptr<PathPattern> parsePathPattern();
-
-
-public:
-  Parser() = default;
-  explicit Parser(const Lexer &lexer) { parseAll(lexer); }
-
-  void parseAll(const Lexer &lexer);
-
-  explicit operator bool() const { return _is_good; }
-  bool is_good() const { return _is_good; }
-  std::string error_msg() const;
 };
 
 }

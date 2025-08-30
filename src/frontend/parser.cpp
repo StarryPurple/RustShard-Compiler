@@ -68,7 +68,44 @@
 
 namespace insomnia::rust_shard::ast {
 
-
+class Parser::Context {
+  friend Backtracker;
+  std::vector<Token> _tokens;
+  std::size_t _pos = 0;
+  std::vector<std::string> _errors;
+public:
+  Context() = default;
+  void clear() {
+    _tokens.clear();
+    _pos = 0;
+    _errors.clear();
+  }
+  template <class T>
+  explicit Context(T &&tokens, std::size_t pos = 0)
+    : _tokens(std::forward<T>(tokens)), _pos(pos) {}
+  // returns a default token with token_type == INVALID if fails.
+  Token peek(std::size_t diff = 1) const {
+    if(_pos + diff >= _tokens.size()) return Token{};
+    return _tokens[_pos + diff];
+  }
+  Token prev(std::size_t diff = 1) const {
+    if(_pos < diff) return Token{};
+    return _tokens[_pos - diff];
+  }
+  // returns a default token with token_type == INVALID if fails.
+  Token current() const {
+    if(_pos >= _tokens.size()) return Token{};
+    return _tokens[_pos];
+  }
+  void consume() {
+    if(_pos >= _tokens.size())
+      throw std::runtime_error("ASTContext consume out of range.");
+    _pos++;
+  }
+  bool empty() const { return _pos >= _tokens.size(); }
+  const std::vector<std::string>& errors() const { return _errors; }
+  void recordError(std::string &&msg) { _errors.push_back(std::move(msg)); }
+};
 
 class Parser::Backtracker {
   Context &_ast_ctx;
@@ -88,6 +125,14 @@ public:
   void commit() { _commited = true; }
 };
 
+Parser::Parser() = default;
+
+Parser::~Parser() = default;
+
+Parser::Parser(const Lexer &lexer) {
+  parseAll(lexer);
+}
+
 std::string Parser::error_msg() const {
   std::string res;
   for(const auto &msg: _ast_ctx->errors()) {
@@ -95,6 +140,14 @@ std::string Parser::error_msg() const {
     res += '\n';
   }
   return res;
+}
+
+ASTTree Parser::release_tree() {
+  if(!_is_good)
+    throw std::runtime_error("Releasing invalid ast tree");
+  _ast_ctx->clear();
+  _is_good = false;
+  return ASTTree(std::move(_crate));
 }
 
 void Parser::parseAll(const Lexer &lexer) {
@@ -278,14 +331,14 @@ std::unique_ptr<SelfParam> Parser::parseSelfParam() {
     _ast_ctx->consume();
   }
   MATCH_TOKEN(kSelfObject);
-  std::unique_ptr<Type> t;
+  std::unique_ptr<Type> t_opt;
   if(CHECK_TOKEN(kColon)) {
     _ast_ctx->consume();
-    t = parseType();
-    EXPECT_POINTER_NOT_EMPTY(t);
+    t_opt = parseType();
+    EXPECT_POINTER_NOT_EMPTY(t_opt);
   }
   tracker.commit();
-  return std::make_unique<SelfParam>(is_ref, is_mut, std::move(t));
+  return std::make_unique<SelfParam>(is_ref, is_mut, std::move(t_opt));
 }
 
 std::unique_ptr<Type> Parser::parseType() {

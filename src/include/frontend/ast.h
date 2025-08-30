@@ -108,6 +108,8 @@ public:
   FunctionParam() = default;
 private:
   // Intentional blank.
+public:
+  // some helpers.
 };
 
 class FunctionParamPattern : public FunctionParam {
@@ -142,16 +144,16 @@ public:
   SelfParam(
     bool is_ref, bool is_mut,
     std::unique_ptr<Type> &&type
-  ): _is_ref(is_ref), _is_mut(is_mut), _type(std::move(type)) {}
+  ): _is_ref(is_ref), _is_mut(is_mut), _type_opt(std::move(type)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_ref;
   bool _is_mut;
-  std::unique_ptr<Type> _type;
+  std::unique_ptr<Type> _type_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(is_ref, _is_ref)
   EXPOSE_FIELD_CONST_REFERENCE(is_mut, _is_mut)
-  EXPOSE_FIELD_CONST_REFERENCE(type, _type)
+  EXPOSE_FIELD_CONST_REFERENCE(type_opt, _type_opt)
 };
 
 class Type : public BasicNode, public TypeInfo {
@@ -355,7 +357,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(const_expr_opt, _const_expr_opt)
 };
 
-class Trait : public VisItem {
+class Trait : public VisItem, public ScopeInfo {
 public:
   Trait(
     std::string_view trait_name,
@@ -428,7 +430,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type_opt, _type_opt)
 };
 
-class Implementation : public VisItem, public Scope {
+class Implementation : public VisItem, public ScopeInfo {
 public:
   Implementation() = default;
 private:

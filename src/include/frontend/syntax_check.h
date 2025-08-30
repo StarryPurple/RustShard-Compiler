@@ -13,53 +13,122 @@ namespace insomnia::rust_shard::ast {
 class SymbolCollector : public RecursiveVisitor {
 public:
   SymbolCollector(ErrorRecorder *recorder): _recorder(recorder) {}
+
+  // scope related:
+  // Crate, BlockExpression, MatchArms, Function, Impl, Trait
+
   void preVisit(Crate &node) override {
-    node.set_scope(std::make_unique<Scope>());
-    _scopes.push_back(node.scope().get());
+    _scopes.push_back(std::make_unique<Scope>());
   }
   void postVisit(Crate &node) override {
+    node.set_scope(std::move(_scopes.back()));
     _scopes.pop_back();
   }
   void preVisit(BlockExpression &node) override {
-    node.set_scope(std::make_unique<Scope>());
-    _scopes.push_back(node.scope().get());
+    _scopes.push_back(std::make_unique<Scope>());
   }
   void postVisit(BlockExpression &node) override {
+    node.set_scope(std::move(_scopes.back()));
     _scopes.pop_back();
   }
-  void preVisit(MatchArm &node) override {
-    node.set_scope(std::make_unique<Scope>());
-    _scopes.push_back(node.scope().get());
-  }
-  void postVisit(MatchArm &node) override {
-    _scopes.pop_back();
-  }
-  void visit(Function &node) override {
-    // RecursiveVisitor::preVisit(node); // no need
-    // function name register
-    add_symbol(node.ident(), SymbolInfo{
-      .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction
-    });
-    // function body block: into the scope first
-    if(node.body_opt()) {
-      node.body_opt()->set_scope(std::make_unique<Scope>());
-      _scopes.push_back(node.body_opt()->scope().get());
-      if(node.params_opt()) {
-        for(const auto &param: node.params_opt()->func_params()) {
-
-        }
-      }
+  void visit(MatchArms &node) override {
+    // no preVisit
+    for(const auto &[arm, expr]: node.arms()) {
+      _scopes.push_back(std::make_unique<Scope>());
+      arm->accept(*this);
+      expr->accept(*this);
+      arm->set_scope(std::move(_scopes.back()));
+      _scopes.pop_back();
     }
-    if(node.res_type_opt()) node.res_type_opt()->accept(*this);
+    // no postVisit
+  }
+  void preVisit(Function &node) override {
+    auto flag = add_symbol(node.ident(), SymbolInfo{
+      .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction
+    }); // add to outer scope
+    if(!flag)
+      _recorder->report("Function symbol already defined: " + std::string(node.ident()));
+    _scopes.push_back(std::make_unique<Scope>());
+  }
+  void postVisit(Function &node) override {
+    if(node.body_opt())
+      node.body_opt()->set_scope(std::move(_scopes.back()));
+    _scopes.pop_back();
+  }
+  void preVisit(InherentImpl &node) override {
+    _scopes.push_back(std::make_unique<Scope>());
+  }
+  void postVisit(InherentImpl &node) override {
+    node.set_scope(std::move(_scopes.back()));
+    _scopes.pop_back();
+  }
+  void preVisit(TraitImpl &node) override {
+    _scopes.push_back(std::make_unique<Scope>());
+  }
+  void postVisit(TraitImpl &node) override {
+    node.set_scope(std::move(_scopes.back()));
+    _scopes.pop_back();
+  }
+  void preVisit(Trait &node) override {
+    auto flag = add_symbol(node.ident(), SymbolInfo{
+      .node = &node, .ident = node.ident(), .kind = SymbolKind::kTrait
+    });
+    if(!flag)
+      _recorder->report("Trait symbol already defined: " + std::string(node.ident()));
+    _scopes.push_back(std::make_unique<Scope>());
+  }
+  void postVisit(Trait &node) override {
+    node.set_scope(std::move(_scopes.back()));
+    _scopes.pop_back();
+  }
 
-    // RecursiveVisitor::postVisit(node); // no need
+  // symbol related:
+  // Function(dealt), const, struct, trait(dealt), enum
+  // patterns (including MatchArm pattern and Let pattern)
+  void preVisit(ConstantItem &node) override {
+    auto flag = add_symbol(node.ident(), SymbolInfo{
+      .node = &node, .ident = node.ident(), .kind = SymbolKind::kConstant
+    });
+    if(!flag)
+      _recorder->report("ConstantItem symbol already defined: " + std::string(node.ident()));
+  }
+  void preVisit(StructStruct &node) override {
+    auto flag = add_symbol(node.ident(), SymbolInfo{
+      .node = &node, .ident = node.ident(), .kind = SymbolKind::kStruct
+    });
+    if(!flag)
+      _recorder->report("StructStruct symbol already defined: " + std::string(node.ident()));
+  }
+  void preVisit(Enumeration &node) override {
+    auto flag = add_symbol(node.ident(), SymbolInfo{
+      .node = &node, .ident = node.ident(), .kind = SymbolKind::kEnum
+    });
+    if(!flag)
+      _recorder->report("Enumeration symbol already defined: " + std::string(node.ident()));
+  }
+  void preVisit(IdentifierPattern &node) override {
+    auto flag = add_symbol(node.ident(), SymbolInfo{
+      .node = &node, .ident = node.ident(), .kind = SymbolKind::kVariable
+    });
+    if(!flag)
+      _recorder->report("Variable symbol already defined: " + std::string(node.ident()));
+  }
+
+  // type related:
+  // struct(dealt), enum(dealt), type alias
+  void preVisit(TypeAlias &node) override {
+    auto flag = add_symbol(node.ident(), SymbolInfo{
+      .node = &node, .ident = node.ident(), .kind = SymbolKind::kTypeAlias
+    });
+    if(!flag)
+      _recorder->report("TypaAlias typename already used: " + std::string(node.ident()));
   }
 
 private:
   ErrorRecorder *_recorder;
-  std::vector<Scope*> _scopes; // store the constructing scopes
-  void add_symbol(std::string_view ident, const SymbolInfo &symbol) {
-    _scopes.back()->add_symbol(ident, symbol);
+  std::vector<std::unique_ptr<Scope>> _scopes; // store the constructing scopes
+  bool add_symbol(std::string_view ident, const SymbolInfo &symbol) {
+    return _scopes.back()->add_symbol(ident, symbol);
   }
 };
 

@@ -65,14 +65,25 @@ enum class SymbolKind {
   kStruct,
   kEnum,
   kConstant,
+  kTrait,
+  kTypeAlias,
 };
 
 class BasicVisitor;
+class RecursiveVisitor;
 
 class BasicNode {
 public:
   virtual ~BasicNode() = default;
   virtual void accept(BasicVisitor &visitor) = 0;
+};
+
+class ASTTree {
+public:
+  ASTTree(std::unique_ptr<Crate> crate);
+  void traverse(RecursiveVisitor &r_visitor);
+private:
+  std::unique_ptr<Crate> _crate;
 };
 
 struct SymbolInfo {
@@ -94,19 +105,11 @@ private:
 class Scope {
 public:
   void init_scope() { _symbol_set.clear(); }
-  void add_symbol(std::string_view ident, const SymbolInfo &symbol) {
-    _symbol_set.emplace(ident, symbol);
-  }
-  SymbolInfo* find_symbol(std::string_view ident) {
-    auto it = _symbol_set.find(ident);
-    if(it == _symbol_set.end()) return nullptr;
-    return &it->second;
-  }
-  const SymbolInfo* find_symbol(std::string_view ident) const {
-    auto it = _symbol_set.find(ident);
-    if(it == _symbol_set.end()) return nullptr;
-    return &it->second;
-  }
+  bool add_symbol(std::string_view ident, const SymbolInfo &symbol);
+  SymbolInfo* find_symbol(std::string_view ident);
+  const SymbolInfo* find_symbol(std::string_view ident) const;
+  bool set_type(std::string_view ident, sem_type::TypePtr type);
+
 private:
   std::unordered_map<std::string_view, SymbolInfo> _symbol_set;
 };
@@ -123,9 +126,7 @@ private:
 
 class ScopeInfo {
 public:
-  void set_scope(std::unique_ptr<Scope> scope) {
-    _scope = std::move(scope);
-  }
+  void set_scope(std::unique_ptr<Scope> scope) { _scope = std::move(scope); }
 private:
   std::unique_ptr<Scope> _scope;
 public:
