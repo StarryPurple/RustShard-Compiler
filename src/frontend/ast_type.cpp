@@ -67,22 +67,28 @@ void StructType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
+  // not rely on fields
+  /*
   for(auto &[name, type]: _fields) {
     combine_hash_impl(seed, static_cast<std::size_t>(hasher(name)));
     type->combine_hash(seed);
   }
+  */
 }
 
 bool StructType::equals_impl(const ExprType &other) const {
   const auto &other_struct = static_cast<const StructType&>(other);
   if(_ident != other_struct.ident()) return false;
+  // not rely on fields
+  /*
   const auto &other_fields = other_struct.fields();
   if(_fields.size() != other_fields.size()) return false;
   for(auto it = _fields.begin(), other_it = other_fields.begin();
     other_it != other_fields.end(); ++it, ++other_it) {
     if(it->first != other_it->first) return false;
     if(*it->second != *other_it->second) return false;
-    }
+  }
+  */
   return true;
 }
 
@@ -129,22 +135,28 @@ void EnumType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
+  // not rely on fields
+  /*
   for(const auto &[name, type]: _variants) {
     combine_hash_impl(seed, static_cast<std::size_t>(hasher(name)));
     type->combine_hash(seed);
   }
+  */
 }
 
 bool EnumType::equals_impl(const ExprType &other) const {
   const auto &other_struct = static_cast<const EnumType&>(other);
   if(_ident != other_struct.ident()) return false;
+  // not rely on fields
+  /*
   const auto &other_variants = other_struct.variants();
   if(_variants.size() != other_variants.size()) return false;
   for(auto it = _variants.begin(), other_it = other_variants.begin();
     other_it != other_variants.end(); ++it, ++other_it) {
     if(it->first != other_it->first) return false;
     if(*it->second != *other_it->second) return false;
-    }
+  }
+  */
   return true;
 }
 

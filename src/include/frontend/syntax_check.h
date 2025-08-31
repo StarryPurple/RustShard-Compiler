@@ -9,10 +9,10 @@
 
 namespace insomnia::rust_shard::ast {
 
-// check basic syntax (like break/continue) and collect symbols
+// check branch syntax (break/continue/return), set scopes and collect symbols
 class SymbolCollector : public RecursiveVisitor {
 public:
-  SymbolCollector(ErrorRecorder *recorder): _recorder(recorder) {}
+  explicit SymbolCollector(ErrorRecorder *recorder): _recorder(recorder) {}
 
   // scope related:
   // Crate, BlockExpression, MatchArms, Function, Impl, Trait
@@ -49,11 +49,13 @@ public:
     if(!flag)
       _recorder->report("Function symbol already defined: " + std::string(node.ident()));
     _scopes.push_back(std::make_unique<Scope>());
+    _function_cnt++;
   }
   void postVisit(Function &node) override {
     if(node.body_opt())
       node.body_opt()->set_scope(std::move(_scopes.back()));
     _scopes.pop_back();
+    _function_cnt--;
   }
   void preVisit(InherentImpl &node) override {
     _scopes.push_back(std::make_unique<Scope>());
@@ -124,13 +126,53 @@ public:
       _recorder->report("TypaAlias typename already used: " + std::string(node.ident()));
   }
 
+  // loop check: (continue, break)
+  void preVisit(InfiniteLoopExpression &node) override {
+    _loop_cnt++;
+  }
+  void postVisit(InfiniteLoopExpression &node) override {
+    _loop_cnt--;
+  }
+  void preVisit(PredicateLoopExpression &node) override {
+    _loop_cnt++;
+  }
+  void postVisit(PredicateLoopExpression &node) override {
+    _loop_cnt--;
+  }
+  void preVisit(BreakExpression &node) override {
+    if(_loop_cnt == 0)
+      _recorder->report("break expression not inside a loop.");
+  }
+  void preVisit(ContinueExpression &node) override {
+    if(_loop_cnt == 0)
+      _recorder->report("continue expression not inside a loop.");
+  }
+
+  // function check: (return)
+  void preVisit(ReturnExpression &node) override {
+    if(_function_cnt == 0)
+      _recorder->report("return expression not inside a function.");
+  }
+
 private:
   ErrorRecorder *_recorder;
   std::vector<std::unique_ptr<Scope>> _scopes; // store the constructing scopes
+  int _loop_cnt = 0, _function_cnt = 0;
+
   bool add_symbol(std::string_view ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
   }
 };
+
+
+class TypeChecker : public RecursiveVisitor {
+public:
+  explicit TypeChecker(ErrorRecorder *recorder): _recorder(recorder) {}
+private:
+  ErrorRecorder *_recorder;
+
+};
+
 
 }
 
