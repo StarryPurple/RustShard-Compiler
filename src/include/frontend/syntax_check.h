@@ -85,7 +85,7 @@ public:
   }
 
   // symbol related:
-  // Function(dealt), const, struct, trait(dealt), enum
+  // Function(dealt), const, struct, trait(dealt), enum, type alias
   // patterns (including MatchArm pattern and Let pattern)
   void preVisit(ConstantItem &node) override {
     auto flag = add_symbol(node.ident(), SymbolInfo{
@@ -115,9 +115,6 @@ public:
     if(!flag)
       _recorder->report("Variable symbol already defined: " + std::string(node.ident()));
   }
-
-  // type related:
-  // struct(dealt), enum(dealt), type alias
   void preVisit(TypeAlias &node) override {
     auto flag = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kTypeAlias
@@ -125,6 +122,9 @@ public:
     if(!flag)
       _recorder->report("TypaAlias typename already used: " + std::string(node.ident()));
   }
+
+  // type related:
+  // struct(dealt), enum(dealt), type alias(dealt)
 
   // loop check: (continue, break)
   void preVisit(InfiniteLoopExpression &node) override {
@@ -164,13 +164,162 @@ private:
   }
 };
 
-
-class TypeChecker : public RecursiveVisitor {
+// Affected:
+//
+// preVisit, postVisit: Crate, BlockExpression, Function, InherentImpl, TraitImpl, Trait
+//
+// visit: MatchArms,
+class ScopedVisitor : public RecursiveVisitor {
 public:
-  explicit TypeChecker(ErrorRecorder *recorder): _recorder(recorder) {}
+  ScopedVisitor() = default;
+
+  void preVisit(Crate &node) override {
+    _scopes.push_back(node.scope().get());
+  }
+  void postVisit(Crate &node) override {
+    _scopes.pop_back();
+  }
+  void preVisit(BlockExpression &node) override {
+    _scopes.push_back(node.scope().get());
+  }
+  void postVisit(BlockExpression &node) override {
+    _scopes.pop_back();
+  }
+  void visit(MatchArms &node) override {
+    // no preVisit
+    for(const auto &[arm, expr]: node.arms()) {
+      _scopes.push_back(arm->scope().get());
+      arm->accept(*this);
+      expr->accept(*this);
+      _scopes.pop_back();
+    }
+    // no postVisit
+  }
+  void preVisit(Function &node) override {
+    if(node.body_opt())
+      _scopes.push_back(node.body_opt()->scope().get());
+  }
+  void postVisit(Function &node) override {
+    if(node.body_opt())
+      _scopes.pop_back();
+  }
+  void preVisit(InherentImpl &node) override {
+    _scopes.push_back(node.scope().get());
+  }
+  void postVisit(InherentImpl &node) override {
+    _scopes.pop_back();
+  }
+  void preVisit(TraitImpl &node) override {
+    _scopes.push_back(node.scope().get());
+  }
+  void postVisit(TraitImpl &node) override {
+    _scopes.pop_back();
+  }
+  void preVisit(Trait &node) override {
+    _scopes.push_back(node.scope().get());
+  }
+  void postVisit(Trait &node) override {
+    _scopes.pop_back();
+  }
+
+protected:
+  SymbolInfo* find_symbol(std::string_view ident) {
+    for(auto rit = _scopes.rbegin(); rit != _scopes.rend(); ++rit) {
+      auto res = (*rit)->find_symbol(ident);
+      if(res) return res;
+    }
+    return nullptr;
+  }
+  const SymbolInfo* find_symbol(std::string_view ident) const {
+    for(auto rit = _scopes.rbegin(); rit != _scopes.rend(); ++rit) {
+      auto res = (*rit)->find_symbol(ident);
+      if(res) return res;
+    }
+    return nullptr;
+  }
+
+private:
+  std::vector<Scope*> _scopes;
+};
+
+// collect struct, enum, const item and type alias.
+class TypeDeclarator : public ScopedVisitor {
+public:
+  TypeDeclarator(ErrorRecorder *recorder, sem_type::TypePool *pool)
+  : _recorder(recorder), _pool(pool) {}
+
+  void preVisit(StructStruct &node) override {
+    auto symbol = find_symbol(node.ident());
+    if(!symbol) {
+      _recorder->report("Symbol not found for StructStruct");
+      return;
+    }
+    symbol->type = _pool->make_type<sem_type::StructType>(node.ident());
+  }
+
+  void preVisit(Enumeration &node) override {
+    auto symbol = find_symbol(node.ident());
+    if(!symbol) {
+      _recorder->report("Symbol not found for Enumeration");
+      return;
+    }
+    symbol->type = _pool->make_type<sem_type::EnumType>(node.ident());
+  }
+
+  void preVisit(ConstantItem &node) override {
+    auto symbol = find_symbol(node.ident());
+    if(!symbol) {
+      _recorder->report("Symbol not found for ConstItem");
+      return;
+    }
+    symbol->is_const = true;
+  }
+
+  void preVisit(TypeAlias &node) override {
+    auto symbol = find_symbol(node.ident());
+    if(!symbol) {
+      _recorder->report("Symbol not found for ConstItem");
+      return;
+    }
+    symbol->type = _pool->make_type<sem_type::AliasType>(node.ident());
+  }
+
 private:
   ErrorRecorder *_recorder;
+  sem_type::TypePool *_pool;
+};
 
+// fill the struct, enum, const and alias types.
+class TypeFiller : public ScopedVisitor {
+public:
+  TypeFiller(ErrorRecorder *recorder, sem_type::TypePool *pool)
+  : _recorder(recorder), _pool(pool) {}
+
+
+  void preVisit(StructStruct &node) override {
+    auto symbol = find_symbol(node.ident());
+    if(!symbol || symbol->kind != SymbolKind::kStruct || !symbol->type) {
+      _recorder->report("Struct symbol not filled");
+      return;
+    }
+    auto ss = symbol->type;
+  }
+
+  void preVisit(Enumeration &node) override {
+
+  }
+
+  void preVisit(ConstantItem &node) override {
+
+  }
+
+  void preVisit(TypeAlias &node) override {
+
+  }
+
+private:
+  ErrorRecorder *_recorder;
+  sem_type::TypePool *_pool;
 };
 
 

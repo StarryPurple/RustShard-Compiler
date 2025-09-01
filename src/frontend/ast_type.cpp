@@ -2,6 +2,11 @@
 
 namespace insomnia::rust_shard::sem_type {
 
+bool TypePtr::operator==(const TypePtr &that) const {
+  if(!ptr || !that.ptr) return ptr == that.ptr;
+  return *ptr == *that.ptr;
+}
+
 std::size_t ExprType::hash() const {
   std::size_t seed = 0;
   this->combine_hash(seed);
@@ -12,16 +17,15 @@ bool ExprType::operator==(const ExprType &other) const  {
   auto self_ptr = remove_alias();
   auto other_ptr = other.remove_alias();
   if(self_ptr->_kind != other_ptr->_kind) return false;
-  if(self_ptr->_is_mut != other_ptr->_is_mut) return false;
   return self_ptr->equals_impl(*other_ptr);
 }
 
 TypePtr ExprType::remove_alias() const {
-  auto ptr = shared_from_this();
+  auto ptr = TypePtr(std::const_pointer_cast<ExprType>(shared_from_this()));
   while(ptr->kind() == TypeKind::kAlias) {
-    ptr = std::static_pointer_cast<const AliasType>(ptr)->type();
+    ptr = ptr.get<AliasType>()->type();
   }
-  return std::const_pointer_cast<ExprType>(ptr);
+  return ptr;
 }
 
 void ExprType::combine_hash_impl(std::size_t &seed, std::size_t h) {
@@ -30,7 +34,6 @@ void ExprType::combine_hash_impl(std::size_t &seed, std::size_t h) {
 }
 
 void PrimitiveType::combine_hash(std::size_t &seed) const {
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(_prime));
 }
@@ -40,7 +43,6 @@ bool PrimitiveType::equals_impl(const ExprType &other) const {
 }
 
 void ArrayType::combine_hash(std::size_t &seed) const {
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
   combine_hash_impl(seed, _length);
@@ -53,7 +55,6 @@ bool ArrayType::equals_impl(const ExprType &other) const {
 }
 
 void ReferenceType::combine_hash(std::size_t &seed) const {
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
 }
@@ -63,8 +64,7 @@ bool ReferenceType::equals_impl(const ExprType &other) const {
 }
 
 void StructType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<std::string> hasher;
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
+  static constexpr std::hash<std::string_view> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   // not rely on fields
@@ -93,7 +93,6 @@ bool StructType::equals_impl(const ExprType &other) const {
 }
 
 void TupleType::combine_hash(std::size_t &seed) const {
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   for(auto &type: _members) type->combine_hash(seed);
 }
@@ -110,7 +109,6 @@ bool TupleType::equals_impl(const ExprType &other) const {
 }
 
 void SliceType::combine_hash(std::size_t &seed) const {
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
 }
@@ -131,8 +129,7 @@ bool AliasType::equals_impl(const ExprType &other) const {
 }
 
 void EnumType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<std::string> hasher;
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
+  static constexpr std::hash<std::string_view> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   // not rely on fields
@@ -179,5 +176,23 @@ bool FunctionType::equals_impl(const ExprType &other) const {
   }
   return true;
 }
+
+TypePool::TypePool() {
+  // register all primitive types first.
+  static const std::vector<TypePrime> primes = {
+    TypePrime::kBool, TypePrime::kChar,
+    TypePrime::kI8, TypePrime::kI16, TypePrime::kI32, TypePrime::kI64,
+    TypePrime::kU8, TypePrime::kU16, TypePrime::kU32, TypePrime::kU64,
+    TypePrime::kISize, TypePrime::kUSize,
+    TypePrime::kF32, TypePrime::kF64,
+    TypePrime::kString
+  };
+  for(auto prime: primes) {
+    _pool.emplace(std::make_shared<PrimitiveType>(prime));
+  }
+  // unit type
+  _pool.emplace(std::make_shared<TupleType>(std::vector<TypePtr>()));
+}
+
 
 }
