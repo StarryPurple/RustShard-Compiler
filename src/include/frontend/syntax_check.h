@@ -281,7 +281,7 @@ public:
       _recorder->report("Symbol not found for ConstItem");
       return;
     }
-    symbol->type = _pool->make_type<sem_type::AliasType>(node.ident());
+    // set type later
   }
 
 private:
@@ -295,14 +295,31 @@ public:
   TypeFiller(ErrorRecorder *recorder, sem_type::TypePool *pool)
   : _recorder(recorder), _pool(pool) {}
 
+  void preVisit(Crate &node) override {
+    ScopedVisitor::preVisit(node);
+    node.scope()->load_primitive(_pool);
+  }
 
-  void preVisit(StructStruct &node) override {
-    auto symbol = find_symbol(node.ident());
-    if(!symbol || symbol->kind != SymbolKind::kStruct || !symbol->type) {
+  void postVisit(StructStruct &node) override {
+    auto info = find_symbol(node.ident());
+    if(!info || info->kind != SymbolKind::kStruct || !info->type) {
       _recorder->report("Struct symbol not filled");
       return;
     }
-    auto ss = symbol->type;
+    std::map<std::string_view, sem_type::TypePtr> struct_fields;
+    if(node.fields_opt()) {
+      for(const auto &field: node.fields_opt()->fields()) {
+        auto ident = field->ident();
+        auto ast_type = field->type()->get_type();
+        if(!ast_type) {
+          _recorder->report("Unresolved struct field type");
+          continue; // continue partial compiling
+        }
+        struct_fields.emplace(ident, ast_type);
+      }
+    }
+    info->type.get<sem_type::StructType>()->set_fields(std::move(struct_fields));
+    node.set_type(info->type);
   }
 
   void preVisit(Enumeration &node) override {

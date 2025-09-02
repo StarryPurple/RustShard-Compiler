@@ -3,10 +3,12 @@
 
 #include <map>
 #include <memory>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <unordered_set>
 
+#include "ast_type.h"
 #include "ast_type.h"
 #include "ast_type.h"
 #include "ast_type.h"
@@ -28,7 +30,7 @@ struct TypePtr {
   TypePtr& operator=(TypePtr&&) = default;
   ~TypePtr() = default;
 
-  bool operator==(const TypePtr &that) const;
+  bool operator==(const TypePtr &other) const;
 
   ExprType& operator*() { return *ptr.get(); }
   ExprType* operator->() { return ptr.get(); }
@@ -36,8 +38,13 @@ struct TypePtr {
   const ExprType* operator->() const { return ptr.get(); }
   explicit operator bool() const { return static_cast<bool>(ptr); }
 
+  // uses static_pointer_cast. use if only when you confirmed its inner type.
   template <class T> requires std::derived_from<T, ExprType>
-  std::shared_ptr<T> get() const { return std::dynamic_pointer_cast<T>(ptr); }
+  std::shared_ptr<T> get() const { return std::static_pointer_cast<T>(ptr); }
+
+  // uses dynamic_pointer_cast.
+  template <class T> requires std::derived_from<T, ExprType>
+  std::shared_ptr<T> try_get() const { return std::dynamic_pointer_cast<T>(ptr); }
 };
 
 enum class TypePrime {
@@ -49,6 +56,9 @@ enum class TypePrime {
   kString
 };
 
+std::string_view get_type_view_from_prime(TypePrime prime);
+const std::vector<TypePrime>& type_primes();
+
 enum class TypeKind {
   kInvalid,
   kPrimitive,
@@ -57,9 +67,9 @@ enum class TypeKind {
   kStruct,
   kTuple,
   kSlice,
-  kAlias, // redundant...
   kEnum,
   kFunction,
+  kTrait
 };
 
 // referred to boost::hash_combine
@@ -79,8 +89,6 @@ protected:
 
   virtual bool equals_impl(const ExprType &other) const = 0;
   static void combine_hash_impl(std::size_t &seed, std::size_t h);
-private:
-  TypePtr remove_alias() const;
 };
 
 class PrimitiveType : public ExprType {
@@ -167,21 +175,6 @@ private:
   TypePtr _type;
 };
 
-class AliasType : public ExprType {
-public:
-  explicit AliasType(std::string_view ident)
-  : ExprType(TypeKind::kAlias), _ident(std::move(ident)) {}
-  void set_type(TypePtr type) { _type = std::move(type); }
-  std::string_view ident() const { return _ident; }
-  TypePtr type() const { return _type; }
-  void combine_hash(std::size_t &seed) const override;
-protected:
-  bool equals_impl(const ExprType &other) const override;
-private:
-  std::string_view _ident;
-  TypePtr _type;
-};
-
 class EnumType : public ExprType {
 public:
   explicit EnumType(std::string_view ident)
@@ -202,18 +195,51 @@ private:
 class FunctionType : public ExprType {
 public:
   FunctionType(
-    std::string ident,
+    std::string_view ident,
     std::vector<TypePtr> &&params
-  ): ExprType(TypeKind::kFunction), _ident(std::move(ident)),
+  ): ExprType(TypeKind::kFunction), _ident(ident),
   _params(std::move(params)) {}
-  const std::string& ident() const { return _ident; }
+  std::string_view ident() const { return _ident; }
   const std::vector<TypePtr>& params() const { return _params; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
-  std::string _ident;
+  std::string_view _ident;
   std::vector<TypePtr> _params;
+};
+
+class TraitType : public ExprType {
+public:
+  explicit TraitType(std::string_view ident)
+  : ExprType(TypeKind::kTrait), _ident(ident) {}
+  void add_asso_func(std::string_view ident, TypePtr asso_func) {
+    if(!asso_func.try_get<FunctionType>())
+      throw std::runtime_error("TraitType: Not a trait function");
+    _asso_funcs.emplace(ident, std::move(asso_func));
+  }
+  void add_asso_const(std::string_view ident, TypePtr asso_const) {
+    _asso_consts.emplace(ident, std::move(asso_const));
+  }
+  void add_asso_type(std::string_view ident, TypePtr asso_type) {
+    _asso_types.emplace(ident, std::move(asso_type));
+  }
+  std::string_view ident() const { return _ident; }
+  const std::unordered_map<std::string_view, TypePtr>& asso_funcs() const {
+    return _asso_funcs;
+  }
+  const std::unordered_map<std::string_view, TypePtr>& asso_types() const {
+    return _asso_types;
+  }
+  const std::unordered_map<std::string_view, TypePtr>& asso_consts() const {
+    return _asso_consts;
+  }
+  void combine_hash(std::size_t &seed) const override;
+protected:
+  bool equals_impl(const ExprType &other) const override;
+private:
+  std::string_view _ident;
+  std::unordered_map<std::string_view, TypePtr> _asso_funcs, _asso_types, _asso_consts;
 };
 
 class TypePool {

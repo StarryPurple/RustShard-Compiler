@@ -67,6 +67,7 @@ enum class SymbolKind {
   kConstant,
   kTrait,
   kTypeAlias,
+  kType
 };
 
 class BasicVisitor;
@@ -97,7 +98,11 @@ struct SymbolInfo {
 class TypeInfo {
 public:
   sem_type::TypePtr get_type() const { return _tp; } // NOLINT
-  void set_type(sem_type::TypePtr tp) { _tp = std::move(tp); }
+  void set_type(sem_type::TypePtr tp) {
+    if(_tp.operator bool())
+      throw std::runtime_error("TypeInfo already set");
+    _tp = std::move(tp);
+  }
 private:
   sem_type::TypePtr _tp;
 };
@@ -105,6 +110,19 @@ private:
 class Scope {
 public:
   void init_scope() { _symbol_set.clear(); }
+  void load_primitive(sem_type::TypePool *pool) {
+    for(const auto prime: sem_type::type_primes()) {
+      auto ident = sem_type::get_type_view_from_prime(prime);
+      _symbol_set.emplace(ident, SymbolInfo{
+        .node = nullptr,
+        .ident = ident,
+        .kind = SymbolKind::kType,
+        .type = pool->make_type<sem_type::PrimitiveType>(prime),
+        .is_const = false,
+        .is_mut = false
+      });
+    }
+  }
   bool add_symbol(std::string_view ident, const SymbolInfo &symbol);
   SymbolInfo* find_symbol(std::string_view ident);
   const SymbolInfo* find_symbol(std::string_view ident) const;
@@ -126,11 +144,14 @@ private:
 
 class ScopeInfo {
 public:
-  void set_scope(std::unique_ptr<Scope> scope) { _scope = std::move(scope); }
+  void set_scope(std::unique_ptr<Scope> scope) {
+    if(_scope.operator bool())
+      throw std::runtime_error("Scope already set");
+    _scope = std::move(scope);
+  }
+  const std::unique_ptr<Scope>& scope() const { return _scope; }
 private:
   std::unique_ptr<Scope> _scope;
-public:
-  const std::unique_ptr<Scope>& scope() const { return _scope; }
 };
 
 }

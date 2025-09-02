@@ -1,10 +1,40 @@
 #include "ast_type.h"
 
+#include <unordered_map>
+
 namespace insomnia::rust_shard::sem_type {
 
-bool TypePtr::operator==(const TypePtr &that) const {
-  if(!ptr || !that.ptr) return ptr == that.ptr;
-  return *ptr == *that.ptr;
+std::string_view get_type_view_from_prime(TypePrime prime) {
+  static const std::unordered_map<TypePrime, std::string_view> table = {
+    {TypePrime::kChar, "char"}, {TypePrime::kBool, "bool"},
+    {TypePrime::kI8, "i8"}, {TypePrime::kI16, "i16"},
+    {TypePrime::kI32, "i32"}, {TypePrime::kI64, "i64"},
+    {TypePrime::kU8, "u8"}, {TypePrime::kU16, "u16"},
+    {TypePrime::kU32, "u32"}, {TypePrime::kU64, "u64"},
+    {TypePrime::kISize, "isize"}, {TypePrime::kUSize, "usize"},
+    {TypePrime::kF32, "f32"}, {TypePrime::kF64, "f64"},
+    {TypePrime::kString, "str"}
+  };
+  return table.at(prime);
+}
+
+const std::vector<TypePrime>& type_primes() {
+  static const std::vector<TypePrime> table = {
+    TypePrime::kChar, TypePrime::kBool,
+    TypePrime::kI8, TypePrime::kI16,
+    TypePrime::kI32, TypePrime::kI64,
+    TypePrime::kU8, TypePrime::kU16,
+    TypePrime::kU32, TypePrime::kU64,
+    TypePrime::kISize, TypePrime::kUSize,
+    TypePrime::kF32, TypePrime::kF64,
+    TypePrime::kString
+  };
+  return table;
+}
+
+bool TypePtr::operator==(const TypePtr &other) const {
+  if(!ptr || !other.ptr) return ptr == other.ptr;
+  return *ptr == *other.ptr;
 }
 
 std::size_t ExprType::hash() const {
@@ -14,18 +44,8 @@ std::size_t ExprType::hash() const {
 }
 
 bool ExprType::operator==(const ExprType &other) const  {
-  auto self_ptr = remove_alias();
-  auto other_ptr = other.remove_alias();
-  if(self_ptr->_kind != other_ptr->_kind) return false;
-  return self_ptr->equals_impl(*other_ptr);
-}
-
-TypePtr ExprType::remove_alias() const {
-  auto ptr = TypePtr(std::const_pointer_cast<ExprType>(shared_from_this()));
-  while(ptr->kind() == TypeKind::kAlias) {
-    ptr = ptr.get<AliasType>()->type();
-  }
-  return ptr;
+  if(_kind != other._kind) return false;
+  return this->equals_impl(other);
 }
 
 void ExprType::combine_hash_impl(std::size_t &seed, std::size_t h) {
@@ -117,17 +137,6 @@ bool SliceType::equals_impl(const ExprType &other) const {
   return *_type == *static_cast<const SliceType&>(other).type();
 }
 
-void AliasType::combine_hash(std::size_t &seed) const {
-  _type->combine_hash(seed);
-  // Do nothing more. Type alias shouldn't affect the essence of the type.
-}
-
-bool AliasType::equals_impl(const ExprType &other) const {
-  throw std::runtime_error("Compiler type error: Trying to check alias equality.");
-  // code should not reach here. But, just in case...
-  return *_type == *static_cast<const AliasType&>(other).type();
-}
-
 void EnumType::combine_hash(std::size_t &seed) const {
   static constexpr std::hash<std::string_view> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
@@ -158,7 +167,7 @@ bool EnumType::equals_impl(const ExprType &other) const {
 }
 
 void FunctionType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<std::string> hasher;
+  static constexpr std::hash<std::string_view> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   for(const auto &type: _params)
@@ -177,7 +186,21 @@ bool FunctionType::equals_impl(const ExprType &other) const {
   return true;
 }
 
+void TraitType::combine_hash(std::size_t &seed) const {
+  static constexpr std::hash<std::string_view> hasher;
+  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+  combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
+}
+
+bool TraitType::equals_impl(const ExprType &other) const {
+  const auto &other_trait = static_cast<const TraitType&>(other);
+  if(_ident != other_trait.ident()) return false;
+  return true;
+}
+
 TypePool::TypePool() {
+  // ugh... no need.
+  /*
   // register all primitive types first.
   static const std::vector<TypePrime> primes = {
     TypePrime::kBool, TypePrime::kChar,
@@ -192,6 +215,7 @@ TypePool::TypePool() {
   }
   // unit type
   _pool.emplace(std::make_shared<TupleType>(std::vector<TypePtr>()));
+  */
 }
 
 

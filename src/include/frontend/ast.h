@@ -63,7 +63,7 @@ private:
   // Intentional blank.
 };
 
-class Function : public VisItem {
+class Function : public VisItem, public TypeInfo {
 public:
   Function(
     bool is_const,
@@ -236,7 +236,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
-class Struct : public VisItem {
+class Struct : public VisItem, public TypeInfo {
 public:
   Struct() = default;
 private:
@@ -285,7 +285,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
-class Enumeration : public VisItem {
+class Enumeration : public VisItem, public TypeInfo {
 public:
   Enumeration(
     std::string_view enum_name,
@@ -339,7 +339,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(const_expr, _const_expr)
 };
 
-class ConstantItem : public VisItem {
+class ConstantItem : public VisItem, public TypeInfo {
 public:
   ConstantItem(
     std::string_view item_name,
