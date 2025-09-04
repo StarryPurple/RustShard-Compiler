@@ -18,9 +18,11 @@
 #define INSOMNIA_AST_H
 
 #include <memory>
+#include <optional>
 #include <variant>
 #include <vector>
 
+#include "ast_constant.h"
 #include "ast_fwd.h"
 #include "ast_defs.h"
 #include "ast_visitor.h"
@@ -312,7 +314,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(items, _items)
 };
 
-class EnumItem : public BasicNode {
+class EnumItem : public BasicNode, public TypeInfo {
 public:
   EnumItem(
     std::string_view item_name,
@@ -357,7 +359,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(const_expr_opt, _const_expr_opt)
 };
 
-class Trait : public VisItem, public ScopeInfo {
+class Trait : public VisItem, public TypeInfo, public ScopeInfo {
 public:
   Trait(
     std::string_view trait_name,
@@ -415,7 +417,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(func, _func)
 };
 
-class TypeAlias : public VisItem {
+class TypeAlias : public VisItem, public TypeInfo {
 public:
   TypeAlias(
     std::string_view alias_name,
@@ -507,12 +509,29 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
 };
 
+class ConstEvaluator;
+
 class Expression : public BasicNode, public TypeInfo {
+  friend ConstEvaluator;
 public:
   Expression() = default;
   virtual bool has_block() const = 0;
+  bool has_constant() const { return _const_value.has_value(); }
+protected:
+  std::optional<sem_const::ConstValPtr> _const_value;
 private:
-  // Intentional blank.
+  // for ConstEvaluator
+  void set_const_value(sem_const::ConstValPtr value) {
+    _const_value = std::move(value);
+  }
+  /*
+  template <class T>
+  void set_const_value(sem_type::TypePtr type, const T &value) {
+    (*_const_value)->set(std::move(type), value);
+  }
+  */
+public:
+  EXPOSE_FIELD_CONST_REFERENCE(const_value, _const_value);
 };
 
 class ExpressionWithoutBlock : public Expression {
@@ -524,23 +543,15 @@ private:
 };
 
 class LiteralExpression : public ExpressionWithoutBlock {
-  using TypePrime = insomnia::rust_shard::sem_type::TypePrime;
 public:
-  template <class Spec>
-  explicit LiteralExpression(TypePrime prime, Spec &&spec)
+  // must be assigned at construction
+  template <class Spec> requires type_utils::is_primitive<Spec>
+  explicit LiteralExpression(sem_type::TypePrime prime, Spec &&spec)
   : _prime(prime), _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  TypePrime _prime;
-  std::variant<
-    char,
-    std::string,
-    std::int64_t,
-    std::uint64_t,
-    float,
-    double,
-    bool
-  > _spec;
+  sem_type::TypePrime _prime;
+  type_utils::primitive_variant _spec;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(prime, _prime)
   EXPOSE_FIELD_CONST_REFERENCE(spec_value, _spec)
@@ -623,6 +634,7 @@ private:
   Operator _oper;
   std::unique_ptr<Expression> _expr;
 public:
+  // kSub/kLogicalNot
   EXPOSE_FIELD_CONST_REFERENCE(oper, _oper)
   EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
 };
@@ -639,6 +651,7 @@ private:
   Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
 public:
+  // kAdd/kSub/kMul/kDiv/kMod/kBitwiseAnd/kBitwiseOr/kBitwiseXor/kShl/kShr
   EXPOSE_FIELD_CONST_REFERENCE(oper, _oper)
   EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
   EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
@@ -656,6 +669,7 @@ private:
   Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
 public:
+  // kEq/kNe/kGt/kLt/kGe/kLe
   EXPOSE_FIELD_CONST_REFERENCE(oper, _oper)
   EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
   EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
@@ -673,6 +687,7 @@ private:
   Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
 public:
+  // kLogicalAnd/kLogicalOr
   EXPOSE_FIELD_CONST_REFERENCE(oper, _oper)
   EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
   EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)
@@ -719,6 +734,9 @@ private:
   Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
 public:
+  // kAddAssign/kSubAssign/kMulAssign/kDivAssign/kModAssign/
+  // kBitwiseAndAssign/kBitwiseOrAssign/kBitwiseXorAssign/
+  // kShlAssign/kShrAssign
   EXPOSE_FIELD_CONST_REFERENCE(oper, _oper);
   EXPOSE_FIELD_CONST_REFERENCE(expr1, _expr1)
   EXPOSE_FIELD_CONST_REFERENCE(expr2, _expr2)

@@ -17,7 +17,6 @@ enum class Operator {
   kMul, // TokenType::kStar
   kDiv, // TokenType::kSlash
   kMod, // TokenType::kPercent
-  kPow, // TokenType::kCaret
 
   // Compound Assignment Operators
   kAddAssign, // TokenType::kPlusEq
@@ -25,12 +24,9 @@ enum class Operator {
   kMulAssign, // TokenType::kStarEq
   kDivAssign, // TokenType::kSlashEq
   kModAssign, // TokenType::kPercentEq
-  kPowAssign, // TokenType::kCaretEq
 
   // Logical and Comparison Operators
-  kAnd,        // TokenType::kAnd
-  kOr,         // TokenType::kOr
-  kNot,        // TokenType::kNot
+  kLogicalNot,        // TokenType::kNot
   kLogicalAnd, // TokenType::kAndAnd
   kLogicalOr,  // TokenType::kOrOr
   kEq,         // TokenType::kEqEq
@@ -48,6 +44,7 @@ enum class Operator {
   kShr,              // TokenType::kShr
   kBitwiseAndAssign, // TokenType::kAndEq
   kBitwiseOrAssign,  // TokenType::kOrEq
+  kBitwiseXorAssign, // TokenType::kCaretEq
   kShlAssign,        // TokenType::kShlEq
   kShrAssign,        // TokenType::kShrEq
 
@@ -134,12 +131,23 @@ private:
 
 class ErrorRecorder {
 public:
-  void reset() { _errors.clear(); }
-  void report(std::string err) { _errors.push_back(std::move(err)); }
-  const std::vector<std::string>& errors() const { return _errors; }
-  bool has_error() const { return !_errors.empty(); }
+  void reset() { _tagged_errors.clear(); _untagged_errors.clear(); }
+  // only the earliest error with the tag will be stored
+  void tagged_report(std::string tag, std::string err) {
+    if(!_tagged_errors.contains(tag)) {
+      _tagged_errors.emplace(std::move(tag), std::move(err));
+    }
+  }
+  void report(std::string err) {
+    _untagged_errors.push_back(std::move(err));
+  }
+  bool has_error() const { return !_untagged_errors.empty() || !_tagged_errors.empty(); }
 private:
-  std::vector<std::string> _errors;
+  std::unordered_map<std::string, std::string> _tagged_errors;
+  std::vector<std::string> _untagged_errors;
+public:
+  const decltype(_tagged_errors)& tagged_errors() const { return _tagged_errors; }
+  const decltype(_untagged_errors)& untagged_errors() const { return _untagged_errors; }
 };
 
 class ScopeInfo {

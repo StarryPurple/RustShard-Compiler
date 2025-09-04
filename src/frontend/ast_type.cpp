@@ -33,8 +33,8 @@ const std::vector<TypePrime>& type_primes() {
 }
 
 bool TypePtr::operator==(const TypePtr &other) const {
-  if(!ptr || !other.ptr) return ptr == other.ptr;
-  return *ptr == *other.ptr;
+  if(!_ptr || !other._ptr) return _ptr == other._ptr;
+  return *_ptr == *other._ptr;
 }
 
 std::size_t ExprType::hash() const {
@@ -198,25 +198,17 @@ bool TraitType::equals_impl(const ExprType &other) const {
   return true;
 }
 
-TypePool::TypePool() {
-  // ugh... no need.
-  /*
-  // register all primitive types first.
-  static const std::vector<TypePrime> primes = {
-    TypePrime::kBool, TypePrime::kChar,
-    TypePrime::kI8, TypePrime::kI16, TypePrime::kI32, TypePrime::kI64,
-    TypePrime::kU8, TypePrime::kU16, TypePrime::kU32, TypePrime::kU64,
-    TypePrime::kISize, TypePrime::kUSize,
-    TypePrime::kF32, TypePrime::kF64,
-    TypePrime::kString
-  };
-  for(auto prime: primes) {
-    _pool.emplace(std::make_shared<PrimitiveType>(prime));
-  }
-  // unit type
-  _pool.emplace(std::make_shared<TupleType>(std::vector<TypePtr>()));
-  */
+void RangeType::combine_hash(std::size_t &seed) const {
+  static constexpr std::hash<std::string_view> hasher;
+  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+  _type->combine_hash(seed);
 }
+
+bool RangeType::equals_impl(const ExprType &other) const {
+  const auto &other_range = static_cast<const RangeType&>(other);
+  return *_type == *other_range.type();
+}
+
 
 
 }

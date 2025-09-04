@@ -843,7 +843,6 @@ Operator token_to_operator(TokenType type) {
     {TokenType::kStar,    Operator::kMul},
     {TokenType::kSlash,   Operator::kDiv},
     {TokenType::kPercent, Operator::kMod},
-    {TokenType::kCaret,   Operator::kPow},
 
     // Compound Assignment Operators
     {TokenType::kPlusEq,   Operator::kAddAssign},
@@ -851,12 +850,9 @@ Operator token_to_operator(TokenType type) {
     {TokenType::kStarEq,   Operator::kMulAssign},
     {TokenType::kSlashEq,  Operator::kDivAssign},
     {TokenType::kPercentEq,Operator::kModAssign},
-    {TokenType::kCaretEq,  Operator::kPowAssign},
 
     // Logical and Comparison Operators
-    {TokenType::kAnd,      Operator::kAnd},
-    {TokenType::kOr,       Operator::kOr},
-    {TokenType::kNot,      Operator::kNot},
+    {TokenType::kNot,      Operator::kLogicalNot},
     {TokenType::kAndAnd,   Operator::kLogicalAnd},
     {TokenType::kOrOr,     Operator::kLogicalOr},
     {TokenType::kEqEq,     Operator::kEq},
@@ -871,10 +867,14 @@ Operator token_to_operator(TokenType type) {
     // The parser's context (e.g., in a bitwise expression context)
     // determines the specific operator. This map provides the general
     // mapping. The specific bitwise assignments are unambiguous.
+    {TokenType::kAnd,      Operator::kBitwiseAnd},
+    {TokenType::kOr,       Operator::kBitwiseOr},
+    {TokenType::kCaret,    Operator::kBitwiseXor},
     {TokenType::kShl,      Operator::kShl},
     {TokenType::kShr,      Operator::kShr},
     {TokenType::kAndEq,    Operator::kBitwiseAndAssign},
     {TokenType::kOrEq,     Operator::kBitwiseOrAssign},
+    {TokenType::kCaretEq,  Operator::kBitwiseXorAssign},
     {TokenType::kShlEq,    Operator::kShlAssign},
     {TokenType::kShrEq,    Operator::kShrAssign},
 
@@ -957,9 +957,9 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence, TokenTy
     } break;
       // infix
     case TokenType::kPlus: case TokenType::kMinus: case TokenType::kStar:
-    case TokenType::kSlash: case TokenType::kPercent: case TokenType::kCaret:
-    case TokenType::kAnd: case TokenType::kOr: case TokenType::kShl:
-    case TokenType::kShr: {
+    case TokenType::kSlash: case TokenType::kPercent:
+    case TokenType::kAnd: case TokenType::kOr: case TokenType::kCaret:
+    case TokenType::kShl: case TokenType::kShr: {
       _ast_ctx->consume();
       auto rht = parseInfixExpression(new_pred, delim);
       EXPECT_POINTER_NOT_EMPTY(rht);
@@ -985,9 +985,9 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence, TokenTy
       lft = std::make_unique<AssignmentExpression>(std::move(lft), std::move(rht));
     } break;
     case TokenType::kPlusEq: case TokenType::kMinusEq: case TokenType::kStarEq:
-    case TokenType::kSlashEq: case TokenType::kPercentEq: case TokenType::kCaretEq:
-    case TokenType::kAndEq: case TokenType::kOrEq: case TokenType::kShlEq:
-    case TokenType::kShrEq: {
+    case TokenType::kSlashEq: case TokenType::kPercentEq:
+    case TokenType::kAndEq: case TokenType::kOrEq: case TokenType::kCaretEq:
+    case TokenType::kShlEq: case TokenType::kShrEq: {
       _ast_ctx->consume();
       auto rht = parseInfixExpression(new_pred - 1, delim); // right associative
       EXPECT_POINTER_NOT_EMPTY(rht);
@@ -1236,7 +1236,7 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     while(lexeme[l] != '\"') ++l;
     while(lexeme[r] != '\"') --r;
     lexeme = lexeme.substr(l + 1, r - l - 1);
-    return std::make_unique<LiteralExpression>(Prime::kString, std::string(lexeme));
+    return std::make_unique<LiteralExpression>(Prime::kString, lexeme);
   }
   case TokenType::kCharLiteral: {
     tracker.commit();

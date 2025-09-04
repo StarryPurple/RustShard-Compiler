@@ -9,9 +9,6 @@
 #include <unordered_set>
 
 #include "ast_type.h"
-#include "ast_type.h"
-#include "ast_type.h"
-#include "ast_type.h"
 
 namespace insomnia::rust_shard::sem_type {
 
@@ -19,32 +16,32 @@ enum class TypeKind;
 class ExprType;
 
 // a wrapper, supporting dynamic cast from basic ExprType
-struct TypePtr {
-  std::shared_ptr<ExprType> ptr;
-
+class TypePtr {
+  std::shared_ptr<ExprType> _ptr;
+public:
   TypePtr() = default;
-  explicit TypePtr(std::shared_ptr<ExprType> p): ptr(std::move(p)) {}
-  TypePtr(const TypePtr&) = default;
-  TypePtr(TypePtr&&) = default;
-  TypePtr& operator=(const TypePtr&) = default;
-  TypePtr& operator=(TypePtr&&) = default;
+  explicit TypePtr(std::shared_ptr<ExprType> p): _ptr(std::move(p)) {}
+  TypePtr(const TypePtr &) = default;
+  TypePtr(TypePtr &&) noexcept = default;
+  TypePtr& operator=(const TypePtr &) = default;
+  TypePtr& operator=(TypePtr &&) noexcept = default;
   ~TypePtr() = default;
 
   bool operator==(const TypePtr &other) const;
 
-  ExprType& operator*() { return *ptr.get(); }
-  ExprType* operator->() { return ptr.get(); }
-  const ExprType& operator*() const { return *ptr.get(); }
-  const ExprType* operator->() const { return ptr.get(); }
-  explicit operator bool() const { return static_cast<bool>(ptr); }
+  ExprType& operator*() { return *_ptr.get(); }
+  ExprType* operator->() { return _ptr.get(); }
+  const ExprType& operator*() const { return *_ptr.get(); }
+  const ExprType* operator->() const { return _ptr.get(); }
+  explicit operator bool() const { return static_cast<bool>(_ptr); }
 
-  // uses static_pointer_cast. use if only when you confirmed its inner type.
+  // uses static_pointer_cast. use it only when you have confirmed its inner type.
   template <class T> requires std::derived_from<T, ExprType>
-  std::shared_ptr<T> get() const { return std::static_pointer_cast<T>(ptr); }
+  std::shared_ptr<T> get() const { return std::static_pointer_cast<T>(_ptr); }
 
   // uses dynamic_pointer_cast.
   template <class T> requires std::derived_from<T, ExprType>
-  std::shared_ptr<T> try_get() const { return std::dynamic_pointer_cast<T>(ptr); }
+  std::shared_ptr<T> try_get() const { return std::dynamic_pointer_cast<T>(_ptr); }
 };
 
 enum class TypePrime {
@@ -69,7 +66,8 @@ enum class TypeKind {
   kSlice,
   kEnum,
   kFunction,
-  kTrait
+  kTrait,
+  kRange
 };
 
 // referred to boost::hash_combine
@@ -178,18 +176,20 @@ private:
 class EnumType : public ExprType {
 public:
   explicit EnumType(std::string_view ident)
-  : ExprType(TypeKind::kEnum), _ident(std::move(ident)) {}
+  : ExprType(TypeKind::kEnum), _ident(ident) {}
   std::string_view ident() const { return _ident; }
-  void set_variants(std::map<std::string_view, TypePtr> &&variants) {
+  void set_variants(std::map<std::string_view, std::pair<TypePtr, std::int64_t>> &&variants) {
     _variants = std::move(variants);
   }
-  const std::map<std::string_view, TypePtr>& variants() const { return _variants; }
+  const std::map<std::string_view, std::pair<TypePtr, std::int64_t>>& variants() const {
+    return _variants;
+  }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
   std::string_view _ident;
-  std::map<std::string_view, TypePtr> _variants;
+  std::map<std::string_view, std::pair<TypePtr, std::int64_t>> _variants;
 };
 
 class FunctionType : public ExprType {
@@ -242,6 +242,18 @@ private:
   std::unordered_map<std::string_view, TypePtr> _asso_funcs, _asso_types, _asso_consts;
 };
 
+class RangeType : public ExprType {
+public:
+  explicit RangeType(TypePtr type)
+  : ExprType(TypeKind::kRange), _type(std::move(type)) {}
+  TypePtr type() const { return _type; }
+  void combine_hash(std::size_t &seed) const override;
+protected:
+  bool equals_impl(const ExprType &other) const override;
+private:
+  TypePtr _type;
+};
+
 class TypePool {
   struct ExprTypeSharedPtrHash {
     std::size_t operator()(const std::shared_ptr<ExprType> &obj) const {
@@ -256,7 +268,7 @@ class TypePool {
     ) const { return *A == *B; }
   };
 public:
-  TypePool();
+  TypePool() = default;
   template <class T, class... Args>
   requires std::derived_from<T, ExprType> && std::is_constructible_v<T, Args...>
   std::shared_ptr<T> make_raw_type(Args &&...args) {

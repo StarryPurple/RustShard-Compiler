@@ -11,6 +11,7 @@ namespace insomnia::rust_shard::ast {
 
 // check branch syntax (break/continue/return), set scopes and collect symbols
 class SymbolCollector : public RecursiveVisitor {
+  static const std::string kDuplicateDefinitionErr, kLoopErr;
 public:
   explicit SymbolCollector(ErrorRecorder *recorder): _recorder(recorder) {}
 
@@ -249,39 +250,57 @@ public:
   : _recorder(recorder), _pool(pool) {}
 
   void preVisit(StructStruct &node) override {
-    auto symbol = find_symbol(node.ident());
-    if(!symbol) {
+    auto info = find_symbol(node.ident());
+    if(!info) {
       _recorder->report("Symbol not found for StructStruct");
       return;
     }
-    symbol->type = _pool->make_type<sem_type::StructType>(node.ident());
+    info->type = _pool->make_type<sem_type::StructType>(node.ident());
+    node.set_type(info->type);
   }
 
   void preVisit(Enumeration &node) override {
-    auto symbol = find_symbol(node.ident());
-    if(!symbol) {
+    auto info = find_symbol(node.ident());
+    if(!info) {
       _recorder->report("Symbol not found for Enumeration");
       return;
     }
-    symbol->type = _pool->make_type<sem_type::EnumType>(node.ident());
+    info->type = _pool->make_type<sem_type::EnumType>(node.ident());
+    if(node.items_opt()) {
+      for(auto &item: node.items_opt()->items()) {
+        item->set_type(info->type);
+      }
+    }
+    node.set_type(info->type);
   }
 
   void preVisit(ConstantItem &node) override {
-    auto symbol = find_symbol(node.ident());
-    if(!symbol) {
+    auto info = find_symbol(node.ident());
+    if(!info) {
       _recorder->report("Symbol not found for ConstItem");
       return;
     }
-    symbol->is_const = true;
+    info->is_const = true;
+    node.set_type(info->type);
   }
 
   void preVisit(TypeAlias &node) override {
-    auto symbol = find_symbol(node.ident());
-    if(!symbol) {
+    auto info = find_symbol(node.ident());
+    if(!info) {
       _recorder->report("Symbol not found for ConstItem");
       return;
     }
-    // set type later
+    node.set_type(info->type);
+  }
+
+  void preVisit(Trait &node) override {
+    auto info = find_symbol(node.ident());
+    if(!info) {
+      _recorder->report("Symbol not found for Trait");
+      return;
+    }
+    info->type = _pool->make_type<sem_type::TraitType>(node.ident());
+    node.set_type(info->type);
   }
 
 private:
@@ -289,8 +308,51 @@ private:
   sem_type::TypePool *_pool;
 };
 
+// evaluate const items.
+// if evaluation fails, the ConstValue in the expression will not be set.
+class ConstEvaluator: public RecursiveVisitor {
+  static const std::string kErrTag;
+public:
+  ConstEvaluator(ErrorRecorder *recorder, sem_type::TypePool *type_pool, sem_const::ConstPool *const_pool)
+  : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool) {}
+
+  void postVisit(LiteralExpression &node);
+  void postVisit(BorrowExpression &node);
+  void postVisit(DereferenceExpression &node);
+  void postVisit(NegationExpression &node);
+  void postVisit(ArithmeticOrLogicalExpression &node);
+  void postVisit(ComparisonExpression &node);
+  void postVisit(LazyBooleanExpression &node);
+  void postVisit(TypeCastExpression &node);
+  void postVisit(AssignmentExpression &node);
+  void postVisit(CompoundAssignmentExpression &node);
+  void postVisit(GroupedExpression &node);
+  void postVisit(ArrayExpression &node);
+  void postVisit(IndexExpression &node);
+  void postVisit(TupleExpression &node);
+  void postVisit(TupleIndexingExpression &node);
+  void postVisit(StructExpression &node);
+  void postVisit(FieldExpression &node);
+  void postVisit(ContinueExpression &node);
+  void postVisit(BreakExpression &node);
+
+  void postVisit(CallExpression &node) {
+    _recorder->report("Function consteval is not supported");
+  }
+  void postVisit(MethodCallExpression &node) {
+    _recorder->report("Method function consteval is not supported");
+  }
+private:
+  ErrorRecorder *_recorder;
+  sem_type::TypePool *_type_pool;
+  sem_const::ConstPool *_const_pool;
+};
+
 // fill the struct, enum, const and alias types.
 class TypeFiller : public ScopedVisitor {
+private:
+  void constEvaluate(Expression &node) {
+  }
 public:
   TypeFiller(ErrorRecorder *recorder, sem_type::TypePool *pool)
   : _recorder(recorder), _pool(pool) {}
@@ -302,10 +364,6 @@ public:
 
   void postVisit(StructStruct &node) override {
     auto info = find_symbol(node.ident());
-    if(!info || info->kind != SymbolKind::kStruct || !info->type) {
-      _recorder->report("Struct symbol not filled");
-      return;
-    }
     std::map<std::string_view, sem_type::TypePtr> struct_fields;
     if(node.fields_opt()) {
       for(const auto &field: node.fields_opt()->fields()) {
@@ -319,20 +377,36 @@ public:
       }
     }
     info->type.get<sem_type::StructType>()->set_fields(std::move(struct_fields));
-    node.set_type(info->type);
   }
 
-  void preVisit(Enumeration &node) override {
+  void postVisit(Enumeration &node) override {
+    auto info = find_symbol(node.ident());
+    std::map<std::string_view, std::pair<sem_type::TypePtr, std::int64_t>> enum_variants;
+    std::int64_t dis = 0;
+    if(node.items_opt()) {
+      for(const auto &item: node.items_opt()->items()) {
+        if(item->discr_opt()) {
+          _recorder->report("EnumItemDiscrimination not implemented");
+        }
+        enum_variants.emplace(
+          item->ident(),
+          std::pair(_pool->make_type<sem_type::PrimitiveType>(sem_type::TypePrime::kI64), dis)
+        );
+        ++dis;
+      }
+    }
+    info->type.get<sem_type::EnumType>()->set_variants(std::move(enum_variants));
+  }
+
+  void postVisit(ConstantItem &node) override {
+    auto info = find_symbol(node.ident());
+  }
+
+  void postVisit(TypeAlias &node) override {
 
   }
 
-  void preVisit(ConstantItem &node) override {
-
-  }
-
-  void preVisit(TypeAlias &node) override {
-
-  }
+  void postVisit(Trait &node) override;
 
 private:
   ErrorRecorder *_recorder;

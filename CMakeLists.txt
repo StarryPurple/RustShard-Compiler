@@ -10,6 +10,7 @@ add_library(frontend_lib STATIC
     src/frontend/ast_recursive_visitor.cpp
     src/frontend/syntax_check.cpp
     src/frontend/ast_defs.cpp
+    src/frontend/ast_constant.cpp
 )
 target_include_directories(frontend_lib PUBLIC
     src/include/common

@@ -46,8 +46,10 @@ int main() {
       if(error_recorder->has_error()) {
         std::cout << "Fail" << std::endl;
         std::cerr << "Symbol collection error." << std::endl;
-        for(const auto &error: error_recorder->errors())
+        for(const auto &error: error_recorder->untagged_errors())
           std::cerr << error << std::endl;
+        for(const auto &[tag, error]: error_recorder->tagged_errors())
+          std::cerr << tag << ": " << error << std::endl;
         break;
       }
       std::cout << "Success" << std::endl;
