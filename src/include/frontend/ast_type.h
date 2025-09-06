@@ -53,6 +53,7 @@ enum class TypePrime {
   kString
 };
 
+
 std::string_view get_type_view_from_prime(TypePrime prime);
 const std::vector<TypePrime>& type_primes();
 

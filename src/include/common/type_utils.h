@@ -14,7 +14,7 @@ struct type_list {
   using as_variant = std::variant<Ts...>;
 
   template <typename T>
-  static constexpr bool contains = is_one_of<std::decay_t<T>, Ts>;
+  static constexpr bool contains = is_one_of<T, Ts...>;
 };
 
 using primitives = type_list<
@@ -27,7 +27,7 @@ using primitives = type_list<
 using primitive_variant = primitives::as_variant;
 
 template <typename T>
-concept is_primitive = primitives::contains<T>;
+concept is_primitive = primitives::contains<std::decay_t<T>>;
 
 }
 

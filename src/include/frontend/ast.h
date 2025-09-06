@@ -769,6 +769,7 @@ public:
 class ArrayElements : public BasicNode {
 public:
   ArrayElements() = default;
+  virtual bool is_explicit() = 0;
 private:
   // Intentional blank.
 };
@@ -779,6 +780,7 @@ public:
     std::vector<std::unique_ptr<Expression>> &&expr_list
   ): _expr_list(std::move(expr_list)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool is_explicit() override { return true; }
 private:
   std::vector<std::unique_ptr<Expression>> _expr_list;
 public:
@@ -792,6 +794,7 @@ public:
     std::unique_ptr<Expression> &&len_expr
   ): _val_expr(std::move(val_expr)), _len_expr(std::move(len_expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool is_explicit() override { return false; }
 private:
   std::unique_ptr<Expression> _val_expr, _len_expr;
 public:

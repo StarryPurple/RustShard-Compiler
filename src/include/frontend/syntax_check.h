@@ -322,20 +322,39 @@ public:
   void postVisit(NegationExpression &node);
   void postVisit(ArithmeticOrLogicalExpression &node);
   void postVisit(ComparisonExpression &node);
-  void postVisit(LazyBooleanExpression &node);
+  void visit(LazyBooleanExpression &node);
   void postVisit(TypeCastExpression &node);
-  void postVisit(AssignmentExpression &node);
-  void postVisit(CompoundAssignmentExpression &node);
   void postVisit(GroupedExpression &node);
-  void postVisit(ArrayExpression &node);
-  void postVisit(IndexExpression &node);
-  void postVisit(TupleExpression &node);
-  void postVisit(TupleIndexingExpression &node);
-  void postVisit(StructExpression &node);
-  void postVisit(FieldExpression &node);
-  void postVisit(ContinueExpression &node);
-  void postVisit(BreakExpression &node);
-
+  void postVisit(ArrayExpression &node) {
+    _recorder->report("Array expression consteval is not supported");
+  }
+  void postVisit(IndexExpression &node) {
+    _recorder->report("Index expression consteval is not supported");
+  }
+  void postVisit(TupleExpression &node) {
+    _recorder->report("Tuple expression consteval is not supported");
+  }
+  void postVisit(TupleIndexingExpression &node) {
+    _recorder->report("Tuple index expression consteval is not supported");
+  }
+  void postVisit(StructExpression &node) {
+    _recorder->report("Struct expression consteval is not supported");
+  }
+  void postVisit(FieldExpression &node) {
+    _recorder->report("Field expression consteval is not supported");
+  }
+  void postVisit(ContinueExpression &node) {
+    _recorder->report("Continue expression consteval is not supported");
+  }
+  void postVisit(BreakExpression &node) {
+    _recorder->report("Break expression consteval is not supported");
+  }
+  void postVisit(AssignmentExpression &node) {
+    _recorder->report("Assignment consteval is not supported");
+  }
+  void postVisit(CompoundAssignmentExpression &node) {
+    _recorder->report("Compound assignment consteval is not supported");
+  }
   void postVisit(CallExpression &node) {
     _recorder->report("Function consteval is not supported");
   }
