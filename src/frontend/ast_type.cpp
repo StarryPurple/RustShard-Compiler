@@ -43,9 +43,17 @@ std::size_t ExprType::hash() const {
   return seed;
 }
 
-bool ExprType::operator==(const ExprType &other) const  {
-  if(_kind != other._kind) return false;
-  return this->equals_impl(other);
+const ExprType* ExprType::remove_alias() const {
+  auto current = this;
+  while(current->kind() == TypeKind::kAlias)
+    current = static_cast<const AliasType *>(current);
+  return current;
+}
+
+bool ExprType::operator==(const ExprType &other) const {
+  auto lhs = remove_alias(), rhs = other.remove_alias();
+  if(lhs->kind() != rhs->kind()) return false;
+  return lhs->equals_impl(*rhs);
 }
 
 void ExprType::combine_hash_impl(std::size_t &seed, std::size_t h) {
@@ -152,7 +160,7 @@ void EnumType::combine_hash(std::size_t &seed) const {
 
 bool EnumType::equals_impl(const ExprType &other) const {
   const auto &other_struct = static_cast<const EnumType&>(other);
-  if(_ident != other_struct.ident()) return false;
+  return _ident == other_struct.ident();
   // not rely on fields
   /*
   const auto &other_variants = other_struct.variants();
@@ -163,7 +171,6 @@ bool EnumType::equals_impl(const ExprType &other) const {
     if(*it->second != *other_it->second) return false;
   }
   */
-  return true;
 }
 
 void FunctionType::combine_hash(std::size_t &seed) const {
@@ -194,12 +201,10 @@ void TraitType::combine_hash(std::size_t &seed) const {
 
 bool TraitType::equals_impl(const ExprType &other) const {
   const auto &other_trait = static_cast<const TraitType&>(other);
-  if(_ident != other_trait.ident()) return false;
-  return true;
+  return _ident == other_trait.ident();
 }
 
 void RangeType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<std::string_view> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
 }
@@ -209,6 +214,25 @@ bool RangeType::equals_impl(const ExprType &other) const {
   return *_type == *other_range.type();
 }
 
+void EnumVariantType::combine_hash(std::size_t &seed) const {
+  parent_enum()->combine_hash(seed);
+  static constexpr std::hash<std::string_view> hasher;
+  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+  combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
+}
 
+bool EnumVariantType::equals_impl(const ExprType &other) const {
+  const auto other_ev = static_cast<const EnumVariantType&>(other);
+  return *parent_enum() == *other_ev.parent_enum() && _ident == other_ev.ident();
+}
+
+void AliasType::combine_hash(std::size_t &seed) const {
+  // do not let this layer affect anything
+  _type->combine_hash(seed);
+}
+
+bool AliasType::equals_impl(const ExprType &other) const {
+  throw std::runtime_error("ast type system error: comparing align types");
+}
 
 }

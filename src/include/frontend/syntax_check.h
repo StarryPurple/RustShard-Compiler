@@ -10,6 +10,7 @@
 namespace insomnia::rust_shard::ast {
 
 // check branch syntax (break/continue/return), set scopes and collect symbols
+// After this, all scopes shall be settled.
 class SymbolCollector : public RecursiveVisitor {
   static const std::string kDuplicateDefinitionErr, kLoopErr;
 public:
@@ -165,10 +166,9 @@ private:
   }
 };
 
+// Automatically enters/exits scopes.
 // Affected:
-//
 // preVisit, postVisit: Crate, BlockExpression, Function, InherentImpl, TraitImpl, Trait
-//
 // visit: MatchArms,
 class ScopedVisitor : public RecursiveVisitor {
 public:
@@ -244,10 +244,20 @@ private:
 };
 
 // collect struct, enum, const item and type alias.
+// After this, all types (including builtin ones) shall be registered in symbol type pool
+// (incomplete. some relationships not filled.)
+// Including: builtin primitive types, structs, enumeration, enumeration item (singleton type),
+// type aliases, and traits.
+// enumeration/enumeration_item relationship has been filled.
 class TypeDeclarator : public ScopedVisitor {
 public:
-  TypeDeclarator(ErrorRecorder *recorder, sem_type::TypePool *pool)
-  : _recorder(recorder), _pool(pool) {}
+  TypeDeclarator(ErrorRecorder *recorder, sem_type::TypePool *type_pool)
+  : _recorder(recorder), _type_pool(type_pool) {}
+
+  void preVisit(Crate &node) override {
+    ScopedVisitor::preVisit(node);
+    node.scope()->load_builtin_types(_type_pool);
+  }
 
   void preVisit(StructStruct &node) override {
     auto info = find_symbol(node.ident());
@@ -255,7 +265,7 @@ public:
       _recorder->report("Symbol not found for StructStruct");
       return;
     }
-    info->type = _pool->make_type<sem_type::StructType>(node.ident());
+    info->type = _type_pool->make_type<sem_type::StructType>(node.ident());
     node.set_type(info->type);
   }
 
@@ -265,23 +275,29 @@ public:
       _recorder->report("Symbol not found for Enumeration");
       return;
     }
-    info->type = _pool->make_type<sem_type::EnumType>(node.ident());
+    info->type = _type_pool->make_type<sem_type::EnumType>(node.ident());
+    node.set_type(info->type);
+    auto enum_ptr = info->type.get<sem_type::EnumType>();
+
+    // types of enum items
+    sem_type::EnumType::variant_map_t enum_variants;
     if(node.items_opt()) {
-      for(auto &item: node.items_opt()->items()) {
-        item->set_type(info->type);
+      sem_type::EnumVariantType::discriminant_t dis = 0;
+      for(const auto &item: node.items_opt()->items()) {
+        if(item->discr_opt()) {
+          _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
+        }
+        auto enum_variant_type = _type_pool->make_type<sem_type::EnumVariantType>(
+          item->ident(), dis, std::vector<sem_type::TypePtr>(), enum_ptr.get()
+        );
+        item->set_type(enum_variant_type); // each enum item _singleton_ has its distinct type
+        enum_variants.emplace(
+          item->ident(), enum_variant_type.get<sem_type::EnumVariantType>().get()
+        );
+        ++dis;
       }
     }
-    node.set_type(info->type);
-  }
-
-  void preVisit(ConstantItem &node) override {
-    auto info = find_symbol(node.ident());
-    if(!info) {
-      _recorder->report("Symbol not found for ConstItem");
-      return;
-    }
-    info->is_const = true;
-    node.set_type(info->type);
+    enum_ptr->set_variants(std::move(enum_variants));
   }
 
   void preVisit(TypeAlias &node) override {
@@ -290,6 +306,7 @@ public:
       _recorder->report("Symbol not found for ConstItem");
       return;
     }
+    info->type = _type_pool->make_type<sem_type::AliasType>(node.ident());
     node.set_type(info->type);
   }
 
@@ -299,13 +316,13 @@ public:
       _recorder->report("Symbol not found for Trait");
       return;
     }
-    info->type = _pool->make_type<sem_type::TraitType>(node.ident());
+    info->type = _type_pool->make_type<sem_type::TraitType>(node.ident());
     node.set_type(info->type);
   }
 
 private:
   ErrorRecorder *_recorder;
-  sem_type::TypePool *_pool;
+  sem_type::TypePool *_type_pool;
 };
 
 // evaluate const items.
@@ -369,16 +386,22 @@ private:
 
 // fill the struct, enum, const and alias types.
 class TypeFiller : public ScopedVisitor {
-private:
-  void constEvaluate(Expression &node) {
+  bool constEvaluate(Expression &node) {
+    node.accept(_evaluator);
+    if(!node.has_constant()) {
+      _recorder->report("const evaluation failed");
+      return false;
+    }
+    return true;
   }
 public:
-  TypeFiller(ErrorRecorder *recorder, sem_type::TypePool *pool)
-  : _recorder(recorder), _pool(pool) {}
+  TypeFiller(ErrorRecorder *recorder, sem_type::TypePool *type_pool, sem_const::ConstPool *const_pool)
+  : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool),
+  _evaluator(recorder, type_pool, const_pool) {}
 
   void preVisit(Crate &node) override {
     ScopedVisitor::preVisit(node);
-    node.scope()->load_primitive(_pool);
+    node.scope()->load_builtin_types(_type_pool);
   }
 
   void postVisit(StructStruct &node) override {
@@ -399,17 +422,26 @@ public:
   }
 
   void postVisit(Enumeration &node) override {
+    using TypePtr = sem_type::TypePtr;
     auto info = find_symbol(node.ident());
-    std::map<std::string_view, std::pair<sem_type::TypePtr, std::int64_t>> enum_variants;
-    std::int64_t dis = 0;
+    auto raw_enum_type = info->type.get_if<const sem_type::EnumType>();
+    if(!raw_enum_type) {
+      _recorder->report("TypeFiller: Not a enumeration type"); // ???
+      return;
+    }
+    sem_type::EnumType::variant_map_t enum_variants;
+    sem_type::EnumVariantType::discriminant_t dis = 0;
     if(node.items_opt()) {
       for(const auto &item: node.items_opt()->items()) {
         if(item->discr_opt()) {
-          _recorder->report("EnumItemDiscrimination not implemented");
+          _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
         }
+        auto enum_variant_type = _type_pool->make_type<sem_type::EnumVariantType>(
+          item->ident(), dis, std::vector<TypePtr>(), raw_enum_type
+        );
+        item->set_type(enum_variant_type); // each enum item _singleton_ has its distinct type
         enum_variants.emplace(
-          item->ident(),
-          std::pair(_pool->make_type<sem_type::PrimitiveType>(sem_type::TypePrime::kI64), dis)
+          item->ident(), enum_variant_type.get<sem_type::EnumVariantType>().get()
         );
         ++dis;
       }
@@ -419,19 +451,27 @@ public:
 
   void postVisit(ConstantItem &node) override {
     auto info = find_symbol(node.ident());
+
   }
 
   void postVisit(TypeAlias &node) override {
 
   }
 
-  void postVisit(Trait &node) override;
+  void postVisit(Trait &node) override {
+
+  }
+
+  // set the types
+
+  void postVisit(Type &node) override;
 
 private:
   ErrorRecorder *_recorder;
-  sem_type::TypePool *_pool;
+  sem_type::TypePool *_type_pool;
+  sem_const::ConstPool *_const_pool;
+  ConstEvaluator _evaluator;
 };
-
 
 }
 

@@ -19,7 +19,7 @@ void ConstEvaluator::postVisit(LiteralExpression &node) {
 const std::string ConstEvaluator::kErrTag = "ConstEvaluator Failure";
 
 void ConstEvaluator::postVisit(BorrowExpression &node) {
-  if(!node.expr()->const_value().has_value()) {
+  if(!node.expr()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner const evaluation failed");
     return;
   }
@@ -31,7 +31,7 @@ void ConstEvaluator::postVisit(BorrowExpression &node) {
 }
 
 void ConstEvaluator::postVisit(DereferenceExpression &node) {
-  if(!node.expr()->const_value().has_value()) {
+  if(!node.expr()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner const evaluation failed");
     return;
   }
@@ -44,7 +44,7 @@ void ConstEvaluator::postVisit(DereferenceExpression &node) {
 }
 
 void ConstEvaluator::postVisit(NegationExpression &node) {
-  if(!node.expr()->const_value().has_value()) {
+  if(!node.expr()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner const evaluation failed");
     return;
   }
@@ -94,7 +94,7 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
 }
 
 void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
-  if (!node.expr1()->const_value().has_value() || !node.expr2()->const_value().has_value()) {
+  if (!node.expr1()->has_constant() || !node.expr2()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
@@ -192,7 +192,7 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
 }
 
 void ConstEvaluator::postVisit(ComparisonExpression &node) {
-  if(!node.expr1()->const_value().has_value() || !node.expr2()->const_value().has_value()) {
+  if(!node.expr1()->has_constant() || !node.expr2()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
@@ -243,7 +243,7 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
   }
 
   node.expr1()->accept(*this);
-  if(!node.expr1()->const_value().has_value()) {
+  if(!node.expr1()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
@@ -272,7 +272,7 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
   }
 
   node.expr2()->accept(*this);
-  if(!node.expr2()->const_value().has_value()) {
+  if(!node.expr2()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
@@ -292,7 +292,7 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
 }
 
 void ConstEvaluator::postVisit(TypeCastExpression &node) {
-  if(!node.expr()->const_value().has_value()) {
+  if(!node.expr()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner const evaluation failed");
     return;
   }
@@ -303,7 +303,7 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     return;
   }
 
-  auto target_type = node.type_no_bounds()->get_type().try_get<sem_type::PrimitiveType>();
+  auto target_type = node.type_no_bounds()->get_type().get_if<sem_type::PrimitiveType>();
   if(!target_type) {
     _recorder->tagged_report(kErrTag, "Target type not primitive in type cast expression");
     return;
@@ -400,12 +400,11 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
 }
 
 void ConstEvaluator::postVisit(GroupedExpression &node) {
-  if(!node.expr()->const_value().has_value()) {
+  if(!node.expr()->has_constant()) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
   node.set_const_value(*node.expr()->const_value());
 }
-
 
 }

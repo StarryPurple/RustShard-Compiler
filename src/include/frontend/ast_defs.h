@@ -61,7 +61,7 @@ enum class SymbolKind {
   kFunction,
   kStruct,
   kEnum,
-  kConstant,
+  kConstant, // Variant
   kTrait,
   kTypeAlias,
   kType
@@ -89,7 +89,7 @@ struct SymbolInfo {
   std::string_view ident;
   SymbolKind kind;
   sem_type::TypePtr type;
-  bool is_const, is_mut;
+  bool is_mut;
 };
 
 class TypeInfo {
@@ -107,7 +107,7 @@ private:
 class Scope {
 public:
   void init_scope() { _symbol_set.clear(); }
-  void load_primitive(sem_type::TypePool *pool) {
+  void load_builtin_types(sem_type::TypePool *pool) {
     for(const auto prime: sem_type::type_primes()) {
       auto ident = sem_type::get_type_view_from_prime(prime);
       _symbol_set.emplace(ident, SymbolInfo{
@@ -115,7 +115,6 @@ public:
         .ident = ident,
         .kind = SymbolKind::kType,
         .type = pool->make_type<sem_type::PrimitiveType>(prime),
-        .is_const = false,
         .is_mut = false
       });
     }

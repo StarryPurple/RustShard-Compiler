@@ -9,6 +9,8 @@
 #include <unordered_set>
 
 #include "ast_type.h"
+#include "ast_type.h"
+#include "ast_type.h"
 
 namespace insomnia::rust_shard::sem_type {
 
@@ -41,7 +43,15 @@ public:
 
   // uses dynamic_pointer_cast.
   template <class T> requires std::derived_from<T, ExprType>
-  std::shared_ptr<T> try_get() const { return std::dynamic_pointer_cast<T>(_ptr); }
+  std::shared_ptr<T> get_if() const { return std::dynamic_pointer_cast<T>(_ptr); }
+
+  // uses static_pointer_cast. use it only when you have confirmed its inner type.
+  template <class T> requires std::derived_from<T, ExprType>
+  T* as() const { return static_cast<T*>(_ptr.get()); }
+
+  // uses dynamic_pointer_cast.
+  template <class T> requires std::derived_from<T, ExprType>
+  T* as_if() const { return dynamic_cast<T*>(_ptr.get()); }
 };
 
 enum class TypePrime {
@@ -68,7 +78,9 @@ enum class TypeKind {
   kEnum,
   kFunction,
   kTrait,
-  kRange
+  kRange,
+  kEnumVariant,
+  kAlias
 };
 
 // referred to boost::hash_combine
@@ -88,6 +100,8 @@ protected:
 
   virtual bool equals_impl(const ExprType &other) const = 0;
   static void combine_hash_impl(std::size_t &seed, std::size_t h);
+private:
+  const ExprType* remove_alias() const;
 };
 
 class PrimitiveType : public ExprType {
@@ -174,15 +188,19 @@ private:
   TypePtr _type;
 };
 
+class EnumVariantType;
+
 class EnumType : public ExprType {
 public:
+  using variant_map_t = std::unordered_map<std::string_view, const EnumVariantType *>;
+
   explicit EnumType(std::string_view ident)
   : ExprType(TypeKind::kEnum), _ident(ident) {}
   std::string_view ident() const { return _ident; }
-  void set_variants(std::map<std::string_view, std::pair<TypePtr, std::int64_t>> &&variants) {
+  void set_variants(variant_map_t &&variants) {
     _variants = std::move(variants);
   }
-  const std::map<std::string_view, std::pair<TypePtr, std::int64_t>>& variants() const {
+  const variant_map_t& variants() const {
     return _variants;
   }
   void combine_hash(std::size_t &seed) const override;
@@ -190,7 +208,7 @@ protected:
   bool equals_impl(const ExprType &other) const override;
 private:
   std::string_view _ident;
-  std::map<std::string_view, std::pair<TypePtr, std::int64_t>> _variants;
+  variant_map_t _variants;
 };
 
 class FunctionType : public ExprType {
@@ -212,10 +230,14 @@ private:
 
 class TraitType : public ExprType {
 public:
+  using asso_func_map_t = std::unordered_map<std::string_view, const FunctionType *>;
+  using asso_type_map_t = std::unordered_map<std::string_view, TypePtr>;
+  using asso_const_map_t = std::unordered_map<std::string_view, TypePtr>;
+
   explicit TraitType(std::string_view ident)
   : ExprType(TypeKind::kTrait), _ident(ident) {}
   void add_asso_func(std::string_view ident, TypePtr asso_func) {
-    if(!asso_func.try_get<FunctionType>())
+    if(!asso_func.get_if<FunctionType>())
       throw std::runtime_error("TraitType: Not a trait function");
     _asso_funcs.emplace(ident, std::move(asso_func));
   }
@@ -252,6 +274,46 @@ public:
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
+  TypePtr _type;
+};
+
+class EnumVariantType : public ExprType {
+public:
+  using discriminant_t = std::int64_t; // the actual type is seen in parent_enum->dis_type
+  EnumVariantType(
+    std::string_view ident,
+    discriminant_t discriminant,
+    std::vector<TypePtr> &&asso_types,
+    EnumType *parent_enum
+  ): ExprType(TypeKind::kEnumVariant), _ident(ident), _discriminant(discriminant),
+  _asso_types(std::move(asso_types)), _parent_enum(std::move(parent_enum)) {}
+  std::string_view ident() const { return _ident; }
+  discriminant_t discriminant() const { return _discriminant; }
+  const std::vector<TypePtr>& asso_types() const { return _asso_types; }
+  const EnumType* parent_enum() const { return _parent_enum; }
+  void combine_hash(std::size_t &seed) const override;
+protected:
+  bool equals_impl(const ExprType &other) const override;
+private:
+  std::string_view _ident;
+  discriminant_t _discriminant;
+  std::vector<TypePtr> _asso_types;
+  const EnumType* _parent_enum;
+};
+
+class AliasType : public ExprType {
+public:
+  AliasType(
+    std::string_view ident
+  ): ExprType(TypeKind::kAlias), _ident(ident) {}
+  void set_type(TypePtr type) { _type = std::move(type); }
+  std::string_view ident() const { return _ident; }
+  TypePtr type() const { return _type; }
+  void combine_hash(std::size_t &seed) const override;
+protected:
+  bool equals_impl(const ExprType &other) const override;
+private:
+  std::string_view _ident;
   TypePtr _type;
 };
 
