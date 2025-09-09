@@ -344,5 +344,54 @@ class PathPattern;
   M(SlicePatternItems) \
   M(PathPattern)
 
+#define INSOMNIA_RUST_SHARD_AST_TYPED_VISITABLE_NODES_LIST(M) \
+  M(Function) \
+  M(StructStruct) \
+  M(Enumeration) \
+  M(EnumItem) \
+  M(Trait) \
+  M(TypeAlias) \
+  M(ParenthesizedType) \
+  M(TupleType) \
+  M(ReferenceType) \
+  M(ArrayType) \
+  M(SliceType) \
+  M(TypePath) \
+  M(LiteralExpression) \
+  M(PathInExpression) \
+  M(BorrowExpression) \
+  M(DereferenceExpression) \
+  M(NegationExpression) \
+  M(ArithmeticOrLogicalExpression) \
+  M(ComparisonExpression) \
+  M(LazyBooleanExpression) \
+  M(TypeCastExpression) \
+  M(AssignmentExpression) \
+  M(CompoundAssignmentExpression) \
+  M(GroupedExpression) \
+  M(ArrayExpression) \
+  M(IndexExpression) \
+  M(TupleExpression) \
+  M(TupleIndexingExpression) \
+  M(StructExpression) \
+  M(MethodCallExpression) \
+  M(FieldExpression) \
+  M(ContinueExpression) \
+  M(BreakExpression) \
+  M(RangeExpr) \
+  M(RangeFromExpr) \
+  M(RangeToExpr) \
+  M(RangeFullExpr) \
+  M(RangeInclusiveExpr) \
+  M(RangeToInclusiveExpr) \
+  M(ReturnExpression) \
+  M(UnderscoreExpression) \
+  M(BlockExpression) \
+  M(FunctionBodyExpr) \
+  M(InfiniteLoopExpression) \
+  M(PredicateLoopExpression) \
+  M(IfExpression) \
+  M(MatchExpression)
+
 }
 #endif // INSOMNIA_AST_FWD_H

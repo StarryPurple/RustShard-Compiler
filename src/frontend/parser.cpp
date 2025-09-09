@@ -709,6 +709,8 @@ std::unique_ptr<TraitImpl> Parser::parseTraitImpl() {
 std::unique_ptr<TypePath> Parser::parseTypePath() {
   Backtracker tracker(*_ast_ctx);
   std::vector<std::unique_ptr<TypePathSegment>> tpss;
+  bool is_absolute = CHECK_TOKEN(kPathSep);
+  if(is_absolute) _ast_ctx->consume();
   auto tps1 = parseTypePathSegment();
   EXPECT_POINTER_NOT_EMPTY(tps1);
   tpss.push_back(std::move(tps1));
@@ -719,7 +721,7 @@ std::unique_ptr<TypePath> Parser::parseTypePath() {
     tpss.push_back(std::move(tps));
   }
   tracker.commit();
-  return std::make_unique<TypePath>(std::move(tpss));
+  return std::make_unique<TypePath>(is_absolute, std::move(tpss));
 }
 
 std::unique_ptr<TypePathSegment> Parser::parseTypePathSegment() {

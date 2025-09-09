@@ -174,7 +174,7 @@ TraitImpl ->
 
 # Simplified: No closures / generics, no mods / use crates
 TypePath ->
-    #"::"?# TypePathSegment ("::" TypePathSegment)*
+    "::"? TypePathSegment ("::" TypePathSegment)*
 
 # No Generic Args
 TypePathSegment -> 

@@ -243,12 +243,12 @@ private:
   std::vector<Scope*> _scopes;
 };
 
-// collect struct, enum, const item and type alias.
+// Collect struct, enum, const item and type alias.
 // After this, all types (including builtin ones) shall be registered in symbol type pool
-// (incomplete. some relationships not filled.)
-// Including: builtin primitive types, structs, enumeration, enumeration item (singleton type),
-// type aliases, and traits.
-// enumeration/enumeration_item relationship has been filled.
+// (incomplete. some relationships not filled.) Including: builtin primitive types, structs,
+// enumeration, enumeration item (singleton type), type aliases, and traits.
+// (enumeration/enumeration_item relationship has been filled.)
+// The type filling progress is ready to launch.
 class TypeDeclarator : public ScopedVisitor {
 public:
   TypeDeclarator(ErrorRecorder *recorder, sem_type::TypePool *type_pool)
@@ -333,6 +333,7 @@ public:
   ConstEvaluator(ErrorRecorder *recorder, sem_type::TypePool *type_pool, sem_const::ConstPool *const_pool)
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool) {}
 
+  /*
   void postVisit(LiteralExpression &node);
   void postVisit(BorrowExpression &node);
   void postVisit(DereferenceExpression &node);
@@ -342,6 +343,7 @@ public:
   void visit(LazyBooleanExpression &node);
   void postVisit(TypeCastExpression &node);
   void postVisit(GroupedExpression &node);
+  */
   void postVisit(ArrayExpression &node) {
     _recorder->report("Array expression consteval is not supported");
   }
@@ -384,8 +386,12 @@ private:
   sem_const::ConstPool *_const_pool;
 };
 
+#define ISM_RS_POST_VISIT_OVERRIDE_METHOD(Node) \
+  void postVisit(Node &node) override;
+
 // fill the struct, enum, const and alias types.
 class TypeFiller : public ScopedVisitor {
+  static const std::string kErrTypeNotResolved, kErrTypeNotMatch;
   bool constEvaluate(Expression &node) {
     node.accept(_evaluator);
     if(!node.has_constant()) {
@@ -399,72 +405,27 @@ public:
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool),
   _evaluator(recorder, type_pool, const_pool) {}
 
-  void preVisit(Crate &node) override {
-    ScopedVisitor::preVisit(node);
-    node.scope()->load_builtin_types(_type_pool);
-  }
+  // decide the types
 
-  void postVisit(StructStruct &node) override {
-    auto info = find_symbol(node.ident());
-    std::map<std::string_view, sem_type::TypePtr> struct_fields;
-    if(node.fields_opt()) {
-      for(const auto &field: node.fields_opt()->fields()) {
-        auto ident = field->ident();
-        auto ast_type = field->type()->get_type();
-        if(!ast_type) {
-          _recorder->report("Unresolved struct field type");
-          continue; // continue partial compiling
-        }
-        struct_fields.emplace(ident, ast_type);
-      }
-    }
-    info->type.get<sem_type::StructType>()->set_fields(std::move(struct_fields));
-  }
-
-  void postVisit(Enumeration &node) override {
-    using TypePtr = sem_type::TypePtr;
-    auto info = find_symbol(node.ident());
-    auto raw_enum_type = info->type.get_if<const sem_type::EnumType>();
-    if(!raw_enum_type) {
-      _recorder->report("TypeFiller: Not a enumeration type"); // ???
-      return;
-    }
-    sem_type::EnumType::variant_map_t enum_variants;
-    sem_type::EnumVariantType::discriminant_t dis = 0;
-    if(node.items_opt()) {
-      for(const auto &item: node.items_opt()->items()) {
-        if(item->discr_opt()) {
-          _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
-        }
-        auto enum_variant_type = _type_pool->make_type<sem_type::EnumVariantType>(
-          item->ident(), dis, std::vector<TypePtr>(), raw_enum_type
-        );
-        item->set_type(enum_variant_type); // each enum item _singleton_ has its distinct type
-        enum_variants.emplace(
-          item->ident(), enum_variant_type.get<sem_type::EnumVariantType>().get()
-        );
-        ++dis;
-      }
-    }
-    info->type.get<sem_type::EnumType>()->set_variants(std::move(enum_variants));
-  }
-
-  void postVisit(ConstantItem &node) override {
-    auto info = find_symbol(node.ident());
-
-  }
-
-  void postVisit(TypeAlias &node) override {
-
-  }
-
-  void postVisit(Trait &node) override {
-
-  }
+  INSOMNIA_RUST_SHARD_AST_TYPED_VISITABLE_NODES_LIST(ISM_RS_POST_VISIT_OVERRIDE_METHOD);
 
   // set the types
+  void postVisit(LetStatement &node) override;
 
-  void postVisit(Type &node) override;
+  // helpers
+  // If type not match, binding will fail
+
+  void bind_pattern(PatternNoTopAlt *pattern, sem_type::TypePtr type);
+  void bind_identifier(IdentifierPattern *pattern, sem_type::TypePtr type);
+  void bind_wildcard(WildcardPattern *pattern, sem_type::TypePtr type);
+  void bind_tuple(TuplePattern *pattern, sem_type::TypePtr type);
+  void bind_struct(StructPattern *pattern, sem_type::TypePtr type);
+  void bind_reference(ReferencePattern *pattern, sem_type::TypePtr type);
+  void bind_literal(LiteralPattern *pattern, sem_type::TypePtr type);
+  void bind_grouped(GroupedPattern *pattern, sem_type::TypePtr type);
+  void bind_slice(SlicePattern *pattern, sem_type::TypePtr type);
+  void bind_path(PathPattern *pattern, sem_type::TypePtr type);
+
 
 private:
   ErrorRecorder *_recorder;
@@ -472,6 +433,8 @@ private:
   sem_const::ConstPool *_const_pool;
   ConstEvaluator _evaluator;
 };
+
+#undef ISM_RS_POST_VISIT_OVERRIDE_METHOD
 
 }
 

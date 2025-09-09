@@ -476,12 +476,15 @@ public:
 class TypePath : public TypeNoBounds {
 public:
   explicit TypePath(
+    bool is_absolute,
     std::vector<std::unique_ptr<TypePathSegment>> &&segments
-  ): _segments(std::move(segments)) {}
+  ): _is_absolute(is_absolute), _segments(std::move(segments)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
+  bool _is_absolute;
   std::vector<std::unique_ptr<TypePathSegment>> _segments;
 public:
+  EXPOSE_FIELD_CONST_REFERENCE(is_absolute, _is_absolute);
   EXPOSE_FIELD_CONST_REFERENCE(segments, _segments)
 };
 

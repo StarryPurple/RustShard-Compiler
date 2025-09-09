@@ -4,6 +4,10 @@
 #include <cmath>
 
 namespace insomnia::rust_shard::ast {
+
+/*************************** ConstEvaluator ***************************************/
+
+/*
 void ConstEvaluator::postVisit(LiteralExpression &node) {
   using sem_type::PrimitiveType;
   auto prime = node.prime();
@@ -139,7 +143,11 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
 
   // TODO: NaN implementation (currently treated as compilation error)
 
-  std::visit([&]<typename T>(T &&arg1, T &&arg2) {
+  std::visit([&]<typename T1, typename T2>(T1 &&arg1, T2 &&arg2) {
+    if constexpr(!std::is_same_v<T1, T2>) {
+      throw std::runtime_error("Type mismatch not checked, inner design has flaws.");
+    }
+    using T = std::decay_t<T1>;
     if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
       if((oper == Operator::kDiv || oper == Operator::kMod) && arg2 == 0) {
         _recorder->tagged_report(kErrTag, "Division by zero");
@@ -406,5 +414,367 @@ void ConstEvaluator::postVisit(GroupedExpression &node) {
   }
   node.set_const_value(*node.expr()->const_value());
 }
+*/
+
+/********************** TypeFiller *****************************/
+
+const std::string TypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
+const std::string TypeFiller::kErrTypeNotMatch = "Error: Type not match between evaluation and declaration";
+
+void TypeFiller::postVisit(Function &node) {
 
 }
+
+void TypeFiller::postVisit(StructStruct &node) {
+  auto info = find_symbol(node.ident());
+  std::map<std::string_view, sem_type::TypePtr> struct_fields;
+  if(node.fields_opt()) {
+    for(const auto &field: node.fields_opt()->fields()) {
+      auto ident = field->ident();
+      auto ast_type = field->type()->get_type();
+      if(!ast_type) {
+        _recorder->report("Unresolved struct field type");
+        continue; // continue partial compiling
+      }
+      struct_fields.emplace(ident, ast_type);
+    }
+  }
+  info->type.get<sem_type::StructType>()->set_fields(std::move(struct_fields));
+}
+
+void TypeFiller::postVisit(Enumeration &node) {
+  auto info = find_symbol(node.ident());
+  auto raw_enum_type = info->type.get_if<sem_type::EnumType>();
+  if(node.items_opt()) {
+    for(const auto &item: node.items_opt()->items()) {
+      if(item->discr_opt()) {
+        _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
+      }
+    }
+  }
+}
+
+void TypeFiller::postVisit(EnumItem &node) {
+
+}
+
+void TypeFiller::postVisit(Trait &node) {
+
+}
+
+void TypeFiller::postVisit(TypeAlias &node) {
+  auto info = find_symbol(node.ident());
+  auto alias_type = info->type.get_if<sem_type::AliasType>();
+  if(node.type_opt()) {
+    auto t = node.type_opt()->get_type();
+    if(!t) {
+      _recorder->report("Type not set");
+      return;
+    }
+    node.set_type(t);
+    alias_type->set_type(t); // bind alias and its underlying type
+  }
+}
+
+void TypeFiller::postVisit(ParenthesizedType &node) {
+
+}
+
+void TypeFiller::postVisit(TupleType &node) {
+
+}
+
+void TypeFiller::postVisit(ReferenceType &node) {
+
+}
+
+void TypeFiller::postVisit(ArrayType &node) {
+
+}
+
+void TypeFiller::postVisit(SliceType &node) {
+
+}
+
+void TypeFiller::postVisit(TypePath &node) {
+
+}
+
+void TypeFiller::postVisit(LiteralExpression &node) {
+
+}
+
+void TypeFiller::postVisit(PathInExpression &node) {
+
+}
+
+void TypeFiller::postVisit(BorrowExpression &node) {
+
+}
+
+void TypeFiller::postVisit(DereferenceExpression &node) {
+
+}
+
+void TypeFiller::postVisit(NegationExpression &node) {
+
+}
+
+void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
+
+}
+
+void TypeFiller::postVisit(ComparisonExpression &node) {
+
+}
+
+void TypeFiller::postVisit(LazyBooleanExpression &node) {
+
+}
+
+void TypeFiller::postVisit(TypeCastExpression &node) {
+
+}
+
+void TypeFiller::postVisit(AssignmentExpression &node) {
+
+}
+
+void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
+
+}
+
+void TypeFiller::postVisit(GroupedExpression &node) {
+
+}
+
+void TypeFiller::postVisit(ArrayExpression &node) {
+
+}
+
+void TypeFiller::postVisit(IndexExpression &node) {
+
+}
+
+void TypeFiller::postVisit(TupleExpression &node) {
+
+}
+
+void TypeFiller::postVisit(TupleIndexingExpression &node) {
+
+}
+
+void TypeFiller::postVisit(StructExpression &node) {
+
+}
+
+void TypeFiller::postVisit(MethodCallExpression &node) {
+
+}
+
+void TypeFiller::postVisit(FieldExpression &node) {
+
+}
+
+void TypeFiller::postVisit(ContinueExpression &node) {
+
+}
+
+void TypeFiller::postVisit(BreakExpression &node) {
+
+}
+
+void TypeFiller::postVisit(RangeExpr &node) {
+
+}
+
+void TypeFiller::postVisit(RangeFromExpr &node) {
+
+}
+
+void TypeFiller::postVisit(RangeToExpr &node) {
+
+}
+
+void TypeFiller::postVisit(RangeFullExpr &node) {
+
+}
+
+void TypeFiller::postVisit(RangeInclusiveExpr &node) {
+
+}
+
+void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
+
+}
+
+void TypeFiller::postVisit(ReturnExpression &node) {
+
+}
+
+void TypeFiller::postVisit(UnderscoreExpression &node) {
+
+}
+
+void TypeFiller::postVisit(BlockExpression &node) {
+
+}
+
+void TypeFiller::postVisit(FunctionBodyExpr &node) {
+
+}
+
+void TypeFiller::postVisit(InfiniteLoopExpression &node) {
+
+}
+
+void TypeFiller::postVisit(PredicateLoopExpression &node) {
+
+}
+
+void TypeFiller::postVisit(IfExpression &node) {
+
+}
+
+void TypeFiller::postVisit(MatchExpression &node) {
+
+}
+
+void TypeFiller::postVisit(LetStatement &node) {
+  if(!node.expr_opt()) {
+    _recorder->report("Uninitialized variable");
+    return;
+  }
+  auto type = node.expr_opt()->get_type();
+  if(!type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside let statement");
+    return;
+  }
+  if(node.type_opt() && node.type_opt()->get_type() != type) {
+    _recorder->tagged_report(kErrTypeNotMatch, "type mismatch inside let statement");
+    return;
+  }
+  bind_pattern(node.pattern().get(), type);
+}
+
+void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, sem_type::TypePtr type) {
+  if(auto ident_p = dynamic_cast<IdentifierPattern*>(pattern)) {
+    bind_identifier(ident_p, type);
+  } else if(auto wildcard_p = dynamic_cast<WildcardPattern*>(pattern)) {
+    bind_wildcard(wildcard_p, type);
+  } else if(auto tuple_p = dynamic_cast<TuplePattern*>(pattern)) {
+    bind_tuple(tuple_p, type);
+  } else if(auto struct_p = dynamic_cast<StructPattern*>(pattern)) {
+    bind_struct(struct_p, type);
+  } else if(auto ref_p = dynamic_cast<ReferencePattern*>(pattern)) {
+    bind_reference(ref_p, type);
+  } else if(auto literal_p = dynamic_cast<LiteralPattern*>(pattern)) {
+    bind_literal(literal_p, type);
+  } else if(auto grouped_p = dynamic_cast<GroupedPattern*>(pattern)) {
+    bind_grouped(grouped_p, type);
+  } else if(auto slice_p = dynamic_cast<SlicePattern*>(pattern)) {
+    bind_slice(slice_p, type);
+  } else if(auto path_p = dynamic_cast<PathPattern*>(pattern)) {
+    bind_path(path_p, type);
+  } else {
+    _recorder->tagged_report(kErrTypeNotResolved, "Unsupported type in resolution");
+  }
+}
+
+void TypeFiller::bind_identifier(IdentifierPattern *pattern, sem_type::TypePtr type) {
+  // always success
+  if(pattern->is_ref()) {
+    // let ref z = r <=> let z = &r
+    type = _type_pool->make_type<sem_type::ReferenceType>(type);
+  }
+  auto info = find_symbol(pattern->ident());
+  info->is_mut = pattern->is_mut();
+  info->type = std::move(type);
+}
+
+void TypeFiller::bind_wildcard(WildcardPattern *pattern, sem_type::TypePtr type) {
+  // always success
+  // nothing to do here
+}
+
+void TypeFiller::bind_tuple(TuplePattern *pattern, sem_type::TypePtr type) {
+  auto t = type.get_if<sem_type::TupleType>();
+  if(!t) {
+    _recorder->report("Type binding failed: not a tuple");
+    return;
+  }
+  std::size_t pattern_size = 0;
+  if(pattern->items_opt()) pattern_size = pattern->items_opt()->patterns().size();
+  if(t->members().size() != pattern_size) {
+    _recorder->report("Type binding failed: tuple length mismatch");
+    return;
+  }
+  for(std::size_t i = 0; i < pattern_size; ++i) {
+    auto &sub_pattern = pattern->items_opt()->patterns()[i];
+    auto sub_type = t->members()[i];
+    if(sub_pattern->patterns().size() != 1) {
+      _recorder->report("Type binding failed: multi patterns");
+      return;
+    }
+    bind_pattern(sub_pattern->patterns()[i].get(), sub_type);
+  }
+}
+
+void TypeFiller::bind_struct(StructPattern *pattern, sem_type::TypePtr type) {
+  auto t = type.get_if<sem_type::StructType>();
+  if(!t) {
+    _recorder->report("Type binding failed: not a struct");
+    return;
+  }
+}
+
+void TypeFiller::bind_reference(ReferencePattern *pattern, sem_type::TypePtr type) {
+
+}
+
+void TypeFiller::bind_literal(LiteralPattern *pattern, sem_type::TypePtr type) {
+
+}
+
+void TypeFiller::bind_grouped(GroupedPattern *pattern, sem_type::TypePtr type) {
+
+}
+
+void TypeFiller::bind_slice(SlicePattern *pattern, sem_type::TypePtr type) {
+
+}
+
+void TypeFiller::bind_path(PathPattern *pattern, sem_type::TypePtr type) {
+
+}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

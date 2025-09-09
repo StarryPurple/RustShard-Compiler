@@ -54,6 +54,11 @@ public:
   T* as_if() const { return dynamic_cast<T*>(_ptr.get()); }
 };
 
+struct TypePath {
+  std::vector<std::string_view> segments;
+  bool is_absolute;
+};
+
 enum class TypePrime {
   kChar, kBool,
   kI8, kI16, kI32, kI64,
