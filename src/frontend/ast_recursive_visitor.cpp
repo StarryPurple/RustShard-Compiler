@@ -227,7 +227,7 @@ void RecursiveVisitor::visit(PathInExpression &node) {
 
 void RecursiveVisitor::visit(PathExprSegment &node) {
   preVisit(node);
-  node.ident()->accept(*this);
+  node.ident_seg()->accept(*this);
   postVisit(node);
 }
 

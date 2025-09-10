@@ -943,7 +943,7 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence, TokenTy
         break;
       }
       // field access
-      auto ident = segment->ident()->ident();
+      auto ident = segment->ident_seg()->ident();
       if(!ident_not_reserved(ident)) {
         REPORT_FAILURE_AND_RETURN("FieldExpression: keyword as field");
       }

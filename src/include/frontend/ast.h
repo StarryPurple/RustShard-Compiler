@@ -582,13 +582,13 @@ public:
 class PathExprSegment : public BasicNode {
 public:
   explicit PathExprSegment(
-    std::unique_ptr<PathIdentSegment> &&ident
-  ): _ident(std::move(ident)) {}
+    std::unique_ptr<PathIdentSegment> &&ident_seg
+  ): _ident_seg(std::move(ident_seg)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  std::unique_ptr<PathIdentSegment> _ident;
+  std::unique_ptr<PathIdentSegment> _ident_seg;
 public:
-  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
+  EXPOSE_FIELD_CONST_REFERENCE(ident_seg, _ident_seg)
 };
 
 class OperatorExpression : public ExpressionWithoutBlock {

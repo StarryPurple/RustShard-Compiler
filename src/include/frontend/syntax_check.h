@@ -9,7 +9,8 @@
 
 namespace insomnia::rust_shard::ast {
 
-// check branch syntax (break/continue/return), set scopes and collect symbols
+// check branch syntax (break/continue/return),
+// set scopes and collect symbols (for all vis items, not variables)
 // After this, all scopes shall be settled.
 class SymbolCollector : public RecursiveVisitor {
   static const std::string kDuplicateDefinitionErr, kLoopErr;
@@ -45,10 +46,10 @@ public:
     // no postVisit
   }
   void preVisit(Function &node) override {
-    auto flag = add_symbol(node.ident(), SymbolInfo{
+    auto info = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction
     }); // add to outer scope
-    if(!flag)
+    if(!info)
       _recorder->report("Function symbol already defined: " + std::string(node.ident()));
     _scopes.push_back(std::make_unique<Scope>());
     _function_cnt++;
@@ -74,10 +75,10 @@ public:
     _scopes.pop_back();
   }
   void preVisit(Trait &node) override {
-    auto flag = add_symbol(node.ident(), SymbolInfo{
+    auto info = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kTrait
     });
-    if(!flag)
+    if(!info)
       _recorder->report("Trait symbol already defined: " + std::string(node.ident()));
     _scopes.push_back(std::make_unique<Scope>());
   }
@@ -90,38 +91,41 @@ public:
   // Function(dealt), const, struct, trait(dealt), enum, type alias
   // patterns (including MatchArm pattern and Let pattern)
   void preVisit(ConstantItem &node) override {
-    auto flag = add_symbol(node.ident(), SymbolInfo{
+    auto info = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kConstant
     });
-    if(!flag)
+    if(!info)
       _recorder->report("ConstantItem symbol already defined: " + std::string(node.ident()));
   }
   void preVisit(StructStruct &node) override {
-    auto flag = add_symbol(node.ident(), SymbolInfo{
+    auto info = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kStruct
     });
-    if(!flag)
+    if(!info)
       _recorder->report("StructStruct symbol already defined: " + std::string(node.ident()));
   }
   void preVisit(Enumeration &node) override {
-    auto flag = add_symbol(node.ident(), SymbolInfo{
+    auto info = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kEnum
     });
-    if(!flag)
+    if(!info)
       _recorder->report("Enumeration symbol already defined: " + std::string(node.ident()));
   }
   void preVisit(IdentifierPattern &node) override {
-    auto flag = add_symbol(node.ident(), SymbolInfo{
+    // no, not now. later checked in TypeFiller.
+    /*
+    auto info = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kVariable
     });
-    if(!flag)
+    if(!info)
       _recorder->report("Variable symbol already defined: " + std::string(node.ident()));
+    */
   }
   void preVisit(TypeAlias &node) override {
-    auto flag = add_symbol(node.ident(), SymbolInfo{
+    auto info = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kTypeAlias
     });
-    if(!flag)
+    if(!info)
       _recorder->report("TypaAlias typename already used: " + std::string(node.ident()));
   }
 
@@ -161,7 +165,7 @@ private:
   std::vector<std::unique_ptr<Scope>> _scopes; // store the constructing scopes
   int _loop_cnt = 0, _function_cnt = 0;
 
-  bool add_symbol(std::string_view ident, const SymbolInfo &symbol) {
+  SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
   }
 };
@@ -224,6 +228,9 @@ public:
   }
 
 protected:
+  SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol) {
+    return _scopes.back()->add_symbol(ident, symbol);
+  }
   SymbolInfo* find_symbol(std::string_view ident) {
     for(auto rit = _scopes.rbegin(); rit != _scopes.rend(); ++rit) {
       auto res = (*rit)->find_symbol(ident);
@@ -333,7 +340,6 @@ public:
   ConstEvaluator(ErrorRecorder *recorder, sem_type::TypePool *type_pool, sem_const::ConstPool *const_pool)
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool) {}
 
-  /*
   void postVisit(LiteralExpression &node);
   void postVisit(BorrowExpression &node);
   void postVisit(DereferenceExpression &node);
@@ -343,7 +349,7 @@ public:
   void visit(LazyBooleanExpression &node);
   void postVisit(TypeCastExpression &node);
   void postVisit(GroupedExpression &node);
-  */
+
   void postVisit(ArrayExpression &node) {
     _recorder->report("Array expression consteval is not supported");
   }

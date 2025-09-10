@@ -31,7 +31,7 @@ class AstTypeTest : public ::testing::Test {
       f64_type = pool.make_type<PrimitiveType>(TypePrime::kF64);
 
       auto u32_array = pool.make_type<ArrayType>(u32_type, 10);
-      auto bool_ref_mut = pool.make_type<ReferenceType>(bool_type);
+      auto bool_ref_mut = pool.make_type<ReferenceType>(bool_type, false);
       complex_base_type = pool.make_type<TupleType>(
         std::vector<TypePtr>{u32_array, bool_ref_mut}
       );
@@ -121,8 +121,8 @@ TEST_F(AstTypeTest, StructComparison) {
 
 TEST_F(AstTypeTest, SliceAndReferenceComparison) {
   // `&i32` vs `&i32`
-  auto ref1 = pool.make_raw_type<ReferenceType>(i32_type);
-  auto ref2 = pool.make_raw_type<ReferenceType>(i32_type);
+  auto ref1 = pool.make_raw_type<ReferenceType>(i32_type, false);
+  auto ref2 = pool.make_raw_type<ReferenceType>(i32_type, false);
   ASSERT_EQ(*ref1, *ref2);
   // Test discarded: no more mutability support.
   /*
@@ -155,12 +155,12 @@ TEST_F(AstTypeTest, StringSliceAndByteSliceAsSameType) {
   auto u8_slice = pool.make_raw_type<SliceType>(TypePtr(u8_type));
 
   // `&[u8]` is the type of string literals and byte slices.
-  auto u8_ref_slice = pool.make_raw_type<ReferenceType>(u8_slice);
+  auto u8_ref_slice = pool.make_raw_type<ReferenceType>(u8_slice, false);
 
   // `&[u8]` is NOT equal to `&[char]`.
   auto char_type = pool.make_raw_type<PrimitiveType>(TypePrime::kChar);
   auto char_slice = pool.make_raw_type<SliceType>(TypePtr(char_type));
-  auto char_ref_slice = pool.make_raw_type<ReferenceType>(char_slice);
+  auto char_ref_slice = pool.make_raw_type<ReferenceType>(char_slice, false);
 
   ASSERT_NE(*u8_ref_slice, *char_ref_slice);
 }

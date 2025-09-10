@@ -13,10 +13,10 @@ void ASTTree::traverse(RecursiveVisitor &r_visitor) {
   r_visitor.traverse(*_crate);
 }
 
-bool Scope::add_symbol(std::string_view ident, const SymbolInfo &symbol) {
-  if(_symbol_set.contains(ident)) return false;
+SymbolInfo* Scope::add_symbol(std::string_view ident, const SymbolInfo &symbol) {
+  if(_symbol_set.contains(ident)) return nullptr;
   _symbol_set.emplace(ident, symbol);
-  return true;
+  return find_symbol(ident);
 }
 
 SymbolInfo* Scope::find_symbol(std::string_view ident) {

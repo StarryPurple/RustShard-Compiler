@@ -139,16 +139,18 @@ private:
 
 class ReferenceType : public ExprType {
 public:
-  explicit ReferenceType(TypePtr type)
-  : ExprType(TypeKind::kReference), _type(std::move(type)) {}
-  explicit ReferenceType(std::shared_ptr<ExprType> type)
-  : ExprType(TypeKind::kReference), _type(std::move(type)) {}
+  explicit ReferenceType(TypePtr type, bool is_mut)
+  : ExprType(TypeKind::kReference), _type(std::move(type)), _is_mut(is_mut) {}
+  explicit ReferenceType(std::shared_ptr<ExprType> type, bool is_mut)
+  : ExprType(TypeKind::kReference), _type(std::move(type)), _is_mut(is_mut) {}
   TypePtr type() const { return _type; }
+  bool is_mut() const { return _is_mut; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
   TypePtr _type;
+  bool _is_mut;
 };
 
 class StructType : public ExprType {

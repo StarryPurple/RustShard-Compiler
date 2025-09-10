@@ -7,7 +7,6 @@ namespace insomnia::rust_shard::ast {
 
 /*************************** ConstEvaluator ***************************************/
 
-/*
 void ConstEvaluator::postVisit(LiteralExpression &node) {
   using sem_type::PrimitiveType;
   auto prime = node.prime();
@@ -29,7 +28,7 @@ void ConstEvaluator::postVisit(BorrowExpression &node) {
   }
   auto inner = *node.expr()->const_value();
   node.set_const_value(_const_pool->make_const<sem_const::ConstReference>(
-    _type_pool->make_type<sem_type::ReferenceType>(inner->type()),
+    _type_pool->make_type<sem_type::ReferenceType>(inner->type(), node.is_mut()),
     inner
   ));
 }
@@ -143,58 +142,69 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
 
   // TODO: NaN implementation (currently treated as compilation error)
 
-  std::visit([&]<typename T1, typename T2>(T1 &&arg1, T2 &&arg2) {
+  std::visit([&]<typename T01, typename T02>(T01 &&arg1, T02 &&arg2) {
+    using T1 = std::decay_t<T01>;
+    using T2 = std::decay_t<T02>;
     if constexpr(!std::is_same_v<T1, T2>) {
       throw std::runtime_error("Type mismatch not checked, inner design has flaws.");
-    }
-    using T = std::decay_t<T1>;
-    if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
-      if((oper == Operator::kDiv || oper == Operator::kMod) && arg2 == 0) {
-        _recorder->tagged_report(kErrTag, "Division by zero");
-        return;
-      }
-      switch(oper) {
-      case Operator::kAdd:
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 + arg2)); break;
-      case Operator::kSub:
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 - arg2)); break;
-      case Operator::kMul:
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 * arg2)); break;
-      case Operator::kDiv:
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 / arg2)); break;
-      case Operator::kMod:
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-          inner1->type(),
-          (std::is_floating_point_v<T> ? std::fmod(arg1, arg2) : arg1 % arg2)));
-        break;
-      case Operator::kBitwiseAnd:
-      case Operator::kBitwiseOr:
-      case Operator::kBitwiseXor:
-        if constexpr(std::is_integral_v<T>) {
-          if(oper == Operator::kBitwiseAnd)
-            node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 & arg2));
-          else if(oper == Operator::kBitwiseOr)
-            node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 | arg2));
-          else
-            node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 ^ arg2));
-        } else {
-          _recorder->tagged_report(kErrTag, "Bitwise operation on non-integer type");
-        }
-        break;
-      default:
-        _recorder->tagged_report(kErrTag, "Invalid operator for arithmetic/logical expression (bitwise)");
-        break;
-      }
-    } else if constexpr(std::is_same_v<T, bool>) {
-      if(oper == Operator::kLogicalAnd) {
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 && arg2));
-      } else if(oper == Operator::kLogicalOr) {
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 || arg2));
-      } else {
-        _recorder->tagged_report(kErrTag, "Invalid operator for arithmetic/logical expression (boolean logical)");
-      }
     } else {
-      _recorder->tagged_report(kErrTag, "Unsupported primitive type in arithmetic/logical expression");
+      using T = T1;
+      if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
+        if((oper == Operator::kDiv || oper == Operator::kMod) && arg2 == 0) {
+          _recorder->tagged_report(kErrTag, "Division by zero");
+          return;
+        }
+        switch(oper) {
+        case Operator::kAdd:
+          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 + arg2));
+          break;
+        case Operator::kSub:
+          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 - arg2));
+          break;
+        case Operator::kMul:
+          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 * arg2));
+          break;
+        case Operator::kDiv:
+          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 / arg2));
+          break;
+        case Operator::kMod: {
+          T val = 0;
+          if constexpr(std::is_floating_point_v<T>) {
+            val = std::fmod(arg1, arg2);
+          } else {
+            val = arg1 % arg2;
+          }
+          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), val));
+        } break;
+        case Operator::kBitwiseAnd:
+        case Operator::kBitwiseOr:
+        case Operator::kBitwiseXor:
+          if constexpr(std::is_integral_v<T>) {
+            if(oper == Operator::kBitwiseAnd)
+              node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 & arg2));
+            else if(oper == Operator::kBitwiseOr)
+              node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 | arg2));
+            else
+              node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 ^ arg2));
+          } else {
+            _recorder->tagged_report(kErrTag, "Bitwise operation on non-integer type");
+          }
+          break;
+        default:
+          _recorder->tagged_report(kErrTag, "Invalid operator for arithmetic/logical expression (bitwise)");
+          break;
+        }
+      } else if constexpr(std::is_same_v<T, bool>) {
+        if(oper == Operator::kLogicalAnd) {
+          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 && arg2));
+        } else if(oper == Operator::kLogicalOr) {
+          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 || arg2));
+        } else {
+          _recorder->tagged_report(kErrTag, "Invalid operator for arithmetic/logical expression (boolean logical)");
+        }
+      } else {
+        _recorder->tagged_report(kErrTag, "Unsupported primitive type in arithmetic/logical expression");
+      }
     }
   }, prime1->value, prime2->value);
 }
@@ -217,28 +227,35 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
     return;
   }
 
-  std::visit([&]<typename T>(T &&arg1, T &&arg2) {
-    bool result = false;
-    auto oper = node.oper();
-
-    if constexpr(type_utils::is_one_of<T, char, std::int64_t, std::uint64_t, float, double, bool>) {
-      switch(oper) {
-      case Operator::kEq: result = (arg1 == arg2); break;
-      case Operator::kNe: result = (arg1 != arg2); break;
-      case Operator::kGt: result = (arg1 > arg2); break;
-      case Operator::kLt: result = (arg1 < arg2); break;
-      case Operator::kGe: result = (arg1 >= arg2); break;
-      case Operator::kLe: result = (arg1 <= arg2); break;
-      default:
-        _recorder->tagged_report(kErrTag, "Invalid operator in comparison expression");
-        return;
-      }
-      node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-        _type_pool->make_type<sem_type::PrimitiveType>(sem_type::TypePrime::kBool),
-        result
-      ));
+  std::visit([&]<typename T01, typename T02>(T01 &&arg1, T02 &&arg2) {
+    using T1 = std::decay_t<T01>;
+    using T2 = std::decay_t<T02>;
+    if constexpr(!std::is_same_v<T1, T2>) {
+      throw std::runtime_error("Type mismatch not checked, inner design has flaws.");
     } else {
-      _recorder->tagged_report(kErrTag, "Unsupported primitive type in comparison expression");
+      using T = T01;
+      bool result = false;
+      auto oper = node.oper();
+      if constexpr(type_utils::is_one_of<T, char, std::int64_t, std::uint64_t, float, double, bool>) {
+        switch(oper) {
+        case Operator::kEq: result = (arg1 == arg2); break;
+        case Operator::kNe: result = (arg1 != arg2); break;
+        case Operator::kGt: result = (arg1 > arg2); break;
+        case Operator::kLt: result = (arg1 < arg2); break;
+        case Operator::kGe: result = (arg1 >= arg2); break;
+          case Operator::kLe: result = (arg1 <= arg2);
+            break;
+          default:
+            _recorder->tagged_report(kErrTag, "Invalid operator in comparison expression");
+            return;
+          }
+          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
+            _type_pool->make_type<sem_type::PrimitiveType>(sem_type::TypePrime::kBool),
+            result
+          ));
+        } else {
+          _recorder->tagged_report(kErrTag, "Unsupported primitive type in comparison expression");
+        }
     }
   }, prime1->value, prime2->value);
 }
@@ -414,7 +431,6 @@ void ConstEvaluator::postVisit(GroupedExpression &node) {
   }
   node.set_const_value(*node.expr()->const_value());
 }
-*/
 
 /********************** TypeFiller *****************************/
 
@@ -637,7 +653,12 @@ void TypeFiller::postVisit(IfExpression &node) {
 }
 
 void TypeFiller::postVisit(MatchExpression &node) {
+  // all match branches must have the same result type
+  // that is the type of this expression
 
+  // extra check in this stage:
+  // ... too much.
+  throw std::runtime_error("Unimplemented");
 }
 
 void TypeFiller::postVisit(LetStatement &node) {
@@ -683,13 +704,21 @@ void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, sem_type::TypePtr type) 
 
 void TypeFiller::bind_identifier(IdentifierPattern *pattern, sem_type::TypePtr type) {
   // always success
+  bool is_mut = pattern->is_mut();
   if(pattern->is_ref()) {
-    // let ref z = r <=> let z = &r
-    type = _type_pool->make_type<sem_type::ReferenceType>(type);
+    // let ref y = r <=> let y = &r
+    // let ref mut z = r <=> let z = &mut r
+    type = _type_pool->make_type<sem_type::ReferenceType>(type, is_mut);
+    is_mut = false; // z is immutable (while *z is mutable)
   }
-  auto info = find_symbol(pattern->ident());
-  info->is_mut = pattern->is_mut();
-  info->type = std::move(type);
+  auto info = add_symbol(pattern->ident(), SymbolInfo{
+    .node = pattern, .ident = pattern->ident(), .kind = SymbolKind::kVariable,
+    .is_mut = is_mut, .type = type
+  });
+  if(!info) {
+    _recorder->report("Variable identifier already defined");
+    return;
+  }
 }
 
 void TypeFiller::bind_wildcard(WildcardPattern *pattern, sem_type::TypePtr type) {
@@ -698,6 +727,7 @@ void TypeFiller::bind_wildcard(WildcardPattern *pattern, sem_type::TypePtr type)
 }
 
 void TypeFiller::bind_tuple(TuplePattern *pattern, sem_type::TypePtr type) {
+  // let (a, b) = (1, 2) -> a = 1, b = 2
   auto t = type.get_if<sem_type::TupleType>();
   if(!t) {
     _recorder->report("Type binding failed: not a tuple");
@@ -713,7 +743,7 @@ void TypeFiller::bind_tuple(TuplePattern *pattern, sem_type::TypePtr type) {
     auto &sub_pattern = pattern->items_opt()->patterns()[i];
     auto sub_type = t->members()[i];
     if(sub_pattern->patterns().size() != 1) {
-      _recorder->report("Type binding failed: multi patterns");
+      _recorder->report("Type binding failed: multi patterns not supported yet");
       return;
     }
     bind_pattern(sub_pattern->patterns()[i].get(), sub_type);
@@ -721,31 +751,64 @@ void TypeFiller::bind_tuple(TuplePattern *pattern, sem_type::TypePtr type) {
 }
 
 void TypeFiller::bind_struct(StructPattern *pattern, sem_type::TypePtr type) {
+  // let Type { x1: x, y1: y } = Type{ x1: 1, y1: 2, z1: 3 } -> x = 1, y = 2
   auto t = type.get_if<sem_type::StructType>();
   if(!t) {
     _recorder->report("Type binding failed: not a struct");
     return;
   }
+  if(pattern->path_in_expr()->segments().back()->ident_seg()->ident() != t->ident()) {
+    _recorder->report("Type binding failed: not the same struct");
+    return;
+  }
+  if(pattern->elems_opt()) for(auto &field: pattern->elems_opt()->fields()->fields()) {
+    auto sub_pattern = field->pattern().get();
+    if(sub_pattern->patterns().size() != 1) {
+      _recorder->report("Type binding failed: multi patterns not supported yet");
+      return;
+    }
+    auto id = field->ident();
+    if(auto it = t->fields().find(id); it != t->fields().end()) {
+      bind_pattern(sub_pattern->patterns().front().get(), it->second);
+    } else {
+      _recorder->report("Type binding failed: field identifier not exist");
+    }
+  }
 }
 
 void TypeFiller::bind_reference(ReferencePattern *pattern, sem_type::TypePtr type) {
-
+  auto t = type.get_if<sem_type::ReferenceType>();
+  if(!t) {
+    _recorder->report("Type binding failed: not a reference");
+    return;
+  }
+  if(t->is_mut() != pattern->is_mut()) {
+    _recorder->report("Type binding failed: reference mutability not match");
+    return;
+  }
+  auto sub_pattern = pattern->pattern().get();
+  bind_pattern(sub_pattern, t->type());
 }
 
 void TypeFiller::bind_literal(LiteralPattern *pattern, sem_type::TypePtr type) {
-
+  _recorder->report("Type binding error: literal pattern not supported in let statement");
 }
 
 void TypeFiller::bind_grouped(GroupedPattern *pattern, sem_type::TypePtr type) {
-
+  auto sub_pattern = pattern->pattern().get();
+  if(sub_pattern->patterns().size() != 1) {
+    _recorder->report("Type binding failed: multi pattern not supported yet");
+    return;
+  }
+  bind_pattern(sub_pattern->patterns().front().get(), type);
 }
 
 void TypeFiller::bind_slice(SlicePattern *pattern, sem_type::TypePtr type) {
-
+  _recorder->report("Slice Not supported yet");
 }
 
 void TypeFiller::bind_path(PathPattern *pattern, sem_type::TypePtr type) {
-
+  _recorder->report("Type binding error: path pattern not supported in let statement");
 }
 
 }

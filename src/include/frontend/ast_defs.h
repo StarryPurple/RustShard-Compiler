@@ -88,8 +88,8 @@ struct SymbolInfo {
   const BasicNode* node;
   std::string_view ident;
   SymbolKind kind;
-  sem_type::TypePtr type;
   bool is_mut;
+  sem_type::TypePtr type;
 };
 
 class TypeInfo {
@@ -114,12 +114,11 @@ public:
         .node = nullptr,
         .ident = ident,
         .kind = SymbolKind::kType,
-        .type = pool->make_type<sem_type::PrimitiveType>(prime),
-        .is_mut = false
+        .type = pool->make_type<sem_type::PrimitiveType>(prime)
       });
     }
   }
-  bool add_symbol(std::string_view ident, const SymbolInfo &symbol);
+  SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol);
   SymbolInfo* find_symbol(std::string_view ident);
   const SymbolInfo* find_symbol(std::string_view ident) const;
   bool set_type(std::string_view ident, sem_type::TypePtr type);
