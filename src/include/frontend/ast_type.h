@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "ast_type.h"
+#include "ast_type.h"
 
 namespace insomnia::rust_shard::sem_type {
 
@@ -83,7 +84,8 @@ enum class TypeKind {
   kTrait,
   kRange,
   kEnumVariant,
-  kAlias
+  kAlias,
+  kNever
 };
 
 // referred to boost::hash_combine
@@ -336,6 +338,14 @@ private:
   TypePtr _type;
 };
 
+class NeverType : public ExprType {
+public:
+  NeverType(): ExprType(TypeKind::kNever) {}
+  void combine_hash(std::size_t &seed) const override;
+protected:
+  bool equals_impl(const ExprType &other) const override;
+};
+
 class TypePool {
   struct ExprTypeSharedPtrHash {
     std::size_t operator()(const std::shared_ptr<ExprType> &obj) const {
@@ -361,6 +371,7 @@ public:
     _pool.insert(ptr);
     return ptr;
   }
+  // In fact I shall list all possibilities... Never mind.
   template <class T, class... Args>
   requires std::derived_from<T, ExprType> && std::is_constructible_v<T, Args...>
   TypePtr make_type(Args &&...args) {

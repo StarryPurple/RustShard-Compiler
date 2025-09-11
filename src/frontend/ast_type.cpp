@@ -235,4 +235,12 @@ bool AliasType::equals_impl(const ExprType &other) const {
   throw std::runtime_error("ast type system error: comparing align types");
 }
 
+void NeverType::combine_hash(std::size_t &seed) const {
+  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+}
+
+bool NeverType::equals_impl(const ExprType &other) const {
+  return true;
+}
+
 }

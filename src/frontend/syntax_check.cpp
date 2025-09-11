@@ -437,6 +437,7 @@ void ConstEvaluator::postVisit(GroupedExpression &node) {
 const std::string TypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
 const std::string TypeFiller::kErrTypeNotMatch = "Error: Type not match between evaluation and declaration";
 const std::string TypeFiller::kErrConstevalFailed = "Error: Necessary const evaluation failed";
+const std::string TypeFiller::kErrIdentNotResolved = "Error: Identifier not resolved as expected";
 
 void TypeFiller::postVisit(Function &node) {
   // Function not checked
@@ -682,8 +683,26 @@ void TypeFiller::postVisit(LiteralExpression &node) {
 }
 
 void TypeFiller::postVisit(PathInExpression &node) {
-  // unsupported
-  throw std::runtime_error("PathInExpression not implemented yet");
+  if(node.segments().size() != 1) {
+    throw std::runtime_error("PathInExpression with path sep(s) not implemented yet");
+    return;
+  }
+  auto ident = node.segments().back()->ident_seg()->ident();
+  if(ident == "super" || ident == "self" || ident == "Self" || ident == "crate") {
+    _recorder->tagged_report(kErrIdentNotResolved, "Not expected keywords here in end of PathInExpression");
+    return;
+  }
+  auto info = find_symbol(ident);
+  if(!info) {
+    _recorder->tagged_report(kErrIdentNotResolved, "Identifier not found as the end of PathInExpression");
+    return;
+  }
+  if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable) {
+    node.set_type(info->type);
+  } else {
+    _recorder->tagged_report(kErrIdentNotResolved, "Invalid type associated with the identifier");
+    return;
+  }
 }
 
 void TypeFiller::postVisit(BorrowExpression &node) {
@@ -1047,8 +1066,28 @@ void TypeFiller::postVisit(ArrayExpression &node) {
 }
 
 void TypeFiller::postVisit(IndexExpression &node) {
-  throw std::runtime_error("IndexExpression not supported");
-  return;
+  auto expr_type = node.expr_obj()->get_type();
+  if(!expr_type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    return;
+  }
+  auto index_type = node.expr_index()->get_type();
+  if(!index_type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    return;
+  }
+  auto expr_arr = expr_type.get_if<sem_type::ArrayType>();
+  if(!expr_arr) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Index on not an array");
+    return;
+  }
+  auto index_primitive = index_type.get_if<sem_type::PrimitiveType>();
+  if(!index_primitive || index_primitive->is_integer()) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Index not an integer");
+    return;
+  }
+  // out_of_range is a runtime problem
+  node.set_type(expr_arr->type());
 }
 
 void TypeFiller::postVisit(TupleExpression &node) {
@@ -1241,26 +1280,86 @@ void TypeFiller::postVisit(BlockExpression &node) {
 }
 
 void TypeFiller::postVisit(FunctionBodyExpr &node) {
-  if(!node.stmts_opt() || !node.stmts_opt()->expr_opt()) {
-    node.set_type(_type_pool->make_unit());
-    return;
+  auto type = _type_pool->make_unit();
+  if(node.stmts_opt() && node.stmts_opt()->expr_opt()) {
+    type = node.stmts_opt()->expr_opt()->get_type();
+    if(!type) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      return;
+    }
   }
-  auto type = node.stmts_opt()->expr_opt()->get_type();
-  if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
-    return;
+  for(const auto &elem: node.func_returns()) {
+    auto t = elem->get_type();
+    if(!t) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      return;
+    }
+    if(t != type) {
+      _recorder->tagged_report(kErrTypeNotMatch, "FunctionBodyExpression has different return type");
+      return;
+    }
   }
   node.set_type(type);
 }
 
 void TypeFiller::postVisit(InfiniteLoopExpression &node) {
-  throw std::runtime_error("InfiniteLoopExpression not supported");
-  return;
+  if(node.loop_breaks().empty()) {
+    node.set_type(_type_pool->make_type<sem_type::NeverType>());
+    return;
+  }
+  auto type = node.loop_breaks().front()->get_type();
+  if(!type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    return;
+  }
+  for(const auto &elem: node.loop_breaks()) {
+    // compared first element again... never mind
+    auto t = elem->get_type();
+    if(!t) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      return;
+    }
+    if(t != type) {
+      _recorder->tagged_report(kErrTypeNotMatch, "InfiniteLoopExpression has different return type");
+      return;
+    }
+  }
+  node.set_type(type);
 }
 
 void TypeFiller::postVisit(PredicateLoopExpression &node) {
-  throw std::runtime_error("PredicateLoopExpression not supported");
-  return;
+  auto cond_type = node.cond()->expr()->get_type();
+  if(!cond_type) {
+    _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
+    return;
+  }
+  auto cond_prime = cond_type.get_if<sem_type::PrimitiveType>();
+  if(!cond_prime || cond_prime->prime() != sem_type::TypePrime::kBool) {
+    _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
+    return;
+  }
+
+  auto type = _type_pool->make_unit();
+  if(node.block_expr()->stmts_opt() && node.block_expr()->stmts_opt()->expr_opt()) {
+    type = node.block_expr()->stmts_opt()->expr_opt()->get_type();
+    if(!type) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      return;
+    }
+  }
+  for(const auto &elem: node.loop_breaks()) {
+    // compared first element again... never mind
+    auto t = elem->get_type();
+    if(!t) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      return;
+    }
+    if(t != type) {
+      _recorder->tagged_report(kErrTypeNotMatch, "PredicateLoopExpression has different return type");
+      return;
+    }
+  }
+  node.set_type(type);
 }
 
 void TypeFiller::postVisit(IfExpression &node) {

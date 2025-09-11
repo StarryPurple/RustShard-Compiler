@@ -15,10 +15,6 @@
 
 namespace fs = std::filesystem;
 namespace rs = insomnia::rust_shard;
-using Lexer = rs::Lexer;
-using Parser = rs::ast::Parser;
-using ErrorRecorder = rs::ast::ErrorRecorder;
-using SymbolCollector = rs::ast::SymbolCollector;
 
 std::string read_file(const fs::path &path) {
   std::ifstream file(path);
@@ -41,19 +37,63 @@ std::string get_expected_verdict(const std::string &source_code) {
 
 std::string run_compiler_logic(const std::string &source_code) {
   try {
+    using namespace rs;
+
     Lexer lexer(source_code);
-    if(!lexer) return "Fail";
+    if(!lexer) {
+      std::cout << "Fail" << std::endl;
+      std::cerr << lexer.error_msg() << std::endl;
+      return "Fail";
+    }
 
-    Parser parser(lexer);
-    if(!parser) return "Fail";
+    ast::Parser parser(lexer);
+    if(!parser) {
+      std::cout << "Fail" << std::endl;
+      std::cerr << "Parser error." << std::endl;
+      return "Fail";
+    }
 
-    auto err_recorder = std::make_unique<ErrorRecorder>();
-    SymbolCollector symbol_collector(err_recorder.get());
+    auto error_recorder = std::make_unique<ast::ErrorRecorder>();
+    auto type_pool = std::make_unique<sem_type::TypePool>();
+    auto const_pool = std::make_unique<sem_const::ConstPool>();
 
-    auto ast = parser.release_tree();
-    ast.traverse(symbol_collector);
-    if(err_recorder->has_error()) return "Fail";
+    auto ast_tree = parser.release_tree();
 
+    ast::SymbolCollector symbol_collector(error_recorder.get());
+    ast_tree.traverse(symbol_collector);
+    if(error_recorder->has_error()) {
+      std::cout << "Fail" << std::endl;
+      std::cerr << "Symbol collection error." << std::endl;
+      for(const auto &error: error_recorder->untagged_errors())
+        std::cerr << error << std::endl;
+      for(const auto &[tag, error]: error_recorder->tagged_errors())
+        std::cerr << tag << ": " << error << std::endl;
+      return "Fail";
+    }
+
+    ast::TypeDeclarator type_declarator(error_recorder.get(), type_pool.get());
+    ast_tree.traverse(type_declarator);
+    if(error_recorder->has_error()) {
+      std::cout << "Fail" << std::endl;
+      std::cerr << "Type declaration error." << std::endl;
+      for(const auto &error: error_recorder->untagged_errors())
+        std::cerr << error << std::endl;
+      for(const auto &[tag, error]: error_recorder->tagged_errors())
+        std::cerr << tag << ": " << error << std::endl;
+      return "Fail";
+    }
+
+    ast::TypeFiller type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
+    ast_tree.traverse(type_filler);
+    if(error_recorder->has_error()) {
+      std::cout << "Fail" << std::endl;
+      std::cerr << "Type filling error." << std::endl;
+      for(const auto &error: error_recorder->untagged_errors())
+        std::cerr << error << std::endl;
+      for(const auto &[tag, error]: error_recorder->tagged_errors())
+        std::cerr << tag << ": " << error << std::endl;
+      return "Fail";
+    }
     return "Success";
   } catch(const std::runtime_error &e) {
     return "Fail";

@@ -1130,6 +1130,12 @@ private:
   std::unique_ptr<Statements> _stmts_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(stmts_opt, _stmts_opt)
+
+private:
+  std::vector<ReturnExpression*> _func_returns;
+public:
+  void add_return_expr(ReturnExpression *node) { _func_returns.push_back(node); }
+  EXPOSE_FIELD_CONST_REFERENCE(func_returns, _func_returns);
 };
 
 class Statements : public BasicNode {
@@ -1208,7 +1214,10 @@ class LoopExpression : public ExpressionWithBlock {
 public:
   LoopExpression() = default;
 private:
-  // Intentional blank.
+  std::vector<BreakExpression*> _loop_breaks;
+public:
+  void add_break_expr(BreakExpression *node) { _loop_breaks.push_back(node); }
+  EXPOSE_FIELD_CONST_REFERENCE(loop_breaks, _loop_breaks);
 };
 
 class InfiniteLoopExpression : public LoopExpression {

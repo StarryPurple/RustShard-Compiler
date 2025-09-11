@@ -160,6 +160,31 @@ private:
   std::unique_ptr<Scope> _scope;
 };
 
+/*
+class ControlBlockContext {
+public:
+  void add_loop_break_asso(LoopExpression *loop_expr, BreakExpression *break_expr) {
+    auto it = _loop_breaks.find(loop_expr);
+    if(it == _loop_breaks.end()) {
+      _loop_breaks.emplace(loop_expr, std::vector{break_expr});
+    } else {
+      it->second.push_back(break_expr);
+    }
+  }
+  void add_func_return_asso(FunctionBodyExpr *func_expr, ReturnExpression *return_expr) {
+    auto it = _func_returns.find(func_expr);
+    if(it == _func_returns.end()) {
+      _func_returns.emplace(func_expr, std::vector{return_expr});
+    } else {
+      it->second.push_back(return_expr);
+    }
+  }
+private:
+  std::unordered_map<LoopExpression*, std::vector<BreakExpression*>> _loop_breaks;
+  std::unordered_map<FunctionBodyExpr*, std::vector<ReturnExpression*>> _func_returns;
+};
+*/
+
 }
 
 #endif // INSOMNIA_AST_DEFS_H

@@ -84,7 +84,7 @@ int main() {
       std::cout << "Success" << std::endl;
     } while(false);
   } catch(std::runtime_error &e) {
-    std::cout << "runtime error:" << e.what() << std::endl;
+    std::cout << "runtime error: " << e.what() << std::endl;
   }
   return 0;
 }

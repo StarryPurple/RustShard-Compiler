@@ -9,7 +9,7 @@
 
 namespace insomnia::rust_shard::ast {
 
-// check branch syntax (break/continue/return),
+// check branch syntax (break/continue/return) and collect them.
 // set scopes and collect symbols (for all vis items, not variables)
 // After this, all scopes shall be settled.
 class SymbolCollector : public RecursiveVisitor {
@@ -52,13 +52,11 @@ public:
     if(!info)
       _recorder->report("Function symbol already defined: " + std::string(node.ident()));
     _scopes.push_back(std::make_unique<Scope>());
-    _function_cnt++;
   }
   void postVisit(Function &node) override {
     if(node.body_opt())
       node.body_opt()->set_scope(std::move(_scopes.back()));
     _scopes.pop_back();
-    _function_cnt--;
   }
   void preVisit(InherentImpl &node) override {
     _scopes.push_back(std::make_unique<Scope>());
@@ -133,37 +131,52 @@ public:
   // struct(dealt), enum(dealt), type alias(dealt)
 
   // loop check: (continue, break)
+  void preVisit(FunctionBodyExpr &node) override {
+    _func_context.push_back(&node);
+  }
+  void postVisit(FunctionBodyExpr &node) override {
+    _func_context.pop_back();
+  }
   void preVisit(InfiniteLoopExpression &node) override {
-    _loop_cnt++;
+    _loop_context.push_back(&node);
   }
   void postVisit(InfiniteLoopExpression &node) override {
-    _loop_cnt--;
+    _loop_context.pop_back();
   }
   void preVisit(PredicateLoopExpression &node) override {
-    _loop_cnt++;
+    _loop_context.push_back(&node);
   }
   void postVisit(PredicateLoopExpression &node) override {
-    _loop_cnt--;
+    _loop_context.pop_back();
   }
   void preVisit(BreakExpression &node) override {
-    if(_loop_cnt == 0)
+    if(_loop_context.empty()) {
       _recorder->report("break expression not inside a loop.");
+      return;
+    }
+    _loop_context.back()->add_break_expr(&node);
   }
+
   void preVisit(ContinueExpression &node) override {
-    if(_loop_cnt == 0)
+    if(_loop_context.empty())
       _recorder->report("continue expression not inside a loop.");
+    // the loop does not need continue expressions
   }
 
   // function check: (return)
   void preVisit(ReturnExpression &node) override {
-    if(_function_cnt == 0)
+    if(_func_context.empty()) {
       _recorder->report("return expression not inside a function.");
+      return;
+    }
+    _func_context.back()->add_return_expr(&node);
   }
 
 private:
   ErrorRecorder *_recorder;
   std::vector<std::unique_ptr<Scope>> _scopes; // store the constructing scopes
-  int _loop_cnt = 0, _function_cnt = 0;
+  std::vector<LoopExpression*> _loop_context;
+  std::vector<FunctionBodyExpr*> _func_context;
 
   SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
@@ -397,7 +410,9 @@ private:
 
 // fill the struct, enum, const and alias types.
 class TypeFiller : public ScopedVisitor {
-  static const std::string kErrTypeNotResolved, kErrTypeNotMatch, kErrConstevalFailed;
+  static const std::string
+  kErrTypeNotResolved, kErrTypeNotMatch, kErrConstevalFailed,
+  kErrIdentNotResolved;
   bool constEvaluate(Expression &node) {
     if(node.has_constant()) return true;
     node.accept(_evaluator);
