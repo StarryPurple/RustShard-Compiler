@@ -11,10 +11,30 @@ concept is_one_of = (std::is_same_v<T, Ts> || ...);
 
 template <typename... Ts>
 struct type_list {
-  using as_variant = std::variant<Ts...>;
+  template <template <typename...> class T>
+  using to_template = T<Ts...>;
+
+  using as_variant = to_template<std::variant>;
 
   template <typename T>
   static constexpr bool contains = is_one_of<T, Ts...>;
+
+  static constexpr std::size_t size = sizeof...(Ts);
+
+  template <typename T>
+  using append = type_list<Ts..., T>;
+
+  template <typename T>
+  using prepend = type_list<T, Ts...>;
+
+  template <typename... Us>
+  using append_list = type_list<Ts..., Us...>;
+
+  template <typename... Us>
+  using prepend_list = type_list<Us..., Ts...>;
+
+  template <std::size_t N>
+  using at = std::tuple_element_t<N, std::tuple<Ts...>>;
 };
 
 using primitives = type_list<

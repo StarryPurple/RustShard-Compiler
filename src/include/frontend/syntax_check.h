@@ -295,11 +295,11 @@ public:
           _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
         }
         auto enum_variant_type = _type_pool->make_type<sem_type::EnumVariantType>(
-          item->ident(), dis, std::vector<sem_type::TypePtr>(), enum_ptr.get()
+          item->ident(), dis, std::vector<sem_type::TypePtr>(), enum_ptr
         );
         item->set_type(enum_variant_type); // each enum item _singleton_ has its distinct type
         enum_variants.emplace(
-          item->ident(), enum_variant_type.get<sem_type::EnumVariantType>().get()
+          item->ident(), enum_variant_type.get<sem_type::EnumVariantType>()
         );
         ++dis;
       }
@@ -332,7 +332,7 @@ private:
   sem_type::TypePool *_type_pool;
 };
 
-// evaluate const items.
+// A helper class that evaluates const items.
 // if evaluation fails, the ConstValue in the expression will not be set.
 class ConstEvaluator: public RecursiveVisitor {
   static const std::string kErrTag;
@@ -397,8 +397,9 @@ private:
 
 // fill the struct, enum, const and alias types.
 class TypeFiller : public ScopedVisitor {
-  static const std::string kErrTypeNotResolved, kErrTypeNotMatch;
+  static const std::string kErrTypeNotResolved, kErrTypeNotMatch, kErrConstevalFailed;
   bool constEvaluate(Expression &node) {
+    if(node.has_constant()) return true;
     node.accept(_evaluator);
     if(!node.has_constant()) {
       _recorder->report("const evaluation failed");

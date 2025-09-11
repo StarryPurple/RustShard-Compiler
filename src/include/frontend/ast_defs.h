@@ -64,7 +64,7 @@ enum class SymbolKind {
   kConstant, // Variant
   kTrait,
   kTypeAlias,
-  kType
+  kPrimitiveType
 };
 
 class BasicVisitor;
@@ -113,7 +113,7 @@ public:
       _symbol_set.emplace(ident, SymbolInfo{
         .node = nullptr,
         .ident = ident,
-        .kind = SymbolKind::kType,
+        .kind = SymbolKind::kPrimitiveType,
         .type = pool->make_type<sem_type::PrimitiveType>(prime)
       });
     }

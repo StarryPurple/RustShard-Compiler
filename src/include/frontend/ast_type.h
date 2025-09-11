@@ -9,13 +9,13 @@
 #include <unordered_set>
 
 #include "ast_type.h"
-#include "ast_type.h"
-#include "ast_type.h"
 
 namespace insomnia::rust_shard::sem_type {
 
 enum class TypeKind;
 class ExprType;
+
+using index_t = std::uint64_t;
 
 // a wrapper, supporting dynamic cast from basic ExprType
 class TypePtr {
@@ -61,13 +61,11 @@ struct TypePath {
 
 enum class TypePrime {
   kChar, kBool,
-  kI8, kI16, kI32, kI64,
-  kU8, kU16, kU32, kU64,
-  kISize, kUSize,
+  kI8, kI16, kI32, kI64, kISize, // order related with PrimitiveType.
+  kU8, kU16, kU32, kU64, kUSize, // order related with PrimitiveType.
   kF32, kF64,
   kString
 };
-
 
 std::string_view get_type_view_from_prime(TypePrime prime);
 const std::vector<TypePrime>& type_primes();
@@ -114,6 +112,18 @@ public:
   explicit PrimitiveType(TypePrime prime)
   : ExprType(TypeKind::kPrimitive), _prime(prime) {}
   TypePrime prime() const { return _prime; }
+  bool is_integer() const {
+    return TypePrime::kI8 <= _prime && _prime <= TypePrime::kUSize;
+  }
+  bool is_floating_point() const {
+    return TypePrime::kF32 <= _prime && _prime <= TypePrime::kF64;
+  }
+  bool is_signed() const {
+    return TypePrime::kI8 <= _prime && _prime <= TypePrime::kISize;
+  }
+  bool is_unsigned() const {
+    return TypePrime::kU8 <= _prime && _prime <= TypePrime::kUSize;
+  }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -123,18 +133,18 @@ private:
 
 class ArrayType : public ExprType {
 public:
-  ArrayType(TypePtr type, std::size_t length)
+  ArrayType(TypePtr type, index_t length)
   : ExprType(TypeKind::kArray), _type(std::move(type)), _length(length) {}
-  ArrayType(std::shared_ptr<ExprType> type, std::size_t length)
+  ArrayType(std::shared_ptr<ExprType> type, index_t length)
   : ExprType(TypeKind::kArray), _type(std::move(type)), _length(length) {}
   TypePtr type() const { return _type; }
-  std::size_t length() const { return _length; }
+  index_t length() const { return _length; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
   TypePtr _type;
-  std::size_t _length;
+  index_t _length;
 };
 
 class ReferenceType : public ExprType {
@@ -199,7 +209,7 @@ class EnumVariantType;
 
 class EnumType : public ExprType {
 public:
-  using variant_map_t = std::unordered_map<std::string_view, const EnumVariantType *>;
+  using variant_map_t = std::unordered_map<std::string_view, std::shared_ptr<EnumVariantType>>;
 
   explicit EnumType(std::string_view ident)
   : ExprType(TypeKind::kEnum), _ident(ident) {}
@@ -237,22 +247,24 @@ private:
 
 class TraitType : public ExprType {
 public:
-  using asso_func_map_t = std::unordered_map<std::string_view, const FunctionType *>;
+  using asso_func_map_t = std::unordered_map<std::string_view, std::shared_ptr<FunctionType>>;
   using asso_type_map_t = std::unordered_map<std::string_view, TypePtr>;
   using asso_const_map_t = std::unordered_map<std::string_view, TypePtr>;
 
   explicit TraitType(std::string_view ident)
   : ExprType(TypeKind::kTrait), _ident(ident) {}
-  void add_asso_func(std::string_view ident, TypePtr asso_func) {
-    if(!asso_func.get_if<FunctionType>())
+  void add_asso_func(std::string_view ident, const TypePtr &asso_func) {
+    auto f = asso_func.get_if<FunctionType>();
+    if(!f) {
       throw std::runtime_error("TraitType: Not a trait function");
-    _asso_funcs.emplace(ident, std::move(asso_func));
+    }
+    _asso_funcs.emplace(ident, std::move(f));
   }
-  void add_asso_const(std::string_view ident, TypePtr asso_const) {
-    _asso_consts.emplace(ident, std::move(asso_const));
+  void add_asso_const(std::string_view ident, const TypePtr &asso_const) {
+    _asso_consts.emplace(ident, asso_const);
   }
-  void add_asso_type(std::string_view ident, TypePtr asso_type) {
-    _asso_types.emplace(ident, std::move(asso_type));
+  void add_asso_type(std::string_view ident, const TypePtr &asso_type) {
+    _asso_types.emplace(ident, asso_type);
   }
   std::string_view ident() const { return _ident; }
   const std::unordered_map<std::string_view, TypePtr>& asso_funcs() const {
@@ -291,13 +303,13 @@ public:
     std::string_view ident,
     discriminant_t discriminant,
     std::vector<TypePtr> &&asso_types,
-    EnumType *parent_enum
+    std::shared_ptr<EnumType> parent_enum
   ): ExprType(TypeKind::kEnumVariant), _ident(ident), _discriminant(discriminant),
   _asso_types(std::move(asso_types)), _parent_enum(std::move(parent_enum)) {}
   std::string_view ident() const { return _ident; }
   discriminant_t discriminant() const { return _discriminant; }
   const std::vector<TypePtr>& asso_types() const { return _asso_types; }
-  const EnumType* parent_enum() const { return _parent_enum; }
+  std::shared_ptr<EnumType> parent_enum() const { return _parent_enum; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -305,7 +317,7 @@ private:
   std::string_view _ident;
   discriminant_t _discriminant;
   std::vector<TypePtr> _asso_types;
-  const EnumType* _parent_enum;
+  std::shared_ptr<EnumType> _parent_enum;
 };
 
 class AliasType : public ExprType {

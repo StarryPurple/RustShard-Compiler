@@ -519,9 +519,9 @@ class Expression : public BasicNode, public TypeInfo {
 public:
   Expression() = default;
   virtual bool has_block() const = 0;
-  bool has_constant() const { return _const_value.has_value(); }
+  bool has_constant() const { return static_cast<bool>(_const_value); }
 protected:
-  std::optional<sem_const::ConstValPtr> _const_value;
+  sem_const::ConstValPtr _const_value;
 private:
   // for ConstEvaluator
   void set_const_value(sem_const::ConstValPtr value) {

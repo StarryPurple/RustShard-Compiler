@@ -76,32 +76,37 @@ struct ConstReference : public ConstBase {
   bool operator==(const ConstReference &) const = default;
 };
 
+// contains std::monostate
+using const_val_list = type_utils::type_list<
+  std::monostate,
+  ConstPrimitive,
+  ConstReference,
+  ConstRange,
+  ConstTuple,
+  ConstArray,
+  ConstStruct,
+  ConstSlice
+>;
+
 class ConstValue {
 public:
   bool operator==(const ConstValue &) const = default;
-  template <class T>
-  ConstValue(sem_type::TypePtr type, const T &value) {
-    set(std::move(type), value);
+  template <class T> requires const_val_list::contains<T>
+  ConstValue(sem_type::TypePtr type, T &&value)
+  : _type(std::move(type)), _const_val(std::forward<T>(value)) {}
+  template <class T> requires const_val_list::contains<T>
+  void set(sem_type::TypePtr type, T &&value) {
+    _type = std::move(type); _const_val = std::forward<T>(value);
   }
-  template <class T>
+  template <class T> requires const_val_list::contains<T>
   const T& get() const;
-  template <class T>
+  template <class T> requires const_val_list::contains<T>
   const T* get_if() const;
-  template <class T>
-  void set(sem_type::TypePtr type, const T &value);
 
 private:
   sem_type::TypePtr _type;
-  std::variant<
-    std::monostate,
-    ConstPrimitive,
-    ConstReference,
-    ConstRange,
-    ConstTuple,
-    ConstArray,
-    ConstStruct,
-    ConstSlice
-  > _const_val;
+  // add a std::monostate to signal for being not constant
+  const_val_list::prepend<std::monostate>::as_variant _const_val;
 public:
   sem_type::TypePtr type() const { return _type; }
   sem_type::TypeKind kind() const { return _type->kind(); }
@@ -118,7 +123,7 @@ public:
   std::shared_ptr<ConstValue> make_raw_const(sem_type::TypePtr type, Args &&...args) {
     auto ptr = std::make_shared<ConstValue>(
       std::move(type),
-      std::make_shared<T>(std::forward<Args>(args)...)
+      T(std::forward<Args>(args)...)
     );
     auto it = _pool.find(ptr);
     if(it != _pool.end())
@@ -134,21 +139,7 @@ public:
   }
 private:
   struct ConstValueSharedPtrHash {
-    std::size_t operator()(const std::shared_ptr<ConstValue> &ptr) const {
-      std::size_t type_hash = ptr->type()->hash();
-      std::size_t value_hash = 0;
-      std::visit([&]<typename T0>(const T0 &val) {
-        using T = std::decay_t<T0>;
-        if constexpr(std::is_same_v<T, ConstPrimitive>) {
-          std::visit([&]<typename T1>(const T1& primitive_val) {
-            value_hash = std::hash<std::decay_t<T1>>()(primitive_val);
-          }, val.value);
-        } else if constexpr(!std::is_same_v<T, std::monostate>) {
-          // value_hash = std::hash<T>()(val);
-        }
-      }, ptr->const_val());
-      return type_hash ^ value_hash;
-    }
+    std::size_t operator()(const std::shared_ptr<ConstValue> &ptr) const;
   };
   struct ConstValueSharedPtrEqual {
     bool operator()(
@@ -166,5 +157,7 @@ private:
 };
 
 }
+
+#include "ast_constant.ipp"
 
 #endif // INSOMNIA_AST_CONSTANT_H
