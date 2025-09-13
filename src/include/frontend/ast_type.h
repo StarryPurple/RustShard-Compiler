@@ -55,11 +55,6 @@ public:
   T* as_if() const { return dynamic_cast<T*>(_ptr.get()); }
 };
 
-struct TypePath {
-  std::vector<std::string_view> segments;
-  bool is_absolute;
-};
-
 enum class TypePrime {
   kChar, kBool,
   kI8, kI16, kI32, kI64, kISize, // order related with PrimitiveType.
@@ -371,7 +366,7 @@ public:
     _pool.insert(ptr);
     return ptr;
   }
-  // In fact I shall list all possibilities... Never mind.
+  // In fact, I shall list all possibilities... Never mind.
   template <class T, class... Args>
   requires std::derived_from<T, ExprType> && std::is_constructible_v<T, Args...>
   TypePtr make_type(Args &&...args) {

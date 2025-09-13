@@ -5,6 +5,13 @@
 
 namespace insomnia::rust_shard::ast {
 
+
+/*************************** SymboCollector ***************************************/
+
+const std::string SymbolCollector::kDuplicateDefinitionErr = "Error: identifier duplicated";
+const std::string SymbolCollector::kControlStatementErr = "Error: control block not match";
+const std::string SymbolCollector::kScopeErr = "Error: Scope not valid";
+
 /*************************** ConstEvaluator ***************************************/
 
 void ConstEvaluator::postVisit(LiteralExpression &node) {

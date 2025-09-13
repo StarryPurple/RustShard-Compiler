@@ -13,7 +13,7 @@ namespace insomnia::rust_shard::ast {
 // set scopes and collect symbols (for all vis items, not variables)
 // After this, all scopes shall be settled.
 class SymbolCollector : public RecursiveVisitor {
-  static const std::string kDuplicateDefinitionErr, kLoopErr;
+  static const std::string kDuplicateDefinitionErr, kControlStatementErr, kScopeErr;
 public:
   explicit SymbolCollector(ErrorRecorder *recorder): _recorder(recorder) {}
 
@@ -343,6 +343,22 @@ public:
 private:
   ErrorRecorder *_recorder;
   sem_type::TypePool *_type_pool;
+};
+
+//
+class SymbolResolver : public RecursiveVisitor {
+public:
+  SymbolResolver(ErrorRecorder *recorder, sem_type::TypePool *type_pool, ResolutionTree *res_tree)
+  : _recorder(recorder), _type_pool(type_pool), _res_tree(res_tree) {}
+
+  void postVisit(Crate &node) override {
+    _res_tree->set_root(std::make_unique<>())
+  }
+
+private:
+  ErrorRecorder *_recorder;
+  sem_type::TypePool *_type_pool;
+  ResolutionTree *_res_tree;
 };
 
 // A helper class that evaluates const items.

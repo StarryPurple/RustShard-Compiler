@@ -32,20 +32,18 @@ namespace insomnia::rust_shard::ast {
 #define EXPOSE_FIELD_CONST_REFERENCE(func_name, field_name) \
   auto func_name() const -> const decltype(field_name) & { return field_name; }
 
-class Crate : public BasicNode {
+class Crate : public BasicNode, public ScopeInfoBase {
 public:
   explicit Crate(std::vector<std::unique_ptr<Item>> &&items) : _items(std::move(items)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
+  std::string_view _ident;
   std::vector<std::unique_ptr<Item>> _items;
-  std::unique_ptr<Scope> _scope;
 public:
+  EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
   EXPOSE_FIELD_CONST_REFERENCE(items, _items)
-  EXPOSE_FIELD_CONST_REFERENCE(scope, _scope);
 
-  void set_scope(std::unique_ptr<Scope> scope) {
-    _scope = std::move(scope);
-  }
+  void set_name(std::string_view ident) { _ident = ident; }
 };
 
 class Item : public BasicNode {
@@ -65,7 +63,7 @@ private:
   // Intentional blank.
 };
 
-class Function : public VisItem, public TypeInfo {
+class Function : public VisItem, public TypeInfoBase {
 public:
   Function(
     bool is_const,
@@ -158,7 +156,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type_opt, _type_opt)
 };
 
-class Type : public BasicNode, public TypeInfo {
+class Type : public BasicNode, public TypeInfoBase {
 public:
   Type() = default;
 private:
@@ -238,7 +236,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
-class Struct : public VisItem, public TypeInfo {
+class Struct : public VisItem, public TypeInfoBase {
 public:
   Struct() = default;
 private:
@@ -287,7 +285,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
-class Enumeration : public VisItem, public TypeInfo {
+class Enumeration : public VisItem, public TypeInfoBase {
 public:
   Enumeration(
     std::string_view enum_name,
@@ -314,7 +312,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(items, _items)
 };
 
-class EnumItem : public BasicNode, public TypeInfo {
+class EnumItem : public BasicNode, public TypeInfoBase {
 public:
   EnumItem(
     std::string_view item_name,
@@ -341,7 +339,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(const_expr, _const_expr)
 };
 
-class ConstantItem : public VisItem, public TypeInfo {
+class ConstantItem : public VisItem, public TypeInfoBase {
 public:
   ConstantItem(
     std::string_view item_name,
@@ -359,7 +357,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(const_expr_opt, _const_expr_opt)
 };
 
-class Trait : public VisItem, public TypeInfo, public ScopeInfo {
+class Trait : public VisItem, public TypeInfoBase, public ScopeInfoBase {
 public:
   Trait(
     std::string_view trait_name,
@@ -417,7 +415,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(func, _func)
 };
 
-class TypeAlias : public VisItem, public TypeInfo {
+class TypeAlias : public VisItem, public TypeInfoBase {
 public:
   TypeAlias(
     std::string_view alias_name,
@@ -432,7 +430,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type_opt, _type_opt)
 };
 
-class Implementation : public VisItem, public ScopeInfo {
+class Implementation : public VisItem, public ScopeInfoBase {
 public:
   Implementation() = default;
 private:
@@ -514,7 +512,7 @@ public:
 
 class ConstEvaluator;
 
-class Expression : public BasicNode, public TypeInfo {
+class Expression : public BasicNode, public TypeInfoBase {
   friend ConstEvaluator;
 public:
   Expression() = default;
@@ -1108,7 +1106,7 @@ private:
   // Intentional blank.
 };
 
-class BlockExpression : public ExpressionWithBlock, public ScopeInfo {
+class BlockExpression : public ExpressionWithBlock, public ScopeInfoBase {
 public:
   explicit BlockExpression(
     std::unique_ptr<Statements> &&stmts_opt
@@ -1120,7 +1118,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(stmts_opt, _stmts_opt)
 };
 
-class FunctionBodyExpr : public ExpressionWithBlock, public ScopeInfo {
+class FunctionBodyExpr : public ExpressionWithBlock, public ScopeInfoBase {
 public:
   explicit FunctionBodyExpr(
     std::unique_ptr<Statements> &&stmts_opt
@@ -1320,7 +1318,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(arms, _arms)
 };
 
-class MatchArm : public BasicNode, public ScopeInfo {
+class MatchArm : public BasicNode, public ScopeInfoBase {
 public:
   MatchArm(
     std::unique_ptr<Pattern> &&pattern,
