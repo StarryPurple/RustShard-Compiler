@@ -88,15 +88,19 @@ enum class TypeKind {
 // TODO: Add a pretty printer. Maybe in another language...
 class ExprType : public std::enable_shared_from_this<ExprType> {
 public:
-  explicit ExprType(TypeKind kind) : _kind(kind) {}
+  explicit ExprType(TypeKind kind, bool is_mut) : _kind(kind), _is_mut(is_mut) {}
   virtual ~ExprType() = default;
+  bool is_never() const { return _kind == TypeKind::kNever; }
   TypeKind kind() const { return _kind; } // type of this layer
+  bool is_mut() const { return _is_mut; }
+  void set_mut(bool is_mut) { _is_mut = is_mut; }
   bool operator==(const ExprType &other) const;
   bool operator!=(const ExprType &other) const { return !(*this == other); }
   virtual void combine_hash(std::size_t &seed) const = 0; // hash of this layer
   std::size_t hash() const; // calls this->combine_hash(seed = 0) and returns the seed.
 protected:
   TypeKind _kind;
+  bool _is_mut;
 
   virtual bool equals_impl(const ExprType &other) const = 0;
   static void combine_hash_impl(std::size_t &seed, std::size_t h);
@@ -106,8 +110,8 @@ private:
 
 class PrimitiveType : public ExprType {
 public:
-  explicit PrimitiveType(TypePrime prime)
-  : ExprType(TypeKind::kPrimitive), _prime(prime) {}
+  explicit PrimitiveType(TypePrime prime, bool is_mut = false)
+  : ExprType(TypeKind::kPrimitive, is_mut), _prime(prime) {}
   TypePrime prime() const { return _prime; }
   bool is_integer() const {
     return TypePrime::kI8 <= _prime && _prime <= TypePrime::kUSize;
@@ -130,10 +134,10 @@ private:
 
 class ArrayType : public ExprType {
 public:
-  ArrayType(TypePtr type, index_t length)
-  : ExprType(TypeKind::kArray), _type(std::move(type)), _length(length) {}
+  ArrayType(TypePtr type, index_t length, bool is_mut = false)
+  : ExprType(TypeKind::kArray, is_mut), _type(std::move(type)), _length(length) {}
   ArrayType(std::shared_ptr<ExprType> type, index_t length)
-  : ExprType(TypeKind::kArray), _type(std::move(type)), _length(length) {}
+  : ExprType(TypeKind::kArray, is_mut), _type(std::move(type)), _length(length) {}
   TypePtr type() const { return _type; }
   index_t length() const { return _length; }
   void combine_hash(std::size_t &seed) const override;
@@ -146,10 +150,10 @@ private:
 
 class ReferenceType : public ExprType {
 public:
-  explicit ReferenceType(TypePtr type, bool is_mut)
-  : ExprType(TypeKind::kReference), _type(std::move(type)), _is_mut(is_mut) {}
+  explicit ReferenceType(TypePtr type, bool is_mut = false)
+  : ExprType(TypeKind::kReference, is_mut), _type(std::move(type)) {}
   explicit ReferenceType(std::shared_ptr<ExprType> type, bool is_mut)
-  : ExprType(TypeKind::kReference), _type(std::move(type)), _is_mut(is_mut) {}
+  : ExprType(TypeKind::kReference, is_mut), _type(std::move(type)) {}
   TypePtr type() const { return _type; }
   bool is_mut() const { return _is_mut; }
   void combine_hash(std::size_t &seed) const override;
@@ -157,13 +161,12 @@ protected:
   bool equals_impl(const ExprType &other) const override;
 private:
   TypePtr _type;
-  bool _is_mut;
 };
 
 class StructType : public ExprType {
 public:
-  explicit StructType(std::string_view ident)
-  : ExprType(TypeKind::kStruct),
+  explicit StructType(std::string_view ident, bool is_mut)
+  : ExprType(TypeKind::kStruct, is_mut),
   _ident(std::move(ident)) {}
   void set_fields(std::map<std::string_view, TypePtr> &&fields) {
     _fields = std::move(fields);
@@ -180,8 +183,8 @@ private:
 
 class TupleType : public ExprType {
 public:
-  explicit TupleType(std::vector<TypePtr> &&members)
-  : ExprType(TypeKind::kTuple), _members(std::move(members)) {}
+  explicit TupleType(std::vector<TypePtr> &&members, bool is_mut = false)
+  : ExprType(TypeKind::kTuple, is_mut), _members(std::move(members)) {}
   const std::vector<TypePtr>& members() const { return _members; }
   void combine_hash(std::size_t &seed) const override;
 protected:
@@ -192,8 +195,8 @@ private:
 
 class SliceType : public ExprType {
 public:
-  explicit SliceType(TypePtr type)
-  : ExprType(TypeKind::kSlice), _type(std::move(type)) {}
+  explicit SliceType(TypePtr type, bool is_mut = false)
+  : ExprType(TypeKind::kSlice, is_mut), _type(std::move(type)) {}
   TypePtr type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
 protected:
@@ -208,8 +211,8 @@ class EnumType : public ExprType {
 public:
   using variant_map_t = std::unordered_map<std::string_view, std::shared_ptr<EnumVariantType>>;
 
-  explicit EnumType(std::string_view ident)
-  : ExprType(TypeKind::kEnum), _ident(ident) {}
+  explicit EnumType(std::string_view ident, bool is_mut = false)
+  : ExprType(TypeKind::kEnum, is_mut), _ident(ident) {}
   std::string_view ident() const { return _ident; }
   void set_variants(variant_map_t &&variants) {
     _variants = std::move(variants);
@@ -229,8 +232,9 @@ class FunctionType : public ExprType {
 public:
   FunctionType(
     std::string_view ident,
-    std::vector<TypePtr> &&params
-  ): ExprType(TypeKind::kFunction), _ident(ident),
+    std::vector<TypePtr> &&params,
+    bool is_mut = false
+  ): ExprType(TypeKind::kFunction, is_mut), _ident(ident),
   _params(std::move(params)) {}
   std::string_view ident() const { return _ident; }
   const std::vector<TypePtr>& params() const { return _params; }
@@ -248,8 +252,8 @@ public:
   using asso_type_map_t = std::unordered_map<std::string_view, TypePtr>;
   using asso_const_map_t = std::unordered_map<std::string_view, TypePtr>;
 
-  explicit TraitType(std::string_view ident)
-  : ExprType(TypeKind::kTrait), _ident(ident) {}
+  explicit TraitType(std::string_view ident, bool is_mut = false)
+  : ExprType(TypeKind::kTrait, is_mut), _ident(ident) {}
   void add_asso_func(std::string_view ident, const TypePtr &asso_func) {
     auto f = asso_func.get_if<FunctionType>();
     if(!f) {
@@ -283,8 +287,8 @@ private:
 
 class RangeType : public ExprType {
 public:
-  explicit RangeType(TypePtr type)
-  : ExprType(TypeKind::kRange), _type(std::move(type)) {}
+  explicit RangeType(TypePtr type, bool is_mut = false)
+  : ExprType(TypeKind::kRange, is_mut), _type(std::move(type)) {}
   TypePtr type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
 protected:
@@ -300,8 +304,9 @@ public:
     std::string_view ident,
     discriminant_t discriminant,
     std::vector<TypePtr> &&asso_types,
-    std::shared_ptr<EnumType> parent_enum
-  ): ExprType(TypeKind::kEnumVariant), _ident(ident), _discriminant(discriminant),
+    std::shared_ptr<EnumType> parent_enum,
+    bool is_mut = false
+  ): ExprType(TypeKind::kEnumVariant, is_mut), _ident(ident), _discriminant(discriminant),
   _asso_types(std::move(asso_types)), _parent_enum(std::move(parent_enum)) {}
   std::string_view ident() const { return _ident; }
   discriminant_t discriminant() const { return _discriminant; }
@@ -320,8 +325,9 @@ private:
 class AliasType : public ExprType {
 public:
   AliasType(
-    std::string_view ident
-  ): ExprType(TypeKind::kAlias), _ident(ident) {}
+    std::string_view ident,
+    bool is_mut = false
+  ): ExprType(TypeKind::kAlias, is_mut), _ident(ident) {}
   void set_type(TypePtr type) { _type = std::move(type); }
   std::string_view ident() const { return _ident; }
   TypePtr type() const { return _type; }
@@ -335,7 +341,7 @@ private:
 
 class NeverType : public ExprType {
 public:
-  NeverType(): ExprType(TypeKind::kNever) {}
+  explicit NeverType(bool is_mut = false): ExprType(TypeKind::kNever, is_mut) {}
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -374,6 +380,15 @@ public:
   }
   TypePtr make_unit() {
     return make_type<TupleType>(std::vector<TypePtr>());
+  }
+  TypePtr make_never() {
+    return make_type<NeverType>();
+  }
+  TypePtr set_mut(TypePtr type, bool is_mut) {
+    type->set_mut(is_mut);
+    auto ptr = type.get<ExprType>();
+    if(!_pool.contains(ptr)) _pool.insert(ptr);
+    return type;
   }
   std::size_t size() const { return _pool.size(); }
 private:

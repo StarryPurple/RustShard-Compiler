@@ -345,14 +345,15 @@ private:
   sem_type::TypePool *_type_pool;
 };
 
-//
+// Resolve symbol reliance relationship (used in Type Path)
+// After this, one node shall know its parent resolution region and its children.
 class SymbolResolver : public RecursiveVisitor {
 public:
   SymbolResolver(ErrorRecorder *recorder, sem_type::TypePool *type_pool, ResolutionTree *res_tree)
   : _recorder(recorder), _type_pool(type_pool), _res_tree(res_tree) {}
 
   void postVisit(Crate &node) override {
-    _res_tree->set_root(std::make_unique<>())
+
   }
 
 private:

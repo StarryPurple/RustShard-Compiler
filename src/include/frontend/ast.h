@@ -32,7 +32,7 @@ namespace insomnia::rust_shard::ast {
 #define EXPOSE_FIELD_CONST_REFERENCE(func_name, field_name) \
   auto func_name() const -> const decltype(field_name) & { return field_name; }
 
-class Crate : public BasicNode, public ScopeInfoBase {
+class Crate : public BasicNode, public ScopeInfoBase, public ResolutionInfoBase {
 public:
   explicit Crate(std::vector<std::unique_ptr<Item>> &&items) : _items(std::move(items)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
@@ -63,7 +63,7 @@ private:
   // Intentional blank.
 };
 
-class Function : public VisItem, public TypeInfoBase {
+class Function : public VisItem, public TypeInfoBase, public ResolutionInfoBase {
 public:
   Function(
     bool is_const,

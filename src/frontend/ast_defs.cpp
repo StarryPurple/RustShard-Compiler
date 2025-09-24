@@ -12,7 +12,6 @@ void ASTTree::traverse(RecursiveVisitor &r_visitor) {
   r_visitor.traverse(*_crate);
 }
 
-
 void Scope::load_builtin_types(sem_type::TypePool *pool) {
   for(const auto prime: sem_type::type_primes()) {
     auto ident = sem_type::get_type_view_from_prime(prime);
@@ -49,21 +48,5 @@ bool Scope::set_type(std::string_view ident, sem_type::TypePtr type) {
   it->second.type = std::move(type);
   return true;
 }
-
-ResolutionNode* SYmbolResolutionTree::resolve_path(const ResolutionPath &path, ResolutionNode *current) const  {
-  if(path.is_absolute) {
-    current = _root.get();
-  }
-  for(const auto &seg: path.segments) {
-    if(!current) return nullptr;
-    if(seg == "self") continue;
-    else if(seg == "super") current = current->super;
-    else if(seg == "crate") current = current->crate;
-    else if(seg == "Self") current = current->Self;
-    else current = current->resolve_segment(seg);
-  }
-  return current;
-}
-
 
 }

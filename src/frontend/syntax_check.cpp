@@ -1133,6 +1133,7 @@ void TypeFiller::postVisit(FieldExpression &node) {
 void TypeFiller::postVisit(ContinueExpression &node) {
   // ???
   // always success
+  node.set_type(_type_pool->make_never());
 }
 
 void TypeFiller::postVisit(BreakExpression &node) {
@@ -1256,16 +1257,14 @@ void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
 }
 
 void TypeFiller::postVisit(ReturnExpression &node) {
-  if(!node.expr_opt()) {
-    node.set_type(_type_pool->make_unit());
-    return;
+  if(node.expr_opt()) {
+    auto type = node.expr_opt()->get_type();
+    if(!type) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      return;
+    }
   }
-  auto type = node.expr_opt()->get_type();
-  if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
-    return;
-  }
-  node.set_type(type);
+  node.set_type(_type_pool->make_never());
 }
 
 void TypeFiller::postVisit(UnderscoreExpression &node) {
@@ -1311,21 +1310,22 @@ void TypeFiller::postVisit(FunctionBodyExpr &node) {
 
 void TypeFiller::postVisit(InfiniteLoopExpression &node) {
   if(node.loop_breaks().empty()) {
-    node.set_type(_type_pool->make_type<sem_type::NeverType>());
+    node.set_type(_type_pool->make_never());
     return;
   }
-  auto type = node.loop_breaks().front()->get_type();
+  auto type = node.block_expr()->get_type();
   if(!type) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
   for(const auto &elem: node.loop_breaks()) {
-    // compared first element again... never mind
     auto t = elem->get_type();
     if(!t) {
       _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
       return;
     }
+    if(t->is_never()) t = type;
+    if(type->is_never()) type = t;
     if(t != type) {
       _recorder->tagged_report(kErrTypeNotMatch, "InfiniteLoopExpression has different return type");
       return;
@@ -1346,13 +1346,10 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
     return;
   }
 
-  auto type = _type_pool->make_unit();
-  if(node.block_expr()->stmts_opt() && node.block_expr()->stmts_opt()->expr_opt()) {
-    type = node.block_expr()->stmts_opt()->expr_opt()->get_type();
-    if(!type) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
-      return;
-    }
+  auto type = node.block_expr()->get_type();
+  if(!type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    return;
   }
   for(const auto &elem: node.loop_breaks()) {
     // compared first element again... never mind
@@ -1361,6 +1358,8 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
       _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
       return;
     }
+    if(t->is_never()) t = type;
+    if(type->is_never()) type = t;
     if(t != type) {
       _recorder->tagged_report(kErrTypeNotMatch, "PredicateLoopExpression has different return type");
       return;
@@ -1392,9 +1391,10 @@ void TypeFiller::postVisit(IfExpression &node) {
     if constexpr(!std::is_same_v<T, std::monostate>) {
       // T = std::unique_ptr<BlockExpression/IfExpression>
       auto t = arg->get_type();
-      if(!t || t != type) {
-        success = false;
-      }
+      if(!t) success = false;
+      if(t->is_never()) t = type;
+      if(type->is_never()) type = t;
+      if(t != type) success = false;
     }
   }, node.else_spec());
   if(!success) {
@@ -1456,16 +1456,15 @@ void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, sem_type::TypePtr type) 
 
 void TypeFiller::bind_identifier(IdentifierPattern *pattern, sem_type::TypePtr type) {
   // always success
-  bool is_mut = pattern->is_mut();
   if(pattern->is_ref()) {
     // let ref y = r <=> let y = &r
     // let ref mut z = r <=> let z = &mut r
-    type = _type_pool->make_type<sem_type::ReferenceType>(type, is_mut);
-    is_mut = false; // z is immutable (while *z is mutable)
+    type = _type_pool->make_type<sem_type::ReferenceType>(type);
   }
+  type = _type_pool->set_mut(type, pattern->is_mut());
   auto info = add_symbol(pattern->ident(), SymbolInfo{
     .node = pattern, .ident = pattern->ident(), .kind = SymbolKind::kVariable,
-    .is_mut = is_mut, .type = type
+    .type = type
   });
   if(!info) {
     _recorder->report("Variable identifier already defined");

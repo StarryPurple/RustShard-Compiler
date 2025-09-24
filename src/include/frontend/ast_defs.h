@@ -90,7 +90,6 @@ struct SymbolInfo {
   const BasicNode* node;
   std::string_view ident;
   SymbolKind kind;
-  bool is_mut;
   sem_type::TypePtr type;
 };
 
@@ -161,109 +160,45 @@ struct ResolutionPath {
 };
 
 enum class ResolutionKind {
-  kProject,        // no related semantic object
-  kCrate,          // no related semantic object
-  kTrait,          // trait_type
-  kInherentImpl,   // obj_type
-  kTraitImpl,      // obj_type, trait_type
-  kType,           // obj_type
-  kFunction,       // obj_type
-  kConstant,       // const_val
+  kProject,        // no related semantic object(management)
+  kCrate,          // no related semantic object(management)
+  kTrait,          // trait_type(management, append in trait impl)
+  kInherentImpl,   // obj_type(::Type, append to type)
+  kTraitImpl,      // obj_type, trait_type(::Type, impl redirect)
+  kRelatedType,    // obj_type(::Type, asso type, type alias)
+  kFunction,       // obj_type(f.func()/T::func())
+  kConstant,       // const_val(f.c/T::c)
+  kStruct,         // obj_type(::Struct)
+  kTuple,          // obj_type(::Tuple)
+  kEnum,           // obj_type(::Enum)
+  kBasic,          // obj_type(f.v/T::v)
 };
 
-// stands for an associative type/function/constant/trait
-class ResolutionNode {
+class ResolutionInfoBase {
+private:
   std::string_view _ident;
   ResolutionKind _kind;
   sem_type::TypePtr _obj_type;
   sem_type::TypePtr _trait_type;
   sem_const::ConstValPtr _const_val;
-  ResolutionNode *_super, *_crate, *_Self;
-  std::unordered_map<std::string_view, std::unique_ptr<ResolutionNode>> _children;
-
+  ResolutionInfoBase *_super {}, *_crate {}, *_Self {};
+  std::unordered_map<std::string_view, std::unique_ptr<ResolutionInfoBase>> _children;
 public:
-  ResolutionNode() = default;
-
-  // Project -> [Crate+]
-  static std::unique_ptr<ResolutionNode> make_project(std::string_view ident) {
-    auto r = std::make_unique<ResolutionNode>();
-    r->_ident = ident;
-    r->_kind = ResolutionKind::kProject;
-    r->_super = nullptr;
-    r->_crate = nullptr;
-    r->_Self = nullptr;
-    return r;
+  ResolutionInfoBase() = default;
+  void init_project(std::string_view ident) {
+    _ident = ident;
+    _kind = ResolutionKind::kProject;
   }
-
-  // Crate -> [VisItem*]
-  std::unique_ptr<ResolutionNode> make_crate(std::string_view ident) {
-    auto r = std::make_unique<ResolutionNode>();
-    r->_ident = ident;
-    r->_kind = ResolutionKind::kCrate;
-    r->_super = this;
-    r->_crate = r.get();
-    r->_Self = nullptr;
-    return r;
+  void init_crate(std::string_view ident) {
+    _ident = ident;
+    _kind = ResolutionKind::kCrate;
   }
-
-  // trait Trait
-  std::unique_ptr<ResolutionNode> make_trait(sem_type::TypePtr trait_type) {
-    auto r = std::make_unique<ResolutionNode>();
-    r->_kind = ResolutionKind::kTrait;
-    r->_trait_type = trait_type;
-    r->_super = this;
-    r->_crate = _crate;
-    r->_Self = nullptr;
-    return r;
+  void init_trait(std::string_view ident, sem_type::TypePtr trait_type) {
+    _ident = ident;
+    _trait_type = trait_type;
+    _kind = ResolutionKind::kTrait;
   }
-
-  // impl Type
-  std::unique_ptr<ResolutionNode> make_inherent_impl(sem_type::TypePtr obj_type) {
-    auto r = std::make_unique<ResolutionNode>();
-    r->_kind = ResolutionKind::kInherentImpl;
-    r->_obj_type = obj_type;
-    r->_super = this;
-    r->_crate = _crate;
-    r->_Self = ;
-    return r;
-  }
-
-  std::unique_ptr<ResolutionNode> make_trait_impl(sem_type::TypePtr obj_type, sem_type::TypePtr trait_type) {
-    auto r = std::make_unique<ResolutionNode>();
-    r->_kind = ResolutionKind::kTraitImpl;
-    return r;
-  }
-
-  std::unique_ptr<ResolutionNode> make_type_alias(sem_type::TypePtr obj_type) {
-    auto r = std::make_unique<ResolutionNode>();
-    r->_kind = ResolutionKind::kInherentImpl;
-    return r;
-  }
-
-  std::unique_ptr<ResolutionNode> make_function(sem_type::TypePtr obj_type) {
-    auto r = std::make_unique<ResolutionNode>();
-    return r;
-  }
-
-  std::unique_ptr<ResolutionNode> make_constant(sem_const::ConstValPtr const_val) {
-    auto r = std::make_unique<ResolutionNode>();
-    return r;
-  }
-
-  ResolutionNode* resolve_segment(std::string_view ident) const {
-    if(auto it = _children.find(ident); it != _children.end()) {
-      return it->second.get();
-    }
-    return nullptr;
-  }
-};
-
-class ResolutionTree {
-public:
-  ResolutionTree(std::string_view project_ident): _root(ResolutionNode::make_project(project_ident)) {}
-  ResolutionNode *resolve_path(const ResolutionPath &path, ResolutionNode *current) const;
-private:
-  std::unique_ptr<ResolutionNode> _root; // project layer
+  void init_inherent_impl()
 };
 
 }
