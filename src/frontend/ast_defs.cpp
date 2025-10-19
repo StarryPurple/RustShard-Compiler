@@ -6,11 +6,22 @@
 namespace insomnia::rust_shard::ast {
 
 ASTTree::ASTTree(std::unique_ptr<Crate> crate)
-: _crate(std::move(crate)) {}
-
+: _crate(std::move(crate)) { _crate->set_name(_crate_name); }
 
 void ASTTree::traverse(RecursiveVisitor &r_visitor) {
   r_visitor.traverse(*_crate);
+}
+
+void Scope::load_builtin_types(sem_type::TypePool *pool) {
+  for(const auto prime: sem_type::type_primes()) {
+    auto ident = sem_type::get_type_view_from_prime(prime);
+    _symbol_set.emplace(ident, SymbolInfo{
+      .node = nullptr,
+      .ident = ident,
+      .kind = SymbolKind::kPrimitiveType,
+      .type = pool->make_type<sem_type::PrimitiveType>(prime)
+    });
+  }
 }
 
 SymbolInfo* Scope::add_symbol(std::string_view ident, const SymbolInfo &symbol) {
