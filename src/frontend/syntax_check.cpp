@@ -4,17 +4,16 @@
 #include <cmath>
 
 namespace insomnia::rust_shard::ast {
-
 /*************************** ConstEvaluator ***************************************/
 
 void ConstEvaluator::postVisit(LiteralExpression &node) {
-  using sem_type::PrimitiveType;
+  using stype::PrimitiveType;
   auto prime = node.prime();
-  sem_type::TypePtr type = _type_pool->make_type<sem_type::PrimitiveType>(prime);
+  stype::TypePtr type = _type_pool->make_type<stype::PrimitiveType>(prime);
   std::visit([&](auto &&arg) {
-    sem_const::ConstPrimitive primitive_val(arg);
+    sconst::ConstPrimitive primitive_val(arg);
     node.set_const_value(
-      _const_pool->make_const<sem_const::ConstPrimitive>(type, primitive_val)
+      _const_pool->make_const<sconst::ConstPrimitive>(type, primitive_val)
     );
   }, node.spec_value());
 }
@@ -27,8 +26,8 @@ void ConstEvaluator::postVisit(BorrowExpression &node) {
     return;
   }
   auto inner = node.expr()->const_value();
-  node.set_const_value(_const_pool->make_const<sem_const::ConstReference>(
-    _type_pool->make_type<sem_type::ReferenceType>(inner->type(), node.is_mut()),
+  node.set_const_value(_const_pool->make_const<sconst::ConstReference>(
+    _type_pool->make_type<stype::ReferenceType>(inner->type(), node.is_mut()),
     inner
   ));
 }
@@ -39,7 +38,7 @@ void ConstEvaluator::postVisit(DereferenceExpression &node) {
     return;
   }
   auto inner = node.expr()->const_value();
-  if(auto ref = inner->get_if<sem_const::ConstReference>()) {
+  if(auto ref = inner->get_if<sconst::ConstReference>()) {
     node.set_const_value(ref->ref);
   } else {
     _recorder->tagged_report(kErrTag, "Dereferencing a not-borrowed type");
@@ -52,7 +51,7 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
     return;
   }
   auto inner = node.expr()->const_value();
-  auto primitive = inner->get_if<sem_const::ConstPrimitive>();
+  auto primitive = inner->get_if<sconst::ConstPrimitive>();
   if(!primitive) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in negation expression");
     return;
@@ -65,8 +64,8 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
         return;
       }
       if constexpr(type_utils::is_one_of<T, std::int64_t>) {
-        using sem_type::TypePrime;
-        auto prime = inner->type().get<sem_type::PrimitiveType>()->prime();
+        using stype::TypePrime;
+        auto prime = inner->type().get<stype::PrimitiveType>()->prime();
         if(
           (prime == TypePrime::kI8 && arg == std::numeric_limits<std::int8_t>::min()) ||
           (prime == TypePrime::kI16 && arg == std::numeric_limits<std::int16_t>::min()) ||
@@ -78,7 +77,7 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
           return;
         }
       }
-      node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
+      node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
         inner->type(), // still primitive
         -arg // negation
       ));
@@ -86,7 +85,7 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
       if(node.oper() != Operator::kLogicalNot) {
         _recorder->tagged_report(kErrTag, "Invalid operator kLogicalNot in negation expression");
       }
-      node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
+      node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
         inner->type(), // still primitive
         !arg // logic not
       ));
@@ -103,8 +102,8 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
   }
   auto inner1 = node.expr1()->const_value();
   auto inner2 = node.expr2()->const_value();
-  auto prime1 = inner1->get_if<sem_const::ConstPrimitive>();
-  auto prime2 = inner2->get_if<sem_const::ConstPrimitive>();
+  auto prime1 = inner1->get_if<sconst::ConstPrimitive>();
+  auto prime2 = inner2->get_if<sconst::ConstPrimitive>();
   if (!prime1 || !prime2) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in arithmetic/logical expression");
     return;
@@ -119,10 +118,10 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
       if constexpr(type_utils::is_one_of<T1, std::int64_t, std::uint64_t>) {
         if constexpr(type_utils::is_one_of<T2, std::uint64_t>) {
           if(oper == Operator::kShl) {
-            node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
+            node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
               inner1->type(), arg1 << arg2));
           } else {
-            node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
+            node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
               inner1->type(), arg1 >> arg2));
           }
         } else {
@@ -156,16 +155,16 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
         }
         switch(oper) {
         case Operator::kAdd:
-          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 + arg2));
+          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 + arg2));
           break;
         case Operator::kSub:
-          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 - arg2));
+          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 - arg2));
           break;
         case Operator::kMul:
-          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 * arg2));
+          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 * arg2));
           break;
         case Operator::kDiv:
-          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 / arg2));
+          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 / arg2));
           break;
         case Operator::kMod: {
           T val = 0;
@@ -174,18 +173,18 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
           } else {
             val = arg1 % arg2;
           }
-          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), val));
+          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), val));
         } break;
         case Operator::kBitwiseAnd:
         case Operator::kBitwiseOr:
         case Operator::kBitwiseXor:
           if constexpr(std::is_integral_v<T>) {
             if(oper == Operator::kBitwiseAnd)
-              node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 & arg2));
+              node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 & arg2));
             else if(oper == Operator::kBitwiseOr)
-              node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 | arg2));
+              node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 | arg2));
             else
-              node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 ^ arg2));
+              node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 ^ arg2));
           } else {
             _recorder->tagged_report(kErrTag, "Bitwise operation on non-integer type");
           }
@@ -196,9 +195,9 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
         }
       } else if constexpr(std::is_same_v<T, bool>) {
         if(oper == Operator::kLogicalAnd) {
-          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 && arg2));
+          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 && arg2));
         } else if(oper == Operator::kLogicalOr) {
-          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(inner1->type(), arg1 || arg2));
+          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), arg1 || arg2));
         } else {
           _recorder->tagged_report(kErrTag, "Invalid operator for arithmetic/logical expression (boolean logical)");
         }
@@ -216,8 +215,8 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
   }
   auto inner1 = node.expr1()->const_value();
   auto inner2 = node.expr2()->const_value();
-  auto prime1 = inner1->get_if<sem_const::ConstPrimitive>();
-  auto prime2 = inner2->get_if<sem_const::ConstPrimitive>();
+  auto prime1 = inner1->get_if<sconst::ConstPrimitive>();
+  auto prime2 = inner2->get_if<sconst::ConstPrimitive>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in comparison expression");
     return;
@@ -246,18 +245,18 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
           case Operator::kLe: result = (arg1 <= arg2);
             break;
           default:
-            _recorder->tagged_report(kErrTag, "Invalid operator in comparison expression");
-            return;
-          }
-          node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-            _type_pool->make_type<sem_type::PrimitiveType>(sem_type::TypePrime::kBool),
-            result
-          ));
-        } else {
-          throw std::runtime_error("Unsupported primitive type in comparison expression");
+          _recorder->tagged_report(kErrTag, "Invalid operator in comparison expression");
+          return;
         }
-    }
-  }, prime1->value, prime2->value);
+        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+          _type_pool->make_type<stype::PrimitiveType>(stype::TypePrime::kBool),
+          result
+        ));
+      } else {
+        throw std::runtime_error("Unsupported primitive type in comparison expression");
+      }
+  }
+}, prime1->value, prime2->value);
 }
 
 void ConstEvaluator::visit(LazyBooleanExpression &node) {
@@ -273,7 +272,7 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
     return;
   }
   auto inner1 = node.expr1()->const_value();
-  auto prime1 = inner1->get_if<sem_const::ConstPrimitive>();
+  auto prime1 = inner1->get_if<sconst::ConstPrimitive>();
   if(!prime1) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in boolean expression");
     return;
@@ -284,14 +283,14 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
     return;
   }
   if(oper == Operator::kLogicalAnd && !*result1) {
-    node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-      _type_pool->make_type<sem_type::PrimitiveType>(sem_type::TypePrime::kBool),
+    node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+      _type_pool->make_type<stype::PrimitiveType>(stype::TypePrime::kBool),
       false));
     return;
   }
   if(oper == Operator::kLogicalOr && *result1) {
-    node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-      _type_pool->make_type<sem_type::PrimitiveType>(sem_type::TypePrime::kBool),
+    node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+      _type_pool->make_type<stype::PrimitiveType>(stype::TypePrime::kBool),
       true));
     return;
   }
@@ -302,7 +301,7 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
     return;
   }
   auto inner2 = node.expr2()->const_value();
-  auto prime2 = inner2->get_if<sem_const::ConstPrimitive>();
+  auto prime2 = inner2->get_if<sconst::ConstPrimitive>();
   if(!prime2) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in boolean expression");
     return;
@@ -322,26 +321,26 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     return;
   }
   auto inner = node.expr()->const_value();
-  auto primitive = inner->get_if<sem_const::ConstPrimitive>();
+  auto primitive = inner->get_if<sconst::ConstPrimitive>();
   if(!primitive) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in type cast expression");
     return;
   }
 
-  auto target_type = node.type_no_bounds()->get_type().get_if<sem_type::PrimitiveType>();
+  auto target_type = node.type_no_bounds()->get_type().get_if<stype::PrimitiveType>();
   if(!target_type) {
     _recorder->tagged_report(kErrTag, "Target type not primitive in type cast expression");
     return;
   }
   std::visit([&]<typename T0>(T0 &&arg) {
     using T = std::decay_t<T0>;
-    using sem_type::TypePrime;
+    using stype::TypePrime;
     auto target_prime = target_type->prime();
     switch(target_prime) {
     case TypePrime::kBool:
       if constexpr(type_utils::is_one_of<T, bool>) {
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-          _type_pool->make_type<sem_type::PrimitiveType>(TypePrime::kBool),
+        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+          _type_pool->make_type<stype::PrimitiveType>(TypePrime::kBool),
           arg));
       } else {
         _recorder->tagged_report(kErrTag, "Cannot cast non-boolean to bool");
@@ -362,8 +361,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
         case TypePrime::kISize: val = static_cast<std::intptr_t>(arg); break;
         default: break;
         }
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-          _type_pool->make_type<sem_type::PrimitiveType>(target_prime),
+        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+          _type_pool->make_type<stype::PrimitiveType>(target_prime),
           val
         ));
       } else {
@@ -386,8 +385,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
         case TypePrime::kUSize: val = static_cast<std::uintptr_t>(arg); break;
         default: break;
         }
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-          _type_pool->make_type<sem_type::PrimitiveType>(target_prime),
+        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+          _type_pool->make_type<stype::PrimitiveType>(target_prime),
           val
         ));
       } else {
@@ -398,8 +397,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
 
     case TypePrime::kF32: {
       if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-          _type_pool->make_type<sem_type::PrimitiveType>(target_prime),
+        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+          _type_pool->make_type<stype::PrimitiveType>(target_prime),
           static_cast<float>(arg)
         ));
       } else {
@@ -408,8 +407,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     } break;
     case TypePrime::kF64: {
       if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
-        node.set_const_value(_const_pool->make_const<sem_const::ConstPrimitive>(
-          _type_pool->make_type<sem_type::PrimitiveType>(target_prime),
+        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+          _type_pool->make_type<stype::PrimitiveType>(target_prime),
           static_cast<double>(arg)
         ));
       } else {
@@ -431,6 +430,9 @@ void ConstEvaluator::postVisit(GroupedExpression &node) {
   }
   node.set_const_value(node.expr()->const_value());
 }
+}
+
+namespace insomnia::rust_shard::ast {
 
 /********************** TypeFiller *****************************/
 
@@ -440,13 +442,71 @@ const std::string TypeFiller::kErrConstevalFailed = "Error: Necessary const eval
 const std::string TypeFiller::kErrIdentNotResolved = "Error: Identifier not resolved as expected";
 
 void TypeFiller::postVisit(Function &node) {
-  // Function not checked
-  return;
+  // check whether every control block share same return types.
+  // allow never type and self type.
+  if(node.body_opt() && !node.body_opt()->get_type()) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Function body type not resolved");
+    return;
+  }
+  if(node.res_type_opt() && !node.res_type_opt()->get_type()) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Function return type hint not resolved");
+    return;
+  }
+
+  stype::TypePtr ret_type;
+
+  if(node.body_opt() && node.res_type_opt()) {
+    if(node.body_opt()->get_type() != node.res_type_opt()->get_type()) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Function body type and return type hint not match");
+      return;
+    }
+    ret_type = node.body_opt()->get_type();
+  } else if(node.body_opt()) {
+    ret_type = node.body_opt()->get_type();
+  } else if(node.res_type_opt()) {
+    ret_type = node.res_type_opt()->get_type();
+  } else {
+    _recorder->tagged_report(kErrTypeNotResolved, "Function failed to deduct its return type");
+  }
+
+  // after checking, register this function type to the symbol table.
+  auto func_symbol = find_symbol(node.ident());
+  if(!func_symbol) {
+    throw std::runtime_error("Fatal error: invalid function name not checked");
+  }
+
+  std::vector<stype::TypePtr> params;
+  if(auto ps = node.params_opt().get()) {
+    if(auto s = ps->self_param_opt().get()) {
+      // self param
+      stype::TypePtr pt;
+      if(s->is_ref())
+        pt = _type_pool->make_type<stype::ReferenceType>(_type_pool->make_type<stype::SelfType>(false), s->is_mut());
+      else pt = _type_pool->make_type<stype::SelfType>(s->is_mut());
+      params.push_back(pt);
+    }
+    // other params
+    for(const auto &p: ps->func_params()) {
+      stype::TypePtr pt;
+      if(auto fpt = dynamic_cast<FunctionParamType*>(p.get())) {
+        pt = fpt->type()->get_type();
+      } else if(auto fpp = dynamic_cast<FunctionParamPattern*>(p.get())) {
+        pt = fpp->type()->get_type();
+      }
+      if(!pt) {
+        throw std::runtime_error("Function param invalidness not detected");
+      }
+      params.push_back(pt);
+    }
+  }
+
+  auto func = _type_pool->make_type<stype::FunctionType>(node.ident(), std::move(params), ret_type);
+  func_symbol->type = func;
 }
 
 void TypeFiller::postVisit(StructStruct &node) {
   auto info = find_symbol(node.ident());
-  std::map<std::string_view, sem_type::TypePtr> struct_fields;
+  std::map<std::string_view, stype::TypePtr> struct_fields;
   if(node.fields_opt()) {
     for(const auto &field: node.fields_opt()->fields()) {
       auto ident = field->ident();
@@ -458,12 +518,12 @@ void TypeFiller::postVisit(StructStruct &node) {
       struct_fields.emplace(ident, ast_type);
     }
   }
-  info->type.get<sem_type::StructType>()->set_fields(std::move(struct_fields));
+  info->type.get<stype::StructType>()->set_fields(std::move(struct_fields));
 }
 
 void TypeFiller::postVisit(Enumeration &node) {
   auto info = find_symbol(node.ident());
-  auto raw_enum_type = info->type.get_if<sem_type::EnumType>();
+  auto raw_enum_type = info->type.get_if<stype::EnumType>();
   if(node.items_opt()) {
     for(const auto &item: node.items_opt()->items()) {
       if(item->discr_opt()) {
@@ -479,13 +539,29 @@ void TypeFiller::postVisit(EnumItem &node) {
 }
 
 void TypeFiller::postVisit(Trait &node) {
-  throw std::runtime_error("Trait not implemented");
-  return;
+  // function, constant and type alias
+
+  auto trait = _type_pool->make_type<stype::TraitType>(node.ident());
+  for(const auto &asso: node.asso_items()) {
+    if(auto fp = dynamic_cast<AssociatedFunction*>(asso.get())) {
+      auto f = fp->func().get();
+      // must have explicit return type
+      // if return type not "Self", then must be determined
+      // if returns "Self", then record it.
+    } else if(auto ap = dynamic_cast<AssociatedTypeAlias*>(asso.get())) {
+
+    } else if(auto cp = dynamic_cast<AssociatedConstantItem*>(asso.get())) {
+
+    } else {
+      throw std::runtime_error("Invalid Asso item not detected");
+    }
+  }
+  // function must have explicit return types
 }
 
 void TypeFiller::postVisit(TypeAlias &node) {
   auto info = find_symbol(node.ident());
-  auto alias_type = info->type.get_if<sem_type::AliasType>();
+  auto alias_type = info->type.get_if<stype::AliasType>();
   if(node.type_opt()) {
     auto t = node.type_opt()->get_type();
     if(!t) {
@@ -507,7 +583,7 @@ void TypeFiller::postVisit(ParenthesizedType &node) {
 }
 
 void TypeFiller::postVisit(TupleType &node) {
-  std::vector<sem_type::TypePtr> types;
+  std::vector<stype::TypePtr> types;
   for(const auto &item: node.types()) {
     auto type = item->get_type();
     if(!type) {
@@ -516,7 +592,7 @@ void TypeFiller::postVisit(TupleType &node) {
     }
     types.push_back(type);
   }
-  node.set_type(_type_pool->make_type<sem_type::TupleType>(std::move(types)));
+  node.set_type(_type_pool->make_type<stype::TupleType>(std::move(types)));
 }
 
 void TypeFiller::postVisit(ReferenceType &node) {
@@ -525,7 +601,7 @@ void TypeFiller::postVisit(ReferenceType &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside reference chain");
     return;
   }
-  node.set_type(_type_pool->make_type<sem_type::ReferenceType>(std::move(type), node.is_mut()));
+  node.set_type(_type_pool->make_type<stype::ReferenceType>(std::move(type), node.is_mut()));
 }
 
 void TypeFiller::postVisit(ArrayType &node) {
@@ -539,17 +615,17 @@ void TypeFiller::postVisit(ArrayType &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "non-evaluable array length");
     return;
   }
-  auto cval = node.const_expr()->const_value()->get_if<sem_const::ConstPrimitive>();
+  auto cval = node.const_expr()->const_value()->get_if<sconst::ConstPrimitive>();
   if(!cval) {
     _recorder->tagged_report(kErrTypeNotResolved, "array length not a primitive type");
     return;
   }
-  auto length = std::get_if<sem_type::index_t>(&cval->value);
+  auto length = std::get_if<stype::index_t>(&cval->value);
   if(!length) {
     _recorder->tagged_report(kErrTypeNotResolved, "array length not an index value");
     return;
   }
-  node.set_type(_type_pool->make_type<sem_type::ArrayType>(std::move(type), *length));
+  node.set_type(_type_pool->make_type<stype::ArrayType>(std::move(type), *length));
 }
 
 void TypeFiller::postVisit(SliceType &node) {
@@ -574,7 +650,8 @@ void TypeFiller::postVisit(TypePath &node) {
       _recorder->tagged_report(kErrTypeNotResolved, "keyword \"self\" is not supported yet");
       return;
     } else if(ident == "Self") {
-      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"Self\" is not supported yet");
+      // set a temporary SelfType here.
+      node.set_type(_type_pool->make_type<stype::SelfType>(false));
       return;
     } else if(ident == "crate") {
       _recorder->tagged_report(kErrTypeNotResolved, "keyword \"crate\" is not supported yet");
@@ -615,7 +692,7 @@ void TypeFiller::postVisit(TypePath &node) {
         return;
       }
       auto item_ident = (*it)->ident_segment()->ident();
-      auto enum_type = info->type.get_if<sem_type::EnumType>();
+      auto enum_type = info->type.get_if<stype::EnumType>();
       if(!enum_type) {
         throw std::runtime_error("Fatal error: enum type mismatch undetected");
       }
@@ -625,7 +702,7 @@ void TypeFiller::postVisit(TypePath &node) {
       } else if(!vit->second) {
         throw std::runtime_error("Fatal error: enum variant type not set");
       } else {
-        node.set_type(sem_type::TypePtr(vit->second));
+        node.set_type(stype::TypePtr(vit->second));
       }
     } break;
     case SymbolKind::kStruct: {
@@ -679,7 +756,7 @@ void TypeFiller::postVisit(TypePath &node) {
 }
 
 void TypeFiller::postVisit(LiteralExpression &node) {
-  node.set_type(_type_pool->make_type<sem_type::PrimitiveType>(node.prime()));
+  node.set_type(_type_pool->make_type<stype::PrimitiveType>(node.prime()));
 }
 
 void TypeFiller::postVisit(PathInExpression &node) {
@@ -711,7 +788,7 @@ void TypeFiller::postVisit(BorrowExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  node.set_type(_type_pool->make_type<sem_type::ReferenceType>(std::move(type), node.is_mut()));
+  node.set_type(_type_pool->make_type<stype::ReferenceType>(std::move(type), node.is_mut()));
 }
 
 void TypeFiller::postVisit(DereferenceExpression &node) {
@@ -720,12 +797,12 @@ void TypeFiller::postVisit(DereferenceExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto sub_type = type.get_if<sem_type::ReferenceType>();
+  auto sub_type = type.get_if<stype::ReferenceType>();
   if(!sub_type) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not reference");
     return;
   }
-  node.set_type(sem_type::TypePtr(sub_type));
+  node.set_type(stype::TypePtr(sub_type));
 }
 
 void TypeFiller::postVisit(NegationExpression &node) {
@@ -748,8 +825,8 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime1 = type1.get_if<sem_type::PrimitiveType>();
-  auto prime2 = type2.get_if<sem_type::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimitiveType>();
+  auto prime2 = type2.get_if<stype::PrimitiveType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -791,7 +868,7 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
 
   case Operator::kLogicalAnd:
   case Operator::kLogicalOr:
-    if(prime1->prime() == prime2->prime() && prime1->prime() == sem_type::TypePrime::kBool) {
+    if(prime1->prime() == prime2->prime() && prime1->prime() == stype::TypePrime::kBool) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator && ||");
@@ -815,8 +892,8 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime1 = type1.get_if<sem_type::PrimitiveType>();
-  auto prime2 = type2.get_if<sem_type::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimitiveType>();
+  auto prime2 = type2.get_if<stype::PrimitiveType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -829,7 +906,7 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
   case Operator::kGe:
   case Operator::kLe:
     if(prime1->prime() == prime2->prime()) {
-      node.set_type(_type_pool->make_type<sem_type::PrimitiveType>(sem_type::TypePrime::kBool));
+      node.set_type(_type_pool->make_type<stype::PrimitiveType>(stype::TypePrime::kBool));
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator < > <= >= == !=");
       return;
@@ -851,8 +928,8 @@ void TypeFiller::postVisit(LazyBooleanExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime1 = type1.get_if<sem_type::PrimitiveType>();
-  auto prime2 = type2.get_if<sem_type::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimitiveType>();
+  auto prime2 = type2.get_if<stype::PrimitiveType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -860,7 +937,7 @@ void TypeFiller::postVisit(LazyBooleanExpression &node) {
   switch(node.oper()) {
   case Operator::kLogicalAnd:
   case Operator::kLogicalNot:
-    if(prime1->prime() == prime2->prime() && prime1->prime() == sem_type::TypePrime::kBool) {
+    if(prime1->prime() == prime2->prime() && prime1->prime() == stype::TypePrime::kBool) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator && ||");
@@ -883,14 +960,14 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto from_prime = from_type.get_if<sem_type::PrimitiveType>();
-  auto to_prime = to_type.get_if<sem_type::PrimitiveType>();
+  auto from_prime = from_type.get_if<stype::PrimitiveType>();
+  auto to_prime = to_type.get_if<stype::PrimitiveType>();
   if(!from_prime || !to_prime) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
   }
   switch(to_prime->prime()) {
-    using sem_type::TypePrime;
+    using stype::TypePrime;
 
   case TypePrime::kI8:
   case TypePrime::kI16:
@@ -952,8 +1029,8 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime1 = type1.get_if<sem_type::PrimitiveType>();
-  auto prime2 = type2.get_if<sem_type::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimitiveType>();
+  auto prime2 = type2.get_if<stype::PrimitiveType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1034,7 +1111,7 @@ void TypeFiller::postVisit(ArrayExpression &node) {
         return;
       }
     }
-    node.set_type(_type_pool->make_type<sem_type::ArrayType>(type, arr->expr_list().size()));
+    node.set_type(_type_pool->make_type<stype::ArrayType>(type, arr->expr_list().size()));
   } else {
     auto arr = dynamic_cast<RepeatedArrayElements*>(node.elements_opt().get());
     if(!arr) {
@@ -1046,12 +1123,12 @@ void TypeFiller::postVisit(ArrayExpression &node) {
       _recorder->tagged_report(kErrConstevalFailed, "Type length not evaluated");
       return;
     }
-    auto length_prime = arr->len_expr()->const_value()->get_if<sem_const::ConstPrimitive>();
+    auto length_prime = arr->len_expr()->const_value()->get_if<sconst::ConstPrimitive>();
     if(!length_prime) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type length not a primitive");
       return;
     }
-    auto length = std::get_if<sem_type::index_t>(&length_prime->value);
+    auto length = std::get_if<stype::index_t>(&length_prime->value);
     if(!length) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type length not an unsigned value");
       return;
@@ -1061,7 +1138,7 @@ void TypeFiller::postVisit(ArrayExpression &node) {
       _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
       return;
     }
-    node.set_type(_type_pool->make_type<sem_type::ArrayType>(type, *length));
+    node.set_type(_type_pool->make_type<stype::ArrayType>(type, *length));
   }
 }
 
@@ -1076,12 +1153,12 @@ void TypeFiller::postVisit(IndexExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto expr_arr = expr_type.get_if<sem_type::ArrayType>();
+  auto expr_arr = expr_type.get_if<stype::ArrayType>();
   if(!expr_arr) {
     _recorder->tagged_report(kErrTypeNotMatch, "Index on not an array");
     return;
   }
-  auto index_primitive = index_type.get_if<sem_type::PrimitiveType>();
+  auto index_primitive = index_type.get_if<stype::PrimitiveType>();
   if(!index_primitive || index_primitive->is_integer()) {
     _recorder->tagged_report(kErrTypeNotMatch, "Index not an integer");
     return;
@@ -1091,7 +1168,7 @@ void TypeFiller::postVisit(IndexExpression &node) {
 }
 
 void TypeFiller::postVisit(TupleExpression &node) {
-  std::vector<sem_type::TypePtr> members;
+  std::vector<stype::TypePtr> members;
   if(node.elems_opt()) for(const auto &expr: node.elems_opt()->expr_list()) {
     auto t = expr->get_type();
     if(!t) {
@@ -1100,7 +1177,7 @@ void TypeFiller::postVisit(TupleExpression &node) {
     }
     members.push_back(std::move(t));
   }
-  node.set_type(_type_pool->make_type<sem_type::TupleType>(std::move(members)));
+  node.set_type(_type_pool->make_type<stype::TupleType>(std::move(members)));
 }
 
 void TypeFiller::postVisit(TupleIndexingExpression &node) {
@@ -1152,8 +1229,8 @@ void TypeFiller::postVisit(RangeExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime1 = type1.get_if<sem_type::PrimitiveType>();
-  auto prime2 = type2.get_if<sem_type::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimitiveType>();
+  auto prime2 = type2.get_if<stype::PrimitiveType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1162,7 +1239,7 @@ void TypeFiller::postVisit(RangeExpr &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "Expected integer type in RangeExpr");
     return;
   }
-  node.set_type(_type_pool->make_type<sem_type::RangeType>(type1));
+  node.set_type(_type_pool->make_type<stype::RangeType>(type1));
 }
 
 void TypeFiller::postVisit(RangeFromExpr &node) {
@@ -1171,7 +1248,7 @@ void TypeFiller::postVisit(RangeFromExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime = type.get_if<sem_type::PrimitiveType>();
+  auto prime = type.get_if<stype::PrimitiveType>();
   if(!prime) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1180,7 +1257,7 @@ void TypeFiller::postVisit(RangeFromExpr &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "Expected integer type in RangeFromExpr");
     return;
   }
-  node.set_type(_type_pool->make_type<sem_type::RangeType>(type));
+  node.set_type(_type_pool->make_type<stype::RangeType>(type));
 }
 
 void TypeFiller::postVisit(RangeToExpr &node) {
@@ -1189,7 +1266,7 @@ void TypeFiller::postVisit(RangeToExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime = type.get_if<sem_type::PrimitiveType>();
+  auto prime = type.get_if<stype::PrimitiveType>();
   if(!prime) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1198,7 +1275,7 @@ void TypeFiller::postVisit(RangeToExpr &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "Expected integer type in RangeToExpr");
     return;
   }
-  node.set_type(_type_pool->make_type<sem_type::RangeType>(type));
+  node.set_type(_type_pool->make_type<stype::RangeType>(type));
 }
 
 void TypeFiller::postVisit(RangeFullExpr &node) {
@@ -1217,8 +1294,8 @@ void TypeFiller::postVisit(RangeInclusiveExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime1 = type1.get_if<sem_type::PrimitiveType>();
-  auto prime2 = type2.get_if<sem_type::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimitiveType>();
+  auto prime2 = type2.get_if<stype::PrimitiveType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1227,7 +1304,7 @@ void TypeFiller::postVisit(RangeInclusiveExpr &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "Expected integer type in RangeInclusiveExpr");
     return;
   }
-  node.set_type(_type_pool->make_type<sem_type::RangeType>(type1));
+  node.set_type(_type_pool->make_type<stype::RangeType>(type1));
 }
 
 void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
@@ -1236,7 +1313,7 @@ void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto prime = type.get_if<sem_type::PrimitiveType>();
+  auto prime = type.get_if<stype::PrimitiveType>();
   if(!prime) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1245,7 +1322,7 @@ void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "Expected integer type in RangeToInclusiveExpr");
     return;
   }
-  node.set_type(_type_pool->make_type<sem_type::RangeType>(type));
+  node.set_type(_type_pool->make_type<stype::RangeType>(type));
 }
 
 void TypeFiller::postVisit(ReturnExpression &node) {
@@ -1304,7 +1381,7 @@ void TypeFiller::postVisit(FunctionBodyExpr &node) {
 
 void TypeFiller::postVisit(InfiniteLoopExpression &node) {
   if(node.loop_breaks().empty()) {
-    node.set_type(_type_pool->make_type<sem_type::NeverType>());
+    node.set_type(_type_pool->make_type<stype::NeverType>());
     return;
   }
   auto type = node.loop_breaks().front()->get_type();
@@ -1333,8 +1410,8 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
   }
-  auto cond_prime = cond_type.get_if<sem_type::PrimitiveType>();
-  if(!cond_prime || cond_prime->prime() != sem_type::TypePrime::kBool) {
+  auto cond_prime = cond_type.get_if<stype::PrimitiveType>();
+  if(!cond_prime || cond_prime->prime() != stype::TypePrime::kBool) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
   }
@@ -1368,8 +1445,8 @@ void TypeFiller::postVisit(IfExpression &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
   }
-  auto cond_prime = cond_type.get_if<sem_type::PrimitiveType>();
-  if(!cond_prime || cond_prime->prime() != sem_type::TypePrime::kBool) {
+  auto cond_prime = cond_type.get_if<stype::PrimitiveType>();
+  if(!cond_prime || cond_prime->prime() != stype::TypePrime::kBool) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
   }
@@ -1423,7 +1500,7 @@ void TypeFiller::postVisit(LetStatement &node) {
   bind_pattern(node.pattern().get(), type);
 }
 
-void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, stype::TypePtr type) {
   if(auto ident_p = dynamic_cast<IdentifierPattern*>(pattern)) {
     bind_identifier(ident_p, type);
   } else if(auto wildcard_p = dynamic_cast<WildcardPattern*>(pattern)) {
@@ -1447,13 +1524,13 @@ void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, sem_type::TypePtr type) 
   }
 }
 
-void TypeFiller::bind_identifier(IdentifierPattern *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type) {
   // always success
   bool is_mut = pattern->is_mut();
   if(pattern->is_ref()) {
     // let ref y = r <=> let y = &r
     // let ref mut z = r <=> let z = &mut r
-    type = _type_pool->make_type<sem_type::ReferenceType>(type, is_mut);
+    type = _type_pool->make_type<stype::ReferenceType>(type, is_mut);
     is_mut = false; // z is immutable (while *z is mutable)
   }
   auto info = add_symbol(pattern->ident(), SymbolInfo{
@@ -1466,14 +1543,14 @@ void TypeFiller::bind_identifier(IdentifierPattern *pattern, sem_type::TypePtr t
   }
 }
 
-void TypeFiller::bind_wildcard(WildcardPattern *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_wildcard(WildcardPattern *pattern, stype::TypePtr type) {
   // always success
   // nothing to do here
 }
 
-void TypeFiller::bind_tuple(TuplePattern *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_tuple(TuplePattern *pattern, stype::TypePtr type) {
   // let (a, b) = (1, 2) -> a = 1, b = 2
-  auto t = type.get_if<sem_type::TupleType>();
+  auto t = type.get_if<stype::TupleType>();
   if(!t) {
     _recorder->report("Type binding failed: not a tuple");
     return;
@@ -1495,9 +1572,9 @@ void TypeFiller::bind_tuple(TuplePattern *pattern, sem_type::TypePtr type) {
   }
 }
 
-void TypeFiller::bind_struct(StructPattern *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_struct(StructPattern *pattern, stype::TypePtr type) {
   // let Type { x1: x, y1: y } = Type{ x1: 1, y1: 2, z1: 3 } -> x = 1, y = 2
-  auto t = type.get_if<sem_type::StructType>();
+  auto t = type.get_if<stype::StructType>();
   if(!t) {
     _recorder->report("Type binding failed: not a struct");
     return;
@@ -1521,8 +1598,8 @@ void TypeFiller::bind_struct(StructPattern *pattern, sem_type::TypePtr type) {
   }
 }
 
-void TypeFiller::bind_reference(ReferencePattern *pattern, sem_type::TypePtr type) {
-  auto t = type.get_if<sem_type::ReferenceType>();
+void TypeFiller::bind_reference(ReferencePattern *pattern, stype::TypePtr type) {
+  auto t = type.get_if<stype::ReferenceType>();
   if(!t) {
     _recorder->report("Type binding failed: not a reference");
     return;
@@ -1535,11 +1612,11 @@ void TypeFiller::bind_reference(ReferencePattern *pattern, sem_type::TypePtr typ
   bind_pattern(sub_pattern, t->type());
 }
 
-void TypeFiller::bind_literal(LiteralPattern *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_literal(LiteralPattern *pattern, stype::TypePtr type) {
   _recorder->report("Type binding error: literal pattern not supported in let statement");
 }
 
-void TypeFiller::bind_grouped(GroupedPattern *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_grouped(GroupedPattern *pattern, stype::TypePtr type) {
   auto sub_pattern = pattern->pattern().get();
   if(sub_pattern->patterns().size() != 1) {
     _recorder->report("Type binding failed: multi pattern not supported yet");
@@ -1548,11 +1625,11 @@ void TypeFiller::bind_grouped(GroupedPattern *pattern, sem_type::TypePtr type) {
   bind_pattern(sub_pattern->patterns().front().get(), type);
 }
 
-void TypeFiller::bind_slice(SlicePattern *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_slice(SlicePattern *pattern, stype::TypePtr type) {
   _recorder->report("Slice Not supported yet");
 }
 
-void TypeFiller::bind_path(PathPattern *pattern, sem_type::TypePtr type) {
+void TypeFiller::bind_path(PathPattern *pattern, stype::TypePtr type) {
   _recorder->report("Type binding error: path pattern not supported in let statement");
 }
 

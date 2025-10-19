@@ -1,6 +1,6 @@
 #include "ast_constant.h"
 
-namespace insomnia::rust_shard::sem_const {
+namespace insomnia::rust_shard::sconst {
 bool ConstValPtr::operator==(const ConstValPtr &other) const {
   if(!_ptr || !other._ptr) return _ptr == other._ptr;
   return *_ptr == *other._ptr;

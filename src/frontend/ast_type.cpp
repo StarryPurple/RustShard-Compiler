@@ -2,7 +2,7 @@
 
 #include <unordered_map>
 
-namespace insomnia::rust_shard::sem_type {
+namespace insomnia::rust_shard::stype {
 
 std::string_view get_type_view_from_prime(TypePrime prime) {
   static const std::unordered_map<TypePrime, std::string_view> table = {
@@ -179,11 +179,13 @@ void FunctionType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   for(const auto &type: _params)
     type->combine_hash(seed);
+  _ret_type->combine_hash(seed);
 }
 
 bool FunctionType::equals_impl(const ExprType &other) const {
   const auto &other_func = static_cast<const FunctionType&>(other);
   if(_ident != other_func.ident()) return false;
+  if(_ret_type != other_func._ret_type) return false;
   const auto &other_params = other_func.params();
   if(_params.size() != other_params.size()) return false;
   for(auto it = _params.begin(), other_it = other_params.begin();
@@ -240,6 +242,17 @@ void NeverType::combine_hash(std::size_t &seed) const {
 }
 
 bool NeverType::equals_impl(const ExprType &other) const {
+  return true;
+}
+
+void SelfType::combine_hash(std::size_t &seed) const {
+  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
+  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+}
+
+bool SelfType::equals_impl(const ExprType &other) const {
+  const auto &other_self = static_cast<const SelfType&>(other);
+  if(_is_mut != other_self._is_mut) return false;
   return true;
 }
 

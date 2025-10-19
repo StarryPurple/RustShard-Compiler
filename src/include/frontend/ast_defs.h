@@ -89,39 +89,74 @@ struct SymbolInfo {
   std::string_view ident;
   SymbolKind kind;
   bool is_mut;
-  sem_type::TypePtr type;
+  stype::TypePtr type;
 };
 
 class TypeInfo {
 public:
-  sem_type::TypePtr get_type() const { return _tp; } // NOLINT
-  void set_type(sem_type::TypePtr tp) {
+  stype::TypePtr get_type() const { return _tp; } // NOLINT
+  void set_type(stype::TypePtr tp) {
     if(_tp.operator bool())
       throw std::runtime_error("TypeInfo already set");
     _tp = std::move(tp);
   }
 private:
-  sem_type::TypePtr _tp;
+  stype::TypePtr _tp;
 };
 
 class Scope {
 public:
   void init_scope() { _symbol_set.clear(); }
-  void load_builtin_types(sem_type::TypePool *pool) {
-    for(const auto prime: sem_type::type_primes()) {
-      auto ident = sem_type::get_type_view_from_prime(prime);
+  void load_builtin(stype::TypePool *pool) {
+    // primitive types
+    for(const auto prime: stype::type_primes()) {
+      auto ident = stype::get_type_view_from_prime(prime);
       _symbol_set.emplace(ident, SymbolInfo{
         .node = nullptr,
         .ident = ident,
         .kind = SymbolKind::kPrimitiveType,
-        .type = pool->make_type<sem_type::PrimitiveType>(prime)
+        .type = pool->make_type<stype::PrimitiveType>(prime)
       });
     }
+    // primitive functions
+
+    // fn print(s: &str) -> ()
+    add_symbol()
+
+    // fn println(s: &str) -> ()
+
+    // fn printInt(n: i32) -> ()
+
+    // fn printlnInt(n: i32) -> ()
+
+    // fn getString() -> String
+
+    // fn getInt() -> i32
+
+    // fn exit(code: i32) -> ()
+
+    // fn to_string(&self) -> String
+
+    // fn as_str(&self) -> &str
+    // Available on: String
+
+    // fn as_mut_str(&mut self) -> &mut str
+    // Available on: String
+
+    // fn len(&self) -> usize
+    // Available on: [T; N], &[T; N], &mut [T; N], String, &str, &mut str
+
+    // fn from(&str) -> String
+    // fn from(&mut str) -> String
+
+    // fn append(&mut self, s: &str) -> ()
+    // Available on: String
   }
+
   SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol);
   SymbolInfo* find_symbol(std::string_view ident);
   const SymbolInfo* find_symbol(std::string_view ident) const;
-  bool set_type(std::string_view ident, sem_type::TypePtr type);
+  bool set_type(std::string_view ident, stype::TypePtr type);
 
 private:
   std::unordered_map<std::string_view, SymbolInfo> _symbol_set;
@@ -160,30 +195,15 @@ private:
   std::unique_ptr<Scope> _scope;
 };
 
-/*
-class ControlBlockContext {
-public:
-  void add_loop_break_asso(LoopExpression *loop_expr, BreakExpression *break_expr) {
-    auto it = _loop_breaks.find(loop_expr);
-    if(it == _loop_breaks.end()) {
-      _loop_breaks.emplace(loop_expr, std::vector{break_expr});
-    } else {
-      it->second.push_back(break_expr);
-    }
-  }
-  void add_func_return_asso(FunctionBodyExpr *func_expr, ReturnExpression *return_expr) {
-    auto it = _func_returns.find(func_expr);
-    if(it == _func_returns.end()) {
-      _func_returns.emplace(func_expr, std::vector{return_expr});
-    } else {
-      it->second.push_back(return_expr);
-    }
-  }
-private:
-  std::unordered_map<LoopExpression*, std::vector<BreakExpression*>> _loop_breaks;
-  std::unordered_map<FunctionBodyExpr*, std::vector<ReturnExpression*>> _func_returns;
+// every crate owns one.
+struct Module {
+  std::string_view ident; // module name
+  std::unordered_map<std::string_view, stype::AliasType> aliases;
+  std::unordered_map<std::string_view, stype::FunctionType> functions;
+  std::unordered_map<std::string_view, stype::TraitType> traits;
+
+  explicit Module(std::string_view _ident): ident(_ident) {}
 };
-*/
 
 }
 

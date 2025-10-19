@@ -11,7 +11,7 @@
 #include "ast_type.h"
 #include "ast_type.h"
 
-namespace insomnia::rust_shard::sem_type {
+namespace insomnia::rust_shard::stype {
 
 enum class TypeKind;
 class ExprType;
@@ -85,7 +85,8 @@ enum class TypeKind {
   kRange,
   kEnumVariant,
   kAlias,
-  kNever
+  kNever,
+  kSelf
 };
 
 // referred to boost::hash_combine
@@ -234,22 +235,25 @@ class FunctionType : public ExprType {
 public:
   FunctionType(
     std::string_view ident,
-    std::vector<TypePtr> &&params
+    std::vector<TypePtr> &&params,
+    TypePtr return_type
   ): ExprType(TypeKind::kFunction), _ident(ident),
-  _params(std::move(params)) {}
+  _params(std::move(params)), _ret_type(return_type) {}
   std::string_view ident() const { return _ident; }
   const std::vector<TypePtr>& params() const { return _params; }
+  TypePtr return_type() const { return _ret_type; }
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
   std::string_view _ident;
   std::vector<TypePtr> _params;
+  TypePtr _ret_type;
 };
 
 class TraitType : public ExprType {
 public:
-  using asso_func_map_t = std::unordered_map<std::string_view, std::shared_ptr<FunctionType>>;
+  using asso_func_map_t = std::unordered_map<std::string_view, TypePtr>;
   using asso_type_map_t = std::unordered_map<std::string_view, TypePtr>;
   using asso_const_map_t = std::unordered_map<std::string_view, TypePtr>;
 
@@ -344,6 +348,17 @@ public:
   void combine_hash(std::size_t &seed) const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+};
+
+class SelfType : public ExprType {
+public:
+  SelfType(bool is_mut): ExprType(TypeKind::kSelf), _is_mut(is_mut) {}
+  bool is_mut() const { return _is_mut; }
+  void combine_hash(std::size_t &seed) const override;
+protected:
+  bool equals_impl(const ExprType &other) const override;
+private:
+  bool _is_mut;
 };
 
 class TypePool {

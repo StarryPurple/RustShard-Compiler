@@ -40,8 +40,8 @@ int main() {
       }
 
       auto error_recorder = std::make_unique<ast::ErrorRecorder>();
-      auto type_pool = std::make_unique<sem_type::TypePool>();
-      auto const_pool = std::make_unique<sem_const::ConstPool>();
+      auto type_pool = std::make_unique<stype::TypePool>();
+      auto const_pool = std::make_unique<sconst::ConstPool>();
 
       auto ast_tree = parser.release_tree();
 

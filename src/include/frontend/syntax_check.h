@@ -183,7 +183,7 @@ private:
   }
 };
 
-// Automatically enters/exits scopes.
+// Automatically enters/exits scopes & Collect module references.
 // Affected:
 // preVisit, postVisit: Crate, BlockExpression, Function, InherentImpl, TraitImpl, Trait
 // visit: MatchArms,
@@ -271,12 +271,12 @@ private:
 // The type filling progress is ready to launch.
 class TypeDeclarator : public ScopedVisitor {
 public:
-  TypeDeclarator(ErrorRecorder *recorder, sem_type::TypePool *type_pool)
+  TypeDeclarator(ErrorRecorder *recorder, stype::TypePool *type_pool)
   : _recorder(recorder), _type_pool(type_pool) {}
 
   void preVisit(Crate &node) override {
     ScopedVisitor::preVisit(node);
-    node.scope()->load_builtin_types(_type_pool);
+    node.scope()->load_builtin(_type_pool);
   }
 
   void preVisit(StructStruct &node) override {
@@ -285,7 +285,7 @@ public:
       _recorder->report("Symbol not found for StructStruct");
       return;
     }
-    info->type = _type_pool->make_type<sem_type::StructType>(node.ident());
+    info->type = _type_pool->make_type<stype::StructType>(node.ident());
     node.set_type(info->type);
   }
 
@@ -295,24 +295,24 @@ public:
       _recorder->report("Symbol not found for Enumeration");
       return;
     }
-    info->type = _type_pool->make_type<sem_type::EnumType>(node.ident());
+    info->type = _type_pool->make_type<stype::EnumType>(node.ident());
     node.set_type(info->type);
-    auto enum_ptr = info->type.get<sem_type::EnumType>();
+    auto enum_ptr = info->type.get<stype::EnumType>();
 
     // types of enum items
-    sem_type::EnumType::variant_map_t enum_variants;
+    stype::EnumType::variant_map_t enum_variants;
     if(node.items_opt()) {
-      sem_type::EnumVariantType::discriminant_t dis = 0;
+      stype::EnumVariantType::discriminant_t dis = 0;
       for(const auto &item: node.items_opt()->items()) {
         if(item->discr_opt()) {
           _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
         }
-        auto enum_variant_type = _type_pool->make_type<sem_type::EnumVariantType>(
-          item->ident(), dis, std::vector<sem_type::TypePtr>(), enum_ptr
+        auto enum_variant_type = _type_pool->make_type<stype::EnumVariantType>(
+          item->ident(), dis, std::vector<stype::TypePtr>(), enum_ptr
         );
         item->set_type(enum_variant_type); // each enum item _singleton_ has its distinct type
         enum_variants.emplace(
-          item->ident(), enum_variant_type.get<sem_type::EnumVariantType>()
+          item->ident(), enum_variant_type.get<stype::EnumVariantType>()
         );
         ++dis;
       }
@@ -326,7 +326,7 @@ public:
       _recorder->report("Symbol not found for ConstItem");
       return;
     }
-    info->type = _type_pool->make_type<sem_type::AliasType>(node.ident());
+    info->type = _type_pool->make_type<stype::AliasType>(node.ident());
     node.set_type(info->type);
   }
 
@@ -336,13 +336,13 @@ public:
       _recorder->report("Symbol not found for Trait");
       return;
     }
-    info->type = _type_pool->make_type<sem_type::TraitType>(node.ident());
+    info->type = _type_pool->make_type<stype::TraitType>(node.ident());
     node.set_type(info->type);
   }
 
 private:
   ErrorRecorder *_recorder;
-  sem_type::TypePool *_type_pool;
+  stype::TypePool *_type_pool;
 };
 
 // A helper class that evaluates const items.
@@ -350,7 +350,7 @@ private:
 class ConstEvaluator: public RecursiveVisitor {
   static const std::string kErrTag;
 public:
-  ConstEvaluator(ErrorRecorder *recorder, sem_type::TypePool *type_pool, sem_const::ConstPool *const_pool)
+  ConstEvaluator(ErrorRecorder *recorder, stype::TypePool *type_pool, sconst::ConstPool *const_pool)
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool) {}
 
   void postVisit(LiteralExpression &node);
@@ -401,8 +401,8 @@ public:
   }
 private:
   ErrorRecorder *_recorder;
-  sem_type::TypePool *_type_pool;
-  sem_const::ConstPool *_const_pool;
+  stype::TypePool *_type_pool;
+  sconst::ConstPool *_const_pool;
 };
 
 #define ISM_RS_POST_VISIT_OVERRIDE_METHOD(Node) \
@@ -423,7 +423,7 @@ class TypeFiller : public ScopedVisitor {
     return true;
   }
 public:
-  TypeFiller(ErrorRecorder *recorder, sem_type::TypePool *type_pool, sem_const::ConstPool *const_pool)
+  TypeFiller(ErrorRecorder *recorder, stype::TypePool *type_pool, sconst::ConstPool *const_pool)
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool),
   _evaluator(recorder, type_pool, const_pool) {}
 
@@ -437,22 +437,22 @@ public:
   // helpers
   // If type not match, binding will fail
 
-  void bind_pattern(PatternNoTopAlt *pattern, sem_type::TypePtr type);
-  void bind_identifier(IdentifierPattern *pattern, sem_type::TypePtr type);
-  void bind_wildcard(WildcardPattern *pattern, sem_type::TypePtr type);
-  void bind_tuple(TuplePattern *pattern, sem_type::TypePtr type);
-  void bind_struct(StructPattern *pattern, sem_type::TypePtr type);
-  void bind_reference(ReferencePattern *pattern, sem_type::TypePtr type);
-  void bind_literal(LiteralPattern *pattern, sem_type::TypePtr type);
-  void bind_grouped(GroupedPattern *pattern, sem_type::TypePtr type);
-  void bind_slice(SlicePattern *pattern, sem_type::TypePtr type);
-  void bind_path(PathPattern *pattern, sem_type::TypePtr type);
+  void bind_pattern(PatternNoTopAlt *pattern, stype::TypePtr type);
+  void bind_identifier(IdentifierPattern *pattern, stype::TypePtr type);
+  void bind_wildcard(WildcardPattern *pattern, stype::TypePtr type);
+  void bind_tuple(TuplePattern *pattern, stype::TypePtr type);
+  void bind_struct(StructPattern *pattern, stype::TypePtr type);
+  void bind_reference(ReferencePattern *pattern, stype::TypePtr type);
+  void bind_literal(LiteralPattern *pattern, stype::TypePtr type);
+  void bind_grouped(GroupedPattern *pattern, stype::TypePtr type);
+  void bind_slice(SlicePattern *pattern, stype::TypePtr type);
+  void bind_path(PathPattern *pattern, stype::TypePtr type);
 
 
 private:
   ErrorRecorder *_recorder;
-  sem_type::TypePool *_type_pool;
-  sem_const::ConstPool *_const_pool;
+  stype::TypePool *_type_pool;
+  sconst::ConstPool *_const_pool;
   ConstEvaluator _evaluator;
 };
 

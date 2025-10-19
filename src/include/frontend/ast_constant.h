@@ -9,7 +9,7 @@
 #include "type_utils.h"
 
 
-namespace insomnia::rust_shard::sem_const {
+namespace insomnia::rust_shard::sconst {
 
 class ConstValue;
 
@@ -17,7 +17,7 @@ class ConstValPtr {
   std::shared_ptr<ConstValue> _ptr;
 public:
   ConstValPtr() = default;
-  ConstValPtr(std::shared_ptr<ConstValue> ptr): _ptr(std::move(ptr)) {}
+  explicit ConstValPtr(std::shared_ptr<ConstValue> ptr): _ptr(std::move(ptr)) {}
   ConstValPtr(const ConstValPtr &other) = default;
   ConstValPtr(ConstValPtr &&) noexcept = default;
   ConstValPtr& operator=(const ConstValPtr &) = default;
@@ -92,10 +92,10 @@ class ConstValue {
 public:
   bool operator==(const ConstValue &) const = default;
   template <class T> requires const_val_list::contains<T>
-  ConstValue(sem_type::TypePtr type, T &&value)
+  ConstValue(stype::TypePtr type, T &&value)
   : _type(std::move(type)), _const_val(std::forward<T>(value)) {}
   template <class T> requires const_val_list::contains<T>
-  void set(sem_type::TypePtr type, T &&value) {
+  void set(stype::TypePtr type, T &&value) {
     _type = std::move(type); _const_val = std::forward<T>(value);
   }
   template <class T> requires const_val_list::contains<T>
@@ -104,12 +104,12 @@ public:
   const T* get_if() const;
 
 private:
-  sem_type::TypePtr _type;
+  stype::TypePtr _type;
   // add a std::monostate to signal for being not constant
   const_val_list::prepend<std::monostate>::as_variant _const_val;
 public:
-  sem_type::TypePtr type() const { return _type; }
-  sem_type::TypeKind kind() const { return _type->kind(); }
+  stype::TypePtr type() const { return _type; }
+  stype::TypeKind kind() const { return _type->kind(); }
   const decltype(_const_val)& const_val() const { return _const_val; }
 };
 
@@ -120,7 +120,7 @@ public:
   template <class T, class... Args> requires
      std::derived_from<T, ConstBase> &&
      std::is_constructible_v<T, Args...>
-  std::shared_ptr<ConstValue> make_raw_const(sem_type::TypePtr type, Args &&...args) {
+  std::shared_ptr<ConstValue> make_raw_const(stype::TypePtr type, Args &&...args) {
     auto ptr = std::make_shared<ConstValue>(
       std::move(type),
       T(std::forward<Args>(args)...)
@@ -134,7 +134,7 @@ public:
   template <class T, class... Args> requires
      std::derived_from<T, ConstBase> &&
      std::is_constructible_v<T, Args...>
-  ConstValPtr make_const(sem_type::TypePtr type, Args &&...args) {
+  ConstValPtr make_const(stype::TypePtr type, Args &&...args) {
     return ConstValPtr(make_raw_const<T>(std::move(type), std::forward<Args>(args)...));
   }
 private:

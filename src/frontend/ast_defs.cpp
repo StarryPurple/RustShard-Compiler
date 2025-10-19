@@ -31,7 +31,7 @@ const SymbolInfo* Scope::find_symbol(std::string_view ident) const {
   return &it->second;
 }
 
-bool Scope::set_type(std::string_view ident, sem_type::TypePtr type) {
+bool Scope::set_type(std::string_view ident, stype::TypePtr type) {
   auto it = _symbol_set.find(ident);
   if(it == _symbol_set.end()) return false;
   it->second.type = std::move(type);

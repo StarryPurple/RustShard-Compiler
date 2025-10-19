@@ -3,13 +3,13 @@
 
 #include "ast_constant.h"
 
-namespace insomnia::rust_shard::sem_const {
+namespace insomnia::rust_shard::sconst {
 
 template <class T> requires const_val_list::contains<T>
 const T& ConstValue::get() const {
-  using sem_type::TypeKind;
-  using sem_type::TypePrime;
-  using sem_type::PrimitiveType;
+  using stype::TypeKind;
+  using stype::TypePrime;
+  using stype::PrimitiveType;
 
   if(_type && _type->kind() == TypeKind::kPrimitive) {
     if constexpr(std::is_integral_v<T> && !std::is_same_v<T, char> && !std::is_same_v<T, bool>) {
@@ -28,9 +28,9 @@ const T& ConstValue::get() const {
 
 template <class T> requires const_val_list::contains<T>
 const T* ConstValue::get_if() const {
-  using sem_type::TypeKind;
-  using sem_type::TypePrime;
-  using sem_type::PrimitiveType;
+  using stype::TypeKind;
+  using stype::TypePrime;
+  using stype::PrimitiveType;
   return std::get_if<T>(&_const_val);
   /*
   if constexpr(type_utils::is_one_of<

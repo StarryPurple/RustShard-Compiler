@@ -521,10 +521,10 @@ public:
   virtual bool has_block() const = 0;
   bool has_constant() const { return static_cast<bool>(_const_value); }
 protected:
-  sem_const::ConstValPtr _const_value;
+  sconst::ConstValPtr _const_value;
 private:
   // for ConstEvaluator
-  void set_const_value(sem_const::ConstValPtr value) {
+  void set_const_value(sconst::ConstValPtr value) {
     _const_value = std::move(value);
   }
   /*
@@ -549,11 +549,11 @@ class LiteralExpression : public ExpressionWithoutBlock {
 public:
   // must be assigned at construction
   template <class Spec> requires type_utils::is_primitive<Spec>
-  explicit LiteralExpression(sem_type::TypePrime prime, Spec &&spec)
+  explicit LiteralExpression(stype::TypePrime prime, Spec &&spec)
   : _prime(prime), _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  sem_type::TypePrime _prime;
+  stype::TypePrime _prime;
   type_utils::primitive_variant _spec;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(prime, _prime)
