@@ -6,22 +6,10 @@
 namespace insomnia::rust_shard::ast {
 
 ASTTree::ASTTree(std::unique_ptr<Crate> crate)
-: _crate(std::move(crate)) { _crate->set_name(_crate_name); }
+: _crate(std::move(crate)) { _crate->set_name("Crate"); }
 
 void ASTTree::traverse(RecursiveVisitor &r_visitor) {
   r_visitor.traverse(*_crate);
-}
-
-void Scope::load_builtin_types(sem_type::TypePool *pool) {
-  for(const auto prime: sem_type::type_primes()) {
-    auto ident = sem_type::get_type_view_from_prime(prime);
-    _symbol_set.emplace(ident, SymbolInfo{
-      .node = nullptr,
-      .ident = ident,
-      .kind = SymbolKind::kPrimitiveType,
-      .type = pool->make_type<sem_type::PrimitiveType>(prime)
-    });
-  }
 }
 
 SymbolInfo* Scope::add_symbol(std::string_view ident, const SymbolInfo &symbol) {
@@ -48,5 +36,51 @@ bool Scope::set_type(std::string_view ident, stype::TypePtr type) {
   it->second.type = std::move(type);
   return true;
 }
+
+void Scope::load_builtin(stype::TypePool *pool) {
+  // primitive types
+  for(const auto prime: stype::type_primes()) {
+    auto ident = stype::get_type_view_from_prime(prime);
+    _symbol_set.emplace(ident, SymbolInfo{
+      .node = nullptr,
+      .ident = ident,
+      .kind = SymbolKind::kPrimitiveType,
+      .type = pool->make_type<stype::PrimitiveType>(prime)
+    });
+  }
+  // primitive functions
+
+  // fn print(s: &str) -> ()
+
+  // fn println(s: &str) -> ()
+
+  // fn printInt(n: i32) -> ()
+
+  // fn printlnInt(n: i32) -> ()
+
+  // fn getString() -> String
+
+  // fn getInt() -> i32
+
+  // fn exit(code: i32) -> ()
+
+  // fn to_string(&self) -> String
+
+  // fn as_str(&self) -> &str
+  // Available on: String
+
+  // fn as_mut_str(&mut self) -> &mut str
+  // Available on: String
+
+  // fn len(&self) -> usize
+  // Available on: [T; N], &[T; N], &mut [T; N], String, &str, &mut str
+
+  // fn from(&str) -> String
+  // fn from(&mut str) -> String
+
+  // fn append(&mut self, s: &str) -> ()
+  // Available on: String
+}
+
 
 }

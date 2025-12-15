@@ -55,7 +55,6 @@ enum class Operator {
   kDeref, // TokenType::kStar
   kRef,   // TokenType::kAnd
 };
-
 enum class SymbolKind {
   kVariable,
   kFunction,
@@ -107,51 +106,7 @@ private:
 class Scope {
 public:
   void init_scope() { _symbol_set.clear(); }
-  void load_builtin(stype::TypePool *pool) {
-    // primitive types
-    for(const auto prime: stype::type_primes()) {
-      auto ident = stype::get_type_view_from_prime(prime);
-      _symbol_set.emplace(ident, SymbolInfo{
-        .node = nullptr,
-        .ident = ident,
-        .kind = SymbolKind::kPrimitiveType,
-        .type = pool->make_type<stype::PrimitiveType>(prime)
-      });
-    }
-    // primitive functions
-
-    // fn print(s: &str) -> ()
-    add_symbol()
-
-    // fn println(s: &str) -> ()
-
-    // fn printInt(n: i32) -> ()
-
-    // fn printlnInt(n: i32) -> ()
-
-    // fn getString() -> String
-
-    // fn getInt() -> i32
-
-    // fn exit(code: i32) -> ()
-
-    // fn to_string(&self) -> String
-
-    // fn as_str(&self) -> &str
-    // Available on: String
-
-    // fn as_mut_str(&mut self) -> &mut str
-    // Available on: String
-
-    // fn len(&self) -> usize
-    // Available on: [T; N], &[T; N], &mut [T; N], String, &str, &mut str
-
-    // fn from(&str) -> String
-    // fn from(&mut str) -> String
-
-    // fn append(&mut self, s: &str) -> ()
-    // Available on: String
-  }
+  void load_builtin(stype::TypePool *pool);
 
   SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol);
   SymbolInfo* find_symbol(std::string_view ident);
@@ -160,6 +115,18 @@ public:
 
 private:
   std::unordered_map<std::string_view, SymbolInfo> _symbol_set;
+};
+
+class ScopeInfo {
+public:
+  void set_scope(std::unique_ptr<Scope> scope) {
+    if(_scope.operator bool())
+      throw std::runtime_error("Scope already set");
+    _scope = std::move(scope);
+  }
+  const std::unique_ptr<Scope>& scope() const { return _scope; }
+private:
+  std::unique_ptr<Scope> _scope;
 };
 
 class ErrorRecorder {
@@ -183,16 +150,13 @@ public:
   const decltype(_untagged_errors)& untagged_errors() const { return _untagged_errors; }
 };
 
-class ScopeInfo {
-public:
-  void set_scope(std::unique_ptr<Scope> scope) {
-    if(_scope.operator bool())
-      throw std::runtime_error("Scope already set");
-    _scope = std::move(scope);
-  }
-  const std::unique_ptr<Scope>& scope() const { return _scope; }
-private:
-  std::unique_ptr<Scope> _scope;
+
+class ResolutionInfo {
+
+};
+
+class ResolutionTree {
+
 };
 
 // every crate owns one.

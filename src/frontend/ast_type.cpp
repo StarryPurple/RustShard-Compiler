@@ -39,7 +39,6 @@ bool TypePtr::operator==(const TypePtr &other) const {
 
 std::size_t ExprType::hash() const {
   std::size_t seed = 0;
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   this->combine_hash(seed);
   return seed;
 }
