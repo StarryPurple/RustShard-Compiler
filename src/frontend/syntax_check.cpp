@@ -27,7 +27,7 @@ void ConstEvaluator::postVisit(BorrowExpression &node) {
   }
   auto inner = node.expr()->const_value();
   node.set_const_value(_const_pool->make_const<sconst::ConstReference>(
-    _type_pool->make_type<stype::ReferenceType>(inner->type(), node.is_mut()),
+    _type_pool->make_type<stype::RefType>(inner->type(), node.is_mut()),
     inner
   ));
 }
@@ -481,7 +481,7 @@ void TypeFiller::postVisit(Function &node) {
       // self param
       stype::TypePtr pt;
       if(s->is_ref())
-        pt = _type_pool->make_type<stype::ReferenceType>(_type_pool->make_type<stype::SelfType>(false), s->is_mut());
+        pt = _type_pool->make_type<stype::RefType>(_type_pool->make_type<stype::SelfType>(false), s->is_mut());
       else pt = _type_pool->make_type<stype::SelfType>(s->is_mut());
       params.push_back(pt);
     }
@@ -506,7 +506,7 @@ void TypeFiller::postVisit(Function &node) {
 
 void TypeFiller::postVisit(StructStruct &node) {
   auto info = find_symbol(node.ident());
-  std::map<std::string_view, stype::TypePtr> struct_fields;
+  std::map<StringRef, stype::TypePtr> struct_fields;
   if(node.fields_opt()) {
     for(const auto &field: node.fields_opt()->fields()) {
       auto ident = field->ident();
@@ -601,7 +601,7 @@ void TypeFiller::postVisit(ReferenceType &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside reference chain");
     return;
   }
-  node.set_type(_type_pool->make_type<stype::ReferenceType>(std::move(type), node.is_mut()));
+  node.set_type(_type_pool->make_type<stype::RefType>(std::move(type), node.is_mut()));
 }
 
 void TypeFiller::postVisit(ArrayType &node) {
@@ -774,7 +774,7 @@ void TypeFiller::postVisit(PathInExpression &node) {
     _recorder->tagged_report(kErrIdentNotResolved, "Identifier not found as the end of PathInExpression");
     return;
   }
-  if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable) {
+  if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable || info->kind == SymbolKind::kFunction) {
     node.set_type(info->type);
   } else {
     _recorder->tagged_report(kErrIdentNotResolved, "Invalid type associated with the identifier");
@@ -788,7 +788,7 @@ void TypeFiller::postVisit(BorrowExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  node.set_type(_type_pool->make_type<stype::ReferenceType>(std::move(type), node.is_mut()));
+  node.set_type(_type_pool->make_type<stype::RefType>(std::move(type), node.is_mut()));
 }
 
 void TypeFiller::postVisit(DereferenceExpression &node) {
@@ -797,7 +797,7 @@ void TypeFiller::postVisit(DereferenceExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
     return;
   }
-  auto sub_type = type.get_if<stype::ReferenceType>();
+  auto sub_type = type.get_if<stype::RefType>();
   if(!sub_type) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not reference");
     return;
@@ -1190,6 +1190,38 @@ void TypeFiller::postVisit(StructExpression &node) {
   return;
 }
 
+void TypeFiller::postVisit(CallExpression &node) {
+  auto func_type = node.expr()->get_type().get_if<stype::FunctionType>();
+  if(!func_type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Function call type not resolved");
+    return;
+  }
+  bool flag = true;
+  if(!node.params_opt()) {
+    // no params.
+    if(!func_type->params().empty()) {
+      flag = false;
+    }
+  } else {
+    const auto &exprs = node.params_opt()->expr_list();
+    const auto &params = func_type->params();
+    if(exprs.size() != params.size()) {
+      flag = false;
+    } else {
+      for(int i = 0; i < exprs.size(); ++i) {
+        if(params[i] != exprs[i]->get_type()) {
+          flag = false; break;
+        }
+      }
+    }
+  }
+  if(!flag) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Function expect no param");
+    return;
+  }
+  node.set_type(func_type->return_type());
+}
+
 void TypeFiller::postVisit(MethodCallExpression &node) {
   throw std::runtime_error("MethodCallExpression not supported");
   return;
@@ -1530,7 +1562,7 @@ void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type
   if(pattern->is_ref()) {
     // let ref y = r <=> let y = &r
     // let ref mut z = r <=> let z = &mut r
-    type = _type_pool->make_type<stype::ReferenceType>(type, is_mut);
+    type = _type_pool->make_type<stype::RefType>(type, is_mut);
     is_mut = false; // z is immutable (while *z is mutable)
   }
   auto info = add_symbol(pattern->ident(), SymbolInfo{
@@ -1599,7 +1631,7 @@ void TypeFiller::bind_struct(StructPattern *pattern, stype::TypePtr type) {
 }
 
 void TypeFiller::bind_reference(ReferencePattern *pattern, stype::TypePtr type) {
-  auto t = type.get_if<stype::ReferenceType>();
+  auto t = type.get_if<stype::RefType>();
   if(!t) {
     _recorder->report("Type binding failed: not a reference");
     return;

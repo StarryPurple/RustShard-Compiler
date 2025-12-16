@@ -9,7 +9,7 @@ bool is_whitespace(char ch) { return ch == '\t' || ch == '\n' || ch == '\r' || c
 bool is_alpha(char ch) { return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z'); }
 bool is_digit(char ch) { return '0' <= ch && ch <= '9'; }
 
-void Lexer::tokenize(std::string_view code) {
+void Lexer::tokenize(StringRef code) {
   _src_code = code;
   _tokens.clear();
   _pos = 0; _row = 1; _col = 1;
@@ -103,19 +103,19 @@ bool Lexer::tokenize_number_literal() {
   static const std::regex dec_pattern(R"(^[\d][\d_]*)");
   static const std::regex integer_suffix_pattern("^(u|i)(8|16|32|64|size)");
   static const std::regex float_pattern(R"(^[\d][\d_]*(\.[^\w\.]|\.[\d][\d_]*|(\.[\d][\d_]*)?(f32|f64)))");
-  std::string_view str = _src_code.substr(_pos);
-  std::cmatch match;
-  if(std::regex_search(str.begin(), str.end(), match, hex_pattern) ||
-    std::regex_search(str.begin(), str.end(), match, oct_pattern) ||
-    std::regex_search(str.begin(), str.end(), match, bin_pattern) ||
-    std::regex_search(str.begin(), str.end(), match, dec_pattern)) {
+  StringRef str = _src_code.substr(_pos);
+  std::smatch match;
+  if(std::regex_search(str, match, hex_pattern) ||
+    std::regex_search(str, match, oct_pattern) ||
+    std::regex_search(str, match, bin_pattern) ||
+    std::regex_search(str, match, dec_pattern)) {
     // number matched. now match suffix
-    std::string_view matched = str.substr(0, match.length());
+    StringRef matched = str.substr(0, match.length());
     auto nxt_pos = _pos + match.length();
     if(nxt_pos < _src_code.length()) {
       char nxt_ch  = _src_code[nxt_pos];
       if(nxt_ch == '.') {
-        if(std::regex_search(str.begin(), str.end(), match, float_pattern)) {
+        if(std::regex_search(str, match, float_pattern)) {
           matched = str.substr(0, match.length());
           _tokens.emplace_back(TokenType::kFloatLiteral, matched, _row, _col);
           _pos += matched.length(); _col += matched.length();
@@ -128,8 +128,8 @@ bool Lexer::tokenize_number_literal() {
         return true;
       }
     }
-    std::string_view remain = str.substr(match.length());
-    if(std::regex_search(remain.begin(), remain.end(), match, integer_suffix_pattern)) {
+    StringRef remain = str.substr(match.length());
+    if(std::regex_search(remain, match, integer_suffix_pattern)) {
       matched = _src_code.substr(_pos, matched.length() + match.length());
     }
     _tokens.emplace_back(TokenType::kIntegerLiteral, matched, _row, _col);
@@ -360,8 +360,8 @@ bool Lexer::tokenize_keyword_identifier() {
   while(_pos < len && (is_alpha(_src_code[_pos]) || is_digit(_src_code[_pos]) || _src_code[_pos] == '_')) {
     advance_one();
   }
-  std::string_view lexeme = _src_code.substr(start, _pos - start);
-  static const std::unordered_map<std::string_view, TokenType> keywords = {
+  StringRef lexeme = _src_code.substr(start, _pos - start);
+  static const std::unordered_map<StringRef, TokenType> keywords = {
     {"as", TokenType::kAs}, {"break", TokenType::kBreak}, {"const", TokenType::kConst},
     {"continue", TokenType::kContinue}, {"crate", TokenType::kCrate}, {"else", TokenType::kElse},
     {"enum", TokenType::kEnum}, {"extern", TokenType::kExtern}, {"false", TokenType::kFalse},

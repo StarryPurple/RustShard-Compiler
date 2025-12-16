@@ -138,12 +138,10 @@ std::vector<fs::path> GetAllTestFiles(const std::string& test_dir) {
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    AllSemanticTests,
+    Semantics,
     SemanticTest,
     ::testing::ValuesIn(GetAllTestFiles(TEST_DIRECTORY_PATH)), // NOLINT: defined in CMakeLists
     [](const testing::TestParamInfo<fs::path>& info) {
-        std::string filename = info.param.filename().string();
-        std::string parent_dir = info.param.parent_path().filename().string();
-        return parent_dir + "_" + filename.substr(0, filename.find('.'));
+        return info.param.filename().replace_extension("").string();
     }
 );

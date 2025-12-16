@@ -65,9 +65,9 @@ struct ConstSlice : public ConstBase {
   bool operator==(const ConstSlice &) const = default;
 };
 struct ConstStruct : public ConstBase {
-  std::unordered_map<std::string_view, ConstValPtr> fields;
+  std::unordered_map<StringRef, ConstValPtr> fields;
 
-  ConstStruct(std::unordered_map<std::string_view, ConstValPtr> &&f): fields(std::move(f)) {}
+  ConstStruct(std::unordered_map<StringRef, ConstValPtr> &&f): fields(std::move(f)) {}
   bool operator==(const ConstStruct &) const = default;
 };
 struct ConstReference : public ConstBase {

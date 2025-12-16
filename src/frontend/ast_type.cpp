@@ -4,8 +4,8 @@
 
 namespace insomnia::rust_shard::stype {
 
-std::string_view get_type_view_from_prime(TypePrime prime) {
-  static const std::unordered_map<TypePrime, std::string_view> table = {
+StringRef prime_strs(TypePrime prime) {
+  static const std::unordered_map<TypePrime, StringRef> table = {
     {TypePrime::kChar, "char"}, {TypePrime::kBool, "bool"},
     {TypePrime::kI8, "i8"}, {TypePrime::kI16, "i16"},
     {TypePrime::kI32, "i32"}, {TypePrime::kI64, "i64"},
@@ -82,17 +82,17 @@ bool ArrayType::equals_impl(const ExprType &other) const {
   return *_type == *other_array.type();
 }
 
-void ReferenceType::combine_hash(std::size_t &seed) const {
+void RefType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
 }
 
-bool ReferenceType::equals_impl(const ExprType &other) const {
-  return *_type == *static_cast<const ReferenceType&>(other).type();
+bool RefType::equals_impl(const ExprType &other) const {
+  return *_type == *static_cast<const RefType&>(other).type();
 }
 
 void StructType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<std::string_view> hasher;
+  static constexpr std::hash<StringRef> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   // not rely on fields
@@ -146,7 +146,7 @@ bool SliceType::equals_impl(const ExprType &other) const {
 }
 
 void EnumType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<std::string_view> hasher;
+  static constexpr std::hash<StringRef> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   // not rely on fields
@@ -174,7 +174,7 @@ bool EnumType::equals_impl(const ExprType &other) const {
 }
 
 void FunctionType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<std::string_view> hasher;
+  static constexpr std::hash<StringRef> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   for(const auto &type: _params)
@@ -196,7 +196,7 @@ bool FunctionType::equals_impl(const ExprType &other) const {
 }
 
 void TraitType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<std::string_view> hasher;
+  static constexpr std::hash<StringRef> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
 }
@@ -218,7 +218,7 @@ bool RangeType::equals_impl(const ExprType &other) const {
 
 void EnumVariantType::combine_hash(std::size_t &seed) const {
   parent_enum()->combine_hash(seed);
-  static constexpr std::hash<std::string_view> hasher;
+  static constexpr std::hash<StringRef> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
 }

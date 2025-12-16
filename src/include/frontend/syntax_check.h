@@ -178,7 +178,7 @@ private:
   std::vector<LoopExpression*> _loop_context;
   std::vector<FunctionBodyExpr*> _func_context;
 
-  SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol) {
+  SymbolInfo* add_symbol(StringRef ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
   }
 };
@@ -241,17 +241,17 @@ public:
   }
 
 protected:
-  SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol) {
+  SymbolInfo* add_symbol(StringRef ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
   }
-  SymbolInfo* find_symbol(std::string_view ident) {
+  SymbolInfo* find_symbol(StringRef ident) {
     for(auto rit = _scopes.rbegin(); rit != _scopes.rend(); ++rit) {
       auto res = (*rit)->find_symbol(ident);
       if(res) return res;
     }
     return nullptr;
   }
-  const SymbolInfo* find_symbol(std::string_view ident) const {
+  const SymbolInfo* find_symbol(StringRef ident) const {
     for(auto rit = _scopes.rbegin(); rit != _scopes.rend(); ++rit) {
       auto res = (*rit)->find_symbol(ident);
       if(res) return res;

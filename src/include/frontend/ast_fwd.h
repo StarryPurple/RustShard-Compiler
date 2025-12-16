@@ -374,6 +374,7 @@ class PathPattern;
   M(TupleExpression) \
   M(TupleIndexingExpression) \
   M(StructExpression) \
+  M(CallExpression) \
   M(MethodCallExpression) \
   M(FieldExpression) \
   M(ContinueExpression) \

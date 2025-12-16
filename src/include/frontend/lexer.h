@@ -8,6 +8,8 @@
 #include <vector>
 #include <iostream>
 
+#include "common.h"
+
 namespace insomnia::rust_shard {
 enum class TokenTypeCat : uint32_t {
   kSpecial = 1 << 7,
@@ -62,10 +64,10 @@ std::string token_type_to_string(TokenType type);
 
 struct Token {
   TokenType type = TokenType::kInvalid;
-  std::string_view lexeme;
+  StringRef lexeme;
   std::size_t row = -1, col = -1;
   Token() = default;
-  Token(TokenType _token_type, std::string_view _lexeme, std::size_t _row, std::size_t _col)
+  Token(TokenType _token_type, StringRef _lexeme, std::size_t _row, std::size_t _col)
     : type(_token_type), lexeme(_lexeme), row(_row), col(_col) {}
 
   friend std::ostream& operator<<(std::ostream &os, const Token &token) {
@@ -77,7 +79,7 @@ struct Token {
 };
 
 class Lexer {
-  std::string_view _src_code;
+  StringRef _src_code;
   std::vector<Token> _tokens;
   std::size_t _pos = 0; // points to first unhandled character
   std::size_t _row = 1, _col = 1; // exact position of _pos
@@ -115,9 +117,9 @@ class Lexer {
 
 public:
   Lexer() = default;
-  explicit Lexer(std::string_view code) { tokenize(code); }
+  explicit Lexer(StringRef code) { tokenize(code); }
   // return false if tokenization fails (lexical/syntax error)
-  void tokenize(std::string_view code);
+  void tokenize(StringRef code);
 
   explicit operator bool() const { return _error_code == Error::kSuccess; }
   [[nodiscard]] bool is_good() const { return _error_code == Error::kSuccess; }

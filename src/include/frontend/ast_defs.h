@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "common.h"
 #include "ast_fwd.h"
 #include "ast_type.h"
 
@@ -77,7 +78,7 @@ public:
 
 class ASTTree {
 public:
-  ASTTree(std::unique_ptr<Crate> crate);
+  explicit ASTTree(std::unique_ptr<Crate> crate);
   void traverse(RecursiveVisitor &r_visitor);
 private:
   std::unique_ptr<Crate> _crate;
@@ -85,7 +86,7 @@ private:
 
 struct SymbolInfo {
   const BasicNode* node;
-  std::string_view ident;
+  StringRef ident;
   SymbolKind kind;
   bool is_mut;
   stype::TypePtr type;
@@ -108,13 +109,13 @@ public:
   void init_scope() { _symbol_set.clear(); }
   void load_builtin(stype::TypePool *pool);
 
-  SymbolInfo* add_symbol(std::string_view ident, const SymbolInfo &symbol);
-  SymbolInfo* find_symbol(std::string_view ident);
-  const SymbolInfo* find_symbol(std::string_view ident) const;
-  bool set_type(std::string_view ident, stype::TypePtr type);
+  SymbolInfo* add_symbol(const StringRef &ident, const SymbolInfo &symbol);
+  SymbolInfo* find_symbol(const StringRef &ident);
+  const SymbolInfo* find_symbol(const StringRef &ident) const;
+  bool set_type(const StringRef &ident, stype::TypePtr type);
 
 private:
-  std::unordered_map<std::string_view, SymbolInfo> _symbol_set;
+  std::unordered_map<StringRef, SymbolInfo> _symbol_set;
 };
 
 class ScopeInfo {
@@ -124,7 +125,7 @@ public:
       throw std::runtime_error("Scope already set");
     _scope = std::move(scope);
   }
-  const std::unique_ptr<Scope>& scope() const { return _scope; }
+  const std::unique_ptr<Scope>& scope() const { return _scope; } // NOLINT
 private:
   std::unique_ptr<Scope> _scope;
 };
@@ -161,12 +162,12 @@ class ResolutionTree {
 
 // every crate owns one.
 struct Module {
-  std::string_view ident; // module name
-  std::unordered_map<std::string_view, stype::AliasType> aliases;
-  std::unordered_map<std::string_view, stype::FunctionType> functions;
-  std::unordered_map<std::string_view, stype::TraitType> traits;
+  StringRef ident; // module name
+  std::unordered_map<StringRef, stype::AliasType> aliases;
+  std::unordered_map<StringRef, stype::FunctionType> functions;
+  std::unordered_map<StringRef, stype::TraitType> traits;
 
-  explicit Module(std::string_view _ident): ident(_ident) {}
+  explicit Module(StringRef _ident): ident(std::move(_ident)) {}
 };
 
 }
