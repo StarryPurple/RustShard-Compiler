@@ -38,7 +38,7 @@ struct type_list {
 };
 
 using primitives = type_list<
-  char, StringRef,
+  char, std::string,
   std::int64_t,
   std::uint64_t,
   float, double,

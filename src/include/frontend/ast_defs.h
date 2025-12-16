@@ -88,7 +88,6 @@ struct SymbolInfo {
   const BasicNode* node;
   StringRef ident;
   SymbolKind kind;
-  bool is_mut;
   stype::TypePtr type;
 };
 

@@ -70,6 +70,27 @@ bool PrimitiveType::equals_impl(const ExprType &other) const {
   return _prime == static_cast<const PrimitiveType&>(other).prime();
 }
 
+std::string PrimitiveType::to_string() const {
+  switch(_prime) {
+  case TypePrime::kBool: return "bool";
+  case TypePrime::kChar: return "char";
+  case TypePrime::kI8: return "i8";
+  case TypePrime::kI16: return "i16";
+  case TypePrime::kI32: return "i32";
+  case TypePrime::kI64: return "i64";
+  case TypePrime::kU8: return "u8";
+  case TypePrime::kU16: return "u16";
+  case TypePrime::kU32: return "u32";
+  case TypePrime::kU64: return "u64";
+  case TypePrime::kISize: return "isize";
+  case TypePrime::kUSize: return "usize";
+  case TypePrime::kF32: return "f32";
+  case TypePrime::kF64: return "f64";
+  case TypePrime::kString: return "String";
+  }
+  return "unrecognized prime";
+}
+
 void ArrayType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
@@ -82,6 +103,30 @@ bool ArrayType::equals_impl(const ExprType &other) const {
   return *_type == *other_array.type();
 }
 
+std::string ArrayType::to_string() const {
+  std::string res = "[";
+  res += _type->to_string();
+  res += "; ";
+  res += std::to_string(_length);
+  res += "]";
+  return res;
+}
+
+void MutType::combine_hash(std::size_t &seed) const {
+  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+  _type->combine_hash(seed);
+}
+
+bool MutType::equals_impl(const ExprType &other) const {
+  return *_type == *static_cast<const MutType&>(other).type();
+}
+
+std::string MutType::to_string() const {
+  std::string res = "mut ";
+  res += _type->to_string();
+  return res;
+}
+
 void RefType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
@@ -89,6 +134,12 @@ void RefType::combine_hash(std::size_t &seed) const {
 
 bool RefType::equals_impl(const ExprType &other) const {
   return *_type == *static_cast<const RefType&>(other).type();
+}
+
+std::string RefType::to_string() const {
+  std::string res = "&";
+  res += _type->to_string();
+  return res;
 }
 
 void StructType::combine_hash(std::size_t &seed) const {
@@ -120,6 +171,10 @@ bool StructType::equals_impl(const ExprType &other) const {
   return true;
 }
 
+std::string StructType::to_string() const {
+  return _ident;
+}
+
 void TupleType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   for(auto &type: _members) type->combine_hash(seed);
@@ -136,6 +191,17 @@ bool TupleType::equals_impl(const ExprType &other) const {
   return true;
 }
 
+std::string TupleType::to_string() const {
+  std::string res = "(";
+  for(int i = 0; i < _members.size(); ++i) {
+    res += _members[i]->to_string();
+    if(i != _members.size() - 1) res += ", ";
+  }
+  if(_members.size() == 1) res += ",";
+  res += ")";
+  return res;
+}
+
 void SliceType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
@@ -143,6 +209,13 @@ void SliceType::combine_hash(std::size_t &seed) const {
 
 bool SliceType::equals_impl(const ExprType &other) const {
   return *_type == *static_cast<const SliceType&>(other).type();
+}
+
+std::string SliceType::to_string() const {
+  std::string res = "[";
+  res += _type->to_string();
+  res += "]";
+  return res;
 }
 
 void EnumType::combine_hash(std::size_t &seed) const {
@@ -173,6 +246,10 @@ bool EnumType::equals_impl(const ExprType &other) const {
   */
 }
 
+std::string EnumType::to_string() const {
+  return _ident;
+}
+
 void FunctionType::combine_hash(std::size_t &seed) const {
   static constexpr std::hash<StringRef> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
@@ -195,6 +272,17 @@ bool FunctionType::equals_impl(const ExprType &other) const {
   return true;
 }
 
+std::string FunctionType::to_string() const {
+  std::string res = "fn(";
+  for(int i = 0; i < _params.size(); ++i) {
+    res += _params[i]->to_string();
+    if(i != _params.size() - 1) res += ", ";
+  }
+  res += ") -> ";
+  res += _ret_type->to_string();
+  return res;
+}
+
 void TraitType::combine_hash(std::size_t &seed) const {
   static constexpr std::hash<StringRef> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
@@ -206,6 +294,10 @@ bool TraitType::equals_impl(const ExprType &other) const {
   return _ident == other_trait.ident();
 }
 
+std::string TraitType::to_string() const {
+  return _ident;
+}
+
 void RangeType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _type->combine_hash(seed);
@@ -214,6 +306,13 @@ void RangeType::combine_hash(std::size_t &seed) const {
 bool RangeType::equals_impl(const ExprType &other) const {
   const auto &other_range = static_cast<const RangeType&>(other);
   return *_type == *other_range.type();
+}
+
+std::string RangeType::to_string() const {
+  std::string res = "Range<";
+  res += _type->to_string();
+  res += ">";
+  return res;
 }
 
 void EnumVariantType::combine_hash(std::size_t &seed) const {
@@ -228,6 +327,13 @@ bool EnumVariantType::equals_impl(const ExprType &other) const {
   return *parent_enum() == *other_ev.parent_enum() && _ident == other_ev.ident();
 }
 
+std::string EnumVariantType::to_string() const {
+  std::string res = _parent_enum->to_string();
+  res += "::";
+  res += _ident;
+  return res;
+}
+
 void AliasType::combine_hash(std::size_t &seed) const {
   // do not let this layer affect anything
   _type->combine_hash(seed);
@@ -235,6 +341,14 @@ void AliasType::combine_hash(std::size_t &seed) const {
 
 bool AliasType::equals_impl(const ExprType &other) const {
   throw std::runtime_error("ast type system error: comparing align types");
+}
+
+std::string AliasType::to_string() const {
+  std::string res = _ident;
+  res += "{a.k.a. ";
+  res += _type->to_string();
+  res += "}";
+  return res;
 }
 
 void NeverType::combine_hash(std::size_t &seed) const {
@@ -245,15 +359,21 @@ bool NeverType::equals_impl(const ExprType &other) const {
   return true;
 }
 
+std::string NeverType::to_string() const {
+  return "!";
+}
+
 void SelfType::combine_hash(std::size_t &seed) const {
-  combine_hash_impl(seed, static_cast<std::size_t>(_is_mut));
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
 }
 
 bool SelfType::equals_impl(const ExprType &other) const {
   const auto &other_self = static_cast<const SelfType&>(other);
-  if(_is_mut != other_self._is_mut) return false;
   return true;
+}
+
+std::string SelfType::to_string() const {
+  return "Self";
 }
 
 }

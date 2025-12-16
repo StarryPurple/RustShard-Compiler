@@ -37,22 +37,37 @@ protected:
   ConstBase() = default; // hides outer construction
 };
 struct ConstPrimitive : public ConstBase {
-  // The underlying type is determined by "type" in ConstValue wrapper
+  stype::TypePrime prime;
   type_utils::primitive_variant value;
+
   template <class T> requires type_utils::is_primitive<T>
-  explicit ConstPrimitive(T &&spec): value(std::forward<T>(spec)) {}
+  ConstPrimitive(stype::TypePrime _prime, T &&spec): prime(_prime), value(std::forward<T>(spec)) {}
   bool operator==(const ConstPrimitive&) const = default;
+  std::optional<stype::usize_t> get_usize() const { // NOLINT
+    return std::visit([&]<typename T0>(T0 &&arg) {
+      using T = std::decay_t<T0>;
+      if constexpr(std::is_same_v<T, std::int64_t>) {
+        if(arg > 0) return std::make_optional(static_cast<stype::usize_t>(arg));
+      } else if constexpr(std::is_same_v<T, std::uint64_t>) {
+        return std::make_optional(static_cast<stype::usize_t>(arg));
+      }
+      return std::optional<stype::usize_t>{};
+    }, value);
+  }
 };
 struct ConstRange : public ConstBase {
   std::optional<ConstValPtr> begin, end;
+
   bool operator==(const ConstRange &) const = default;
 };
 struct ConstTuple : public ConstBase {
   std::vector<ConstValPtr> tuple;
+
   bool operator==(const ConstTuple &) const = default;
 };
 struct ConstArray : public ConstBase {
   std::vector<ConstValPtr> array;
+
   std::size_t length() const { return array.size(); }
   bool operator==(const ConstArray &) const = default;
 };
