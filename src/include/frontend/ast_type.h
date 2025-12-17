@@ -46,6 +46,7 @@ public:
   template <class T> requires std::derived_from<T, ExprType>
   std::shared_ptr<T> get_if() const { return std::dynamic_pointer_cast<T>(_ptr); } // NOLINT
 
+  /*
   // uses static_pointer_cast. use it only when you have confirmed its inner type.
   template <class T> requires std::derived_from<T, ExprType>
   T* as() const { return static_cast<T*>(_ptr.get()); }
@@ -53,6 +54,7 @@ public:
   // uses dynamic_pointer_cast.
   template <class T> requires std::derived_from<T, ExprType>
   T* as_if() const { return dynamic_cast<T*>(_ptr.get()); }
+  */
 };
 
 struct TypePath {
@@ -118,16 +120,18 @@ public:
   : ExprType(TypeKind::kPrimitive), _prime(prime) {}
   TypePrime prime() const { return _prime; }
   bool is_integer() const {
-    return TypePrime::kI8 <= _prime && _prime <= TypePrime::kUSize;
+    return is_signed_integer() || is_unsigned_integer();
   }
   bool is_floating_point() const {
-    return TypePrime::kF32 <= _prime && _prime <= TypePrime::kF64;
+    return _prime == TypePrime::kF32 || _prime == TypePrime::kF64;
   }
-  bool is_signed() const {
-    return TypePrime::kI8 <= _prime && _prime <= TypePrime::kISize;
+  bool is_signed_integer() const {
+    return _prime == TypePrime::kI8 || _prime == TypePrime::kI16 || _prime == TypePrime::kI32
+      || _prime == TypePrime::kI64 || _prime == TypePrime::kISize;
   }
-  bool is_unsigned() const {
-    return TypePrime::kU8 <= _prime && _prime <= TypePrime::kUSize;
+  bool is_unsigned_integer() const {
+    return _prime == TypePrime::kU8 || _prime == TypePrime::kU16 || _prime == TypePrime::kU32
+      || _prime == TypePrime::kU64 || _prime == TypePrime::kUSize;
   }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
@@ -139,45 +143,43 @@ private:
 
 class ArrayType : public ExprType {
 public:
-  ArrayType(TypePtr type, usize_t length)
-  : ExprType(TypeKind::kArray), _type(std::move(type)), _length(length) {}
-  ArrayType(std::shared_ptr<ExprType> type, usize_t length)
-  : ExprType(TypeKind::kArray), _type(std::move(type)), _length(length) {}
-  TypePtr type() const { return _type; }
+  ArrayType(TypePtr inner, usize_t length)
+  : ExprType(TypeKind::kArray), _inner(std::move(inner)), _length(length) {}
+  TypePtr inner() const { return _inner; }
   usize_t length() const { return _length; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
-  TypePtr _type;
+  TypePtr _inner;
   usize_t _length;
 };
 
 class MutType : public ExprType {
 public:
-  explicit MutType(TypePtr type)
-  : ExprType(TypeKind::kMut), _type(std::move(type)) {}
-  TypePtr type() const { return _type; }
+  explicit MutType(TypePtr inner)
+  : ExprType(TypeKind::kMut), _inner(std::move(inner)) {}
+  TypePtr inner() const { return _inner; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
-  TypePtr _type;
+  TypePtr _inner;
 };
 
 class RefType : public ExprType {
 public:
-  explicit RefType(TypePtr type)
-  : ExprType(TypeKind::kRef), _type(std::move(type)) {}
-  TypePtr type() const { return _type; }
+  explicit RefType(TypePtr inner)
+  : ExprType(TypeKind::kRef), _inner(std::move(inner)) {}
+  TypePtr inner() const { return _inner; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
-  TypePtr _type;
+  TypePtr _inner;
 };
 
 class StructType : public ExprType {
@@ -214,15 +216,15 @@ private:
 
 class SliceType : public ExprType {
 public:
-  explicit SliceType(TypePtr type)
-  : ExprType(TypeKind::kSlice), _type(std::move(type)) {}
-  TypePtr type() const { return _type; }
+  explicit SliceType(TypePtr inner)
+  : ExprType(TypeKind::kSlice), _inner(std::move(inner)) {}
+  TypePtr inner() const { return _inner; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
-  TypePtr _type;
+  TypePtr _inner;
 };
 
 class EnumVariantType;
@@ -410,7 +412,7 @@ public:
     _pool.insert(ptr);
     return ptr;
   }
-  // In fact I shall list all possibilities... Never mind.
+  // In fact, I shall list all possibilities... Never mind.
   template <class T, class... Args>
   requires std::derived_from<T, ExprType> && std::is_constructible_v<T, Args...>
   TypePtr make_type(Args &&...args) {
@@ -419,6 +421,17 @@ public:
   TypePtr make_unit() {
     return make_type<TupleType>(std::vector<TypePtr>());
   }
+
+  // strip one layer of mutability.
+  // mut T -> T, &mut T -> &T, mut &T -> &T, mut &mut T -> &mut T
+  TypePtr strip_mut(TypePtr type) {
+    if(auto m = type.get_if<MutType>()) return m->inner();
+    if(auto r = type.get_if<RefType>())
+      if(auto m = TypePtr(r).get_if<MutType>())
+        return make_type<RefType>(m->inner());
+    return type;
+  }
+
   std::size_t size() const { return _pool.size(); }
 private:
   std::unordered_set<

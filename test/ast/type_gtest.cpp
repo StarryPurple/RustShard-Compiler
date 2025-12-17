@@ -75,8 +75,8 @@ TEST_F(AstTypeTest, ArrayComparison) {
   ASSERT_NE(*arr1, *pool.make_raw_type<ArrayType>(u32_type, 10));
 
   // `[[i32; 10]; 5]` vs `[[i32; 10]; 5]`
-  auto nested_arr1 = pool.make_raw_type<ArrayType>(arr1, 5);
-  auto nested_arr2 = pool.make_raw_type<ArrayType>(arr2, 5);
+  auto nested_arr1 = pool.make_raw_type<ArrayType>(TypePtr(arr1), 5);
+  auto nested_arr2 = pool.make_raw_type<ArrayType>(TypePtr(arr2), 5);
   ASSERT_EQ(*nested_arr1, *nested_arr2);
 }
 

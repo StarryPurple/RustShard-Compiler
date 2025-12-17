@@ -518,9 +518,14 @@ public:
   Expression() = default;
   virtual bool has_block() const = 0;
   bool has_constant() const { return static_cast<bool>(_const_value); }
+  bool is_lvalue() const { return _is_lvalue; }
+  void set_is_lvalue() { _is_lvalue = true; }
+  bool is_
 protected:
   sconst::ConstValPtr _const_value;
 private:
+  bool _is_lvalue = false;
+
   // for ConstEvaluator
   void set_const_value(sconst::ConstValPtr value) {
     _const_value = std::move(value);

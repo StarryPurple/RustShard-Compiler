@@ -800,7 +800,7 @@ void TypeFiller::postVisit(PathInExpression &node) {
 void TypeFiller::postVisit(BorrowExpression &node) {
   auto type = node.expr()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in BorrowExpression");
     return;
   }
   if(node.is_mut()) type = _type_pool->make_type<stype::MutType>(type);
@@ -811,10 +811,10 @@ void TypeFiller::postVisit(BorrowExpression &node) {
 void TypeFiller::postVisit(DereferenceExpression &node) {
   auto type = node.expr()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in DereferenceExpression");
     return;
   }
-  if(auto inner = type.get_if<stype::MutType>()) type = stype::TypePtr(inner);
+  type = _type_pool->strip_mut(type);
   if(auto inner = type.get_if<stype::RefType>()) {
     type = stype::TypePtr(inner);
   } else {
@@ -827,7 +827,7 @@ void TypeFiller::postVisit(DereferenceExpression &node) {
 void TypeFiller::postVisit(NegationExpression &node) {
   auto type = node.expr()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in NegationExpression");
     return;
   }
   node.set_type(std::move(type));
@@ -836,12 +836,12 @@ void TypeFiller::postVisit(NegationExpression &node) {
 void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
   auto type1 = node.expr1()->get_type();
   if(!type1) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in ArithmeticOrLogicalExpression");
     return;
   }
   auto type2 = node.expr1()->get_type();
   if(!type2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ArithmeticOrLogicalExpression");
     return;
   }
   auto prime1 = type1.get_if<stype::PrimitiveType>();
@@ -853,7 +853,7 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
   switch(node.oper()) {
   case Operator::kShl:
   case Operator::kShr:
-    if(prime1->is_integer() && prime2->is_unsigned()) {
+    if(prime1->is_integer() && prime2->is_unsigned_integer()) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator << >>");
@@ -903,12 +903,12 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
 void TypeFiller::postVisit(ComparisonExpression &node) {
   auto type1 = node.expr1()->get_type();
   if(!type1) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in ComparisonExpression");
     return;
   }
   auto type2 = node.expr1()->get_type();
   if(!type2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ComparisonExpression");
     return;
   }
   auto prime1 = type1.get_if<stype::PrimitiveType>();
@@ -939,12 +939,12 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
 void TypeFiller::postVisit(LazyBooleanExpression &node) {
   auto type1 = node.expr1()->get_type();
   if(!type1) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in LazyBooleanExpression");
     return;
   }
   auto type2 = node.expr1()->get_type();
   if(!type2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in LazyBooleanExpression");
     return;
   }
   auto prime1 = type1.get_if<stype::PrimitiveType>();
@@ -971,12 +971,12 @@ void TypeFiller::postVisit(LazyBooleanExpression &node) {
 void TypeFiller::postVisit(TypeCastExpression &node) {
   auto from_type = node.expr()->get_type();
   if(!from_type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "From type not got in TypeCastExpression");
     return;
   }
   auto to_type = node.type_no_bounds()->get_type();
   if(!to_type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "To type not got in TypeCastExpression");
     return;
   }
   auto from_prime = from_type.get_if<stype::PrimitiveType>();
@@ -1018,34 +1018,65 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
   }
 }
 
+void TypeFiller::preVisit(AssignmentExpression &node) {
+  node.expr1()->set_is_lvalue();
+}
+
 void TypeFiller::postVisit(AssignmentExpression &node) {
   auto to_type = node.expr1()->get_type();
-  if(to_type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+  if(!to_type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "To type not got in AssignmentExpression");
     return;
   }
   auto from_type = node.expr2()->get_type();
   if(!from_type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "From type not got in AssignmentExpression");
     return;
   }
-  if(from_type == to_type) {
-    node.set_type(to_type);
+  // Accepted assignment:
+  // mut T <- T
+  // &T <- &T
+  // &T <- &mut T
+  // &mut T <- &mut T
+  // Also, we allow auto dereference:
+  //
+  from_type = _type_pool->strip_mut(from_type); // unneeded mut in FromType
+  if(auto m = to_type.get_if<stype::MutType>()) {
+    // ToType with mut:
+    if(from_type != to_type) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform assignment to other type."
+        " ToType: " + to_type->to_string() + ", FromType: " + from_type->to_string());
+      return;
+    }
   } else {
-    _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform assignment to other type");
-    return;
+    // ToType without mut:
+    if(auto f = from_type.get_if<stype::RefType>(), t = to_type.get_if<stype::RefType>();
+      !f || !t) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform assignment to non-reference immutable type."
+        " ToType: " + to_type->to_string() + ", FromType: " + from_type->to_string());
+      return;
+    } else if(_type_pool->strip_mut(stype::TypePtr(t)) != stype::TypePtr(f)) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform assignment to other reference type."
+        " ToType: " + to_type->to_string() + ", FromType: " + from_type->to_string());
+      return;
+    }
   }
+  node.set_type(to_type);
+}
+
+void TypeFiller::preVisit(CompoundAssignmentExpression &node) {
+  node.expr1()->set_is_lvalue();
 }
 
 void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   auto type1 = node.expr1()->get_type();
   if(!type1) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in CompoundAssignmentExpression");
     return;
   }
   auto type2 = node.expr1()->get_type();
   if(!type2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in CompoundAssignmentExpression");
     return;
   }
   auto prime1 = type1.get_if<stype::PrimitiveType>();
@@ -1057,7 +1088,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   switch(node.oper()) {
   case Operator::kShlAssign:
   case Operator::kShrAssign:
-    if(prime1->is_integer() && prime2->is_unsigned()) {
+    if(prime1->is_integer() && prime2->is_unsigned_integer()) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator <<= >>=");
@@ -1097,7 +1128,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
 void TypeFiller::postVisit(GroupedExpression &node) {
   auto type = node.expr()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in GroupedExpression");
     return;
   }
   node.set_type(type);
@@ -1122,7 +1153,7 @@ void TypeFiller::postVisit(ArrayExpression &node) {
     for(auto &elem: arr->expr_list()) {
       auto t = elem->get_type();
       if(!t) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+        _recorder->tagged_report(kErrTypeNotResolved, "Type not got in ArrayExpression");
         return;
       }
       if(type != t) {
@@ -1147,14 +1178,14 @@ void TypeFiller::postVisit(ArrayExpression &node) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type length not a primitive");
       return;
     }
-    auto length = std::get_if<stype::usize_t>(&length_prime->value);
+    auto length = length_prime->get_usize();
     if(!length) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type length not an unsigned value");
       return;
     }
     auto type = arr->val_expr()->get_type();
     if(!type) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      _recorder->tagged_report(kErrTypeNotResolved, "Expr type not got in ArrayExpression");
       return;
     }
     node.set_type(_type_pool->make_type<stype::ArrayType>(type, *length));
@@ -1164,26 +1195,57 @@ void TypeFiller::postVisit(ArrayExpression &node) {
 void TypeFiller::postVisit(IndexExpression &node) {
   auto expr_type = node.expr_obj()->get_type();
   if(!expr_type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Expr type not got in IndexExpression");
     return;
   }
   auto index_type = node.expr_index()->get_type();
   if(!index_type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Index type not got in IndexExpression");
     return;
+  }
+  bool is_mut1 = false, is_ref = false, is_mut2 = false;
+  if(auto m = expr_type.get_if<stype::MutType>()) {
+    expr_type = m->inner();
+    is_mut1 = true;
   }
   auto expr_arr = expr_type.get_if<stype::ArrayType>();
   if(!expr_arr) {
-    _recorder->tagged_report(kErrTypeNotMatch, "Index on not an array");
-    return;
+    // try to dereference one layer
+    if(auto r = expr_type.get_if<stype::RefType>()) {
+      expr_type = r->inner();
+      is_ref = true;
+    } else {
+      _recorder->tagged_report(kErrTypeNotMatch, "Expr type is neither an array, nor a reference of array."
+        " Type: " + expr_type->to_string());
+      return;
+    }
+    if(auto m = expr_type.get_if<stype::MutType>()) {
+      expr_type = m->inner();
+      is_mut2 = true;
+    }
+    expr_arr = expr_type.get_if<stype::ArrayType>();
+    if(!expr_type) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Expr type is neither an array, nor a reference of array."
+        " Type: " + expr_type->to_string());
+      return;
+    }
   }
   auto index_primitive = index_type.get_if<stype::PrimitiveType>();
-  if(!index_primitive || index_primitive->is_integer()) {
+  if(!index_primitive || !index_primitive->is_integer()) {
     _recorder->tagged_report(kErrTypeNotMatch, "Index not an integer");
     return;
   }
   // out_of_range is a runtime problem
-  node.set_type(expr_arr->type());
+
+  auto tp = expr_arr->inner();
+  if((!is_ref && is_mut1) || (is_ref && is_mut2 && node.is_lvalue()))
+    tp = _type_pool->make_type<stype::MutType>(tp);
+  tp = _type_pool->make_type<stype::RefType>(tp);
+  node.set_type(tp);
+
+  // (mut) [T; N] -> &(mut) T
+  // (mut) &[T; N] -> &T
+  // (mut) &mut [T; N] -> &T (rvalue), &mut T (lvalue)
 }
 
 void TypeFiller::postVisit(TupleExpression &node) {
@@ -1191,7 +1253,7 @@ void TypeFiller::postVisit(TupleExpression &node) {
   if(node.elems_opt()) for(const auto &expr: node.elems_opt()->expr_list()) {
     auto t = expr->get_type();
     if(!t) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not got in TupleExpression");
       return;
     }
     members.push_back(std::move(t));
@@ -1263,7 +1325,7 @@ void TypeFiller::postVisit(BreakExpression &node) {
   }
   auto type = node.expr_opt()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in BreakExpression");
     return;
   }
   node.set_type(type);
@@ -1272,12 +1334,12 @@ void TypeFiller::postVisit(BreakExpression &node) {
 void TypeFiller::postVisit(RangeExpr &node) {
   auto type1 = node.expr1()->get_type();
   if(!type1) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in RangeExpr");
     return;
   }
   auto type2 = node.expr1()->get_type();
   if(!type2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in RangeExpr");
     return;
   }
   auto prime1 = type1.get_if<stype::PrimitiveType>();
@@ -1296,7 +1358,7 @@ void TypeFiller::postVisit(RangeExpr &node) {
 void TypeFiller::postVisit(RangeFromExpr &node) {
   auto type = node.expr()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in RangeFromExpr");
     return;
   }
   auto prime = type.get_if<stype::PrimitiveType>();
@@ -1314,7 +1376,7 @@ void TypeFiller::postVisit(RangeFromExpr &node) {
 void TypeFiller::postVisit(RangeToExpr &node) {
   auto type = node.expr()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in RangeToExpr");
     return;
   }
   auto prime = type.get_if<stype::PrimitiveType>();
@@ -1337,12 +1399,12 @@ void TypeFiller::postVisit(RangeFullExpr &node) {
 void TypeFiller::postVisit(RangeInclusiveExpr &node) {
   auto type1 = node.expr1()->get_type();
   if(!type1) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in RangeInclusiveExpr");
     return;
   }
   auto type2 = node.expr1()->get_type();
   if(!type2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in RangeInclusiveExpr");
     return;
   }
   auto prime1 = type1.get_if<stype::PrimitiveType>();
@@ -1361,7 +1423,7 @@ void TypeFiller::postVisit(RangeInclusiveExpr &node) {
 void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
   auto type = node.expr()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in RangeToInclusiveExpr");
     return;
   }
   auto prime = type.get_if<stype::PrimitiveType>();
@@ -1383,7 +1445,7 @@ void TypeFiller::postVisit(ReturnExpression &node) {
   }
   auto type = node.expr_opt()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in ReturnExpression");
     return;
   }
   node.set_type(type);
@@ -1412,14 +1474,14 @@ void TypeFiller::postVisit(FunctionBodyExpr &node) {
   if(node.stmts_opt() && node.stmts_opt()->expr_opt()) {
     type = node.stmts_opt()->expr_opt()->get_type();
     if(!type) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      _recorder->tagged_report(kErrTypeNotResolved, "Param type not got in FunctionBodyExpr");
       return;
     }
   }
   for(const auto &elem: node.func_returns()) {
     auto t = elem->get_type();
     if(!t) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      _recorder->tagged_report(kErrTypeNotResolved, "Return type not got in FunctionBodyExpr");
       return;
     }
     if(t != type) {
@@ -1437,14 +1499,14 @@ void TypeFiller::postVisit(InfiniteLoopExpression &node) {
   }
   auto type = node.loop_breaks().front()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Result type not got in InfiniteLoopExpression");
     return;
   }
   for(const auto &elem: node.loop_breaks()) {
     // compared first element again... never mind
     auto t = elem->get_type();
     if(!t) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      _recorder->tagged_report(kErrTypeNotResolved, "Result type not got in InfiniteLoopExpression");
       return;
     }
     if(t != type) {
@@ -1471,7 +1533,7 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
   if(node.block_expr()->stmts_opt() && node.block_expr()->stmts_opt()->expr_opt()) {
     type = node.block_expr()->stmts_opt()->expr_opt()->get_type();
     if(!type) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      _recorder->tagged_report(kErrTypeNotResolved, "Result type not got in PredicateLoopExpression");
       return;
     }
   }
@@ -1479,7 +1541,7 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
     // compared first element again... never mind
     auto t = elem->get_type();
     if(!t) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+      _recorder->tagged_report(kErrTypeNotResolved, "Result type not got in PredicateLoopExpression");
       return;
     }
     if(t != type) {
@@ -1504,7 +1566,7 @@ void TypeFiller::postVisit(IfExpression &node) {
 
   auto type = node.block_expr()->get_type();
   if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
+    _recorder->tagged_report(kErrTypeNotResolved, "Result type not got in IfExpression");
     return;
   }
   bool success = true;
@@ -1582,13 +1644,11 @@ void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, stype::TypePtr type) {
 void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type) {
   // always success
   bool is_mut = pattern->is_mut();
-  if(pattern->is_ref()) {
-    // let ref y = r <=> let y = &r
-    // let ref mut z = r <=> let z = &mut r
-    if(is_mut) type = _type_pool->make_type<stype::MutType>(type);
-    type = _type_pool->make_type<stype::RefType>(type);
-    is_mut = false; // z is immutable (while *z is mutable)
-  }
+  // let mut x = r <=> let x = mut r
+  // let ref y = r <=> let y = &r
+  // let ref mut z = r <=> let z = &mut r
+  if(pattern->is_mut()) type = _type_pool->make_type<stype::MutType>(type);
+  if(pattern->is_ref()) type = _type_pool->make_type<stype::RefType>(type);
   auto info = add_symbol(pattern->ident(), SymbolInfo{
     .node = pattern, .ident = pattern->ident(), .kind = SymbolKind::kVariable,
     .type = type
@@ -1659,14 +1719,14 @@ void TypeFiller::bind_reference(ReferencePattern *pattern, stype::TypePtr type) 
     _recorder->report("Type binding failed: not a reference");
     return;
   } else {
-    type = t->type();
+    type = t->inner();
   }
   if(pattern->is_mut()) {
     if(auto t = type.get_if<stype::MutType>(); !t) {
       _recorder->report("Type binding failed: reference mutability mismatch");
       return;
     } else {
-      type = t->type();
+      type = t->inner();
     }
   }
   auto sub_pattern = pattern->pattern().get();
@@ -1695,32 +1755,3 @@ void TypeFiller::bind_path(PathPattern *pattern, stype::TypePtr type) {
 }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

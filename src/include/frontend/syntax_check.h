@@ -448,6 +448,10 @@ public:
 
   INSOMNIA_RUST_SHARD_AST_TYPED_VISITABLE_NODES_LIST(ISM_RS_POST_VISIT_OVERRIDE_METHOD);
 
+  // assignment
+  void preVisit(AssignmentExpression &node) override;
+  void preVisit(CompoundAssignmentExpression &node) override;
+
   // set the types
   void postVisit(LetStatement &node) override;
 

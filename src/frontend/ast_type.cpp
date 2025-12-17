@@ -93,19 +93,19 @@ std::string PrimitiveType::to_string() const {
 
 void ArrayType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
-  _type->combine_hash(seed);
+  _inner->combine_hash(seed);
   combine_hash_impl(seed, _length);
 }
 
 bool ArrayType::equals_impl(const ExprType &other) const {
   const auto &other_array = static_cast<const ArrayType&>(other);
   if(_length != other_array.length()) return false;
-  return *_type == *other_array.type();
+  return *_inner == *other_array.inner();
 }
 
 std::string ArrayType::to_string() const {
   std::string res = "[";
-  res += _type->to_string();
+  res += _inner->to_string();
   res += "; ";
   res += std::to_string(_length);
   res += "]";
@@ -114,31 +114,31 @@ std::string ArrayType::to_string() const {
 
 void MutType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
-  _type->combine_hash(seed);
+  _inner->combine_hash(seed);
 }
 
 bool MutType::equals_impl(const ExprType &other) const {
-  return *_type == *static_cast<const MutType&>(other).type();
+  return *_inner == *static_cast<const MutType&>(other).inner();
 }
 
 std::string MutType::to_string() const {
   std::string res = "mut ";
-  res += _type->to_string();
+  res += _inner->to_string();
   return res;
 }
 
 void RefType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
-  _type->combine_hash(seed);
+  _inner->combine_hash(seed);
 }
 
 bool RefType::equals_impl(const ExprType &other) const {
-  return *_type == *static_cast<const RefType&>(other).type();
+  return *_inner == *static_cast<const RefType&>(other).inner();
 }
 
 std::string RefType::to_string() const {
   std::string res = "&";
-  res += _type->to_string();
+  res += _inner->to_string();
   return res;
 }
 
@@ -204,16 +204,16 @@ std::string TupleType::to_string() const {
 
 void SliceType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
-  _type->combine_hash(seed);
+  _inner->combine_hash(seed);
 }
 
 bool SliceType::equals_impl(const ExprType &other) const {
-  return *_type == *static_cast<const SliceType&>(other).type();
+  return *_inner == *static_cast<const SliceType&>(other).inner();
 }
 
 std::string SliceType::to_string() const {
   std::string res = "[";
-  res += _type->to_string();
+  res += _inner->to_string();
   res += "]";
   return res;
 }
