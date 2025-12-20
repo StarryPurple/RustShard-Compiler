@@ -11,7 +11,7 @@ std::size_t ConstPool::ConstValueSharedPtrHash::operator()(const std::shared_ptr
   std::size_t value_hash = 0;
   std::visit([&]<typename T0>(const T0 &val) {
     using T = std::decay_t<T0>;
-    if constexpr(std::is_same_v<T, ConstPrimitive>) {
+    if constexpr(std::is_same_v<T, ConstPrime>) {
       std::visit([&]<typename T1>(const T1& primitive_val) {
         value_hash = std::hash<std::decay_t<T1>>()(primitive_val);
       }, val.value);

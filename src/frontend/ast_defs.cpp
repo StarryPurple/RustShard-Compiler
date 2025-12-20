@@ -47,7 +47,7 @@ void Scope::load_builtin(stype::TypePool *pool) {
       .node = nullptr,
       .ident = ident,
       .kind = SymbolKind::kPrimitiveType,
-      .type = pool->make_type<PrimitiveType>(prime)
+      .type = pool->make_type<PrimeType>(prime)
     });
   }
 
@@ -57,7 +57,7 @@ void Scope::load_builtin(stype::TypePool *pool) {
       "print", pool->make_type<FunctionType>(
       "print",
       std::vector{
-        pool->make_type<RefType>(pool->make_type<PrimitiveType>(TypePrime::kString)),
+        pool->make_type<RefType>(pool->make_type<PrimeType>(TypePrime::kString), false),
       },
       pool->make_unit())
     }, {
@@ -65,7 +65,7 @@ void Scope::load_builtin(stype::TypePool *pool) {
       "println", pool->make_type<FunctionType>(
       "println",
       std::vector{
-        pool->make_type<RefType>(pool->make_type<PrimitiveType>(TypePrime::kString)),
+        pool->make_type<RefType>(pool->make_type<PrimeType>(TypePrime::kString), false),
       },
       pool->make_unit()
       )
@@ -74,7 +74,7 @@ void Scope::load_builtin(stype::TypePool *pool) {
       "printInt", pool->make_type<FunctionType>(
       "printInt",
       std::vector{
-        pool->make_type<PrimitiveType>(TypePrime::kI32),
+        pool->make_type<PrimeType>(TypePrime::kI32),
       },
       pool->make_unit()
       )
@@ -83,7 +83,7 @@ void Scope::load_builtin(stype::TypePool *pool) {
       "printlnInt", pool->make_type<FunctionType>(
       "printlnInt",
       std::vector{
-        pool->make_type<PrimitiveType>(TypePrime::kI32),
+        pool->make_type<PrimeType>(TypePrime::kI32),
       },
       pool->make_unit()
       )
@@ -92,21 +92,21 @@ void Scope::load_builtin(stype::TypePool *pool) {
       "getString", pool->make_type<FunctionType>(
         "getString",
         std::vector<TypePtr>{},
-        pool->make_type<PrimitiveType>(TypePrime::kString)
+        pool->make_type<PrimeType>(TypePrime::kString)
       )
     }, {
       // fn getInt() -> i32
       "getInt", pool->make_type<FunctionType>(
         "getInt",
         std::vector<TypePtr>{},
-        pool->make_type<PrimitiveType>(TypePrime::kI32)
+        pool->make_type<PrimeType>(TypePrime::kI32)
       )
     }, {
       // fn exit(code: i32) -> ()
       "exit", pool->make_type<FunctionType>(
       "exit",
       std::vector{
-        pool->make_type<PrimitiveType>(TypePrime::kI32),
+        pool->make_type<PrimeType>(TypePrime::kI32),
       },
       pool->make_unit()
       )

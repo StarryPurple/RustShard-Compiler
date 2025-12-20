@@ -11,7 +11,27 @@
 
 namespace insomnia::rust_shard::sconst {
 
+struct ConstPrime;
+struct ConstRef;
+struct ConstRange;
+struct ConstTuple;
+struct ConstArray;
+struct ConstStruct;
+struct ConstSlice;
+
 class ConstValue;
+
+// contains std::monostate
+using const_val_list = type_utils::type_list<
+  std::monostate,
+  ConstPrime,
+  ConstRef,
+  ConstRange,
+  ConstTuple,
+  ConstArray,
+  ConstStruct,
+  ConstSlice
+>;
 
 class ConstValPtr {
   std::shared_ptr<ConstValue> _ptr;
@@ -36,13 +56,13 @@ struct ConstBase {
 protected:
   ConstBase() = default; // hides outer construction
 };
-struct ConstPrimitive : public ConstBase {
+struct ConstPrime : public ConstBase {
   stype::TypePrime prime;
   type_utils::primitive_variant value;
 
   template <class T> requires type_utils::is_primitive<T>
-  ConstPrimitive(stype::TypePrime _prime, T &&spec): prime(_prime), value(std::forward<T>(spec)) {}
-  bool operator==(const ConstPrimitive&) const = default;
+  ConstPrime(stype::TypePrime _prime, T &&spec): prime(_prime), value(std::forward<T>(spec)) {}
+  bool operator==(const ConstPrime&) const = default;
   std::optional<stype::usize_t> get_usize() const { // NOLINT
     return std::visit([&]<typename T0>(T0 &&arg) {
       using T = std::decay_t<T0>;
@@ -85,23 +105,12 @@ struct ConstStruct : public ConstBase {
   ConstStruct(std::unordered_map<StringRef, ConstValPtr> &&f): fields(std::move(f)) {}
   bool operator==(const ConstStruct &) const = default;
 };
-struct ConstReference : public ConstBase {
-  ConstValPtr ref;
-  ConstReference(ConstValPtr r): ref(std::move(r)) {}
-  bool operator==(const ConstReference &) const = default;
+struct ConstRef : public ConstBase {
+  ConstValPtr inner;
+  bool ref_is_mut;
+  ConstRef(ConstValPtr r, bool _ref_is_mut): inner(std::move(r)), ref_is_mut(_ref_is_mut) {}
+  bool operator==(const ConstRef &) const = default;
 };
-
-// contains std::monostate
-using const_val_list = type_utils::type_list<
-  std::monostate,
-  ConstPrimitive,
-  ConstReference,
-  ConstRange,
-  ConstTuple,
-  ConstArray,
-  ConstStruct,
-  ConstSlice
->;
 
 class ConstValue {
 public:

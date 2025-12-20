@@ -9,28 +9,31 @@ template <class T> requires const_val_list::contains<T>
 const T& ConstValue::get() const {
   using stype::TypeKind;
   using stype::TypePrime;
-  using stype::PrimitiveType;
+  using stype::PrimeType;
 
+  return std::get<T>(_const_val);
+  /*
   if(_type && _type->kind() == TypeKind::kPrimitive) {
     if constexpr(std::is_integral_v<T> && !std::is_same_v<T, char> && !std::is_same_v<T, bool>) {
       if constexpr(std::is_signed_v<T>) {
-        return static_cast<T>(std::get<std::int64_t>(std::get<ConstPrimitive>(_const_val).value));
+        return static_cast<T>(std::get<std::int64_t>(std::get<ConstPrime>(_const_val).value));
       } else {
-        return static_cast<T>(std::get<std::uint64_t>(std::get<ConstPrimitive>(_const_val).value));
+        return static_cast<T>(std::get<std::uint64_t>(std::get<ConstPrime>(_const_val).value));
       }
     } else {
-      return std::get<T>(std::get<ConstPrimitive>(_const_val).value);
+      return std::get<T>(std::get<ConstPrime>(_const_val).value);
     }
   } else {
     return std::get<T>(_const_val);
   }
+  */
 }
 
 template <class T> requires const_val_list::contains<T>
 const T* ConstValue::get_if() const {
   using stype::TypeKind;
   using stype::TypePrime;
-  using stype::PrimitiveType;
+  using stype::PrimeType;
   return std::get_if<T>(&_const_val);
   /*
   if constexpr(type_utils::is_one_of<

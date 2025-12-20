@@ -370,6 +370,10 @@ public:
   ConstEvaluator(ErrorRecorder *recorder, stype::TypePool *type_pool, sconst::ConstPool *const_pool)
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool) {}
 
+  // bind lvalue property
+  void preVisit(AssignmentExpression &node) override;
+  void preVisit(CompoundAssignmentExpression &node) override;
+
   void postVisit(LiteralExpression &node);
   void postVisit(BorrowExpression &node);
   void postVisit(DereferenceExpression &node);
@@ -429,7 +433,7 @@ private:
 class TypeFiller : public ScopedVisitor {
   static const std::string
   kErrTypeNotResolved, kErrTypeNotMatch, kErrConstevalFailed,
-  kErrIdentNotResolved;
+  kErrIdentNotResolved, kErrNoPlaceMutability;
   bool constEvaluate(Expression &node) {
     if(node.has_constant()) return true;
     node.accept(_evaluator);
@@ -448,7 +452,7 @@ public:
 
   INSOMNIA_RUST_SHARD_AST_TYPED_VISITABLE_NODES_LIST(ISM_RS_POST_VISIT_OVERRIDE_METHOD);
 
-  // assignment
+  // assignment: bind lvalue property
   void preVisit(AssignmentExpression &node) override;
   void preVisit(CompoundAssignmentExpression &node) override;
 

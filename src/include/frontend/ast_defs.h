@@ -9,53 +9,7 @@
 #include "ast_type.h"
 
 namespace insomnia::rust_shard::ast {
-enum class Operator {
-  kInvalid,
 
-  // Arithmetic Operators
-  kAdd, // TokenType::kPlus
-  kSub, // TokenType::kMinus
-  kMul, // TokenType::kStar
-  kDiv, // TokenType::kSlash
-  kMod, // TokenType::kPercent
-
-  // Compound Assignment Operators
-  kAddAssign, // TokenType::kPlusEq
-  kSubAssign, // TokenType::kMinusEq
-  kMulAssign, // TokenType::kStarEq
-  kDivAssign, // TokenType::kSlashEq
-  kModAssign, // TokenType::kPercentEq
-
-  // Logical and Comparison Operators
-  kLogicalNot,        // TokenType::kNot
-  kLogicalAnd, // TokenType::kAndAnd
-  kLogicalOr,  // TokenType::kOrOr
-  kEq,         // TokenType::kEqEq
-  kNe,         // TokenType::kNe
-  kGt,         // TokenType::kGt
-  kLt,         // TokenType::kLt
-  kGe,         // TokenType::kGe
-  kLe,         // TokenType::kLe
-
-  // Bitwise Operators
-  kBitwiseAnd,       // TokenType::kAnd
-  kBitwiseOr,        // TokenType::kOr
-  kBitwiseXor,       // TokenType::kCaret
-  kShl,              // TokenType::kShl
-  kShr,              // TokenType::kShr
-  kBitwiseAndAssign, // TokenType::kAndEq
-  kBitwiseOrAssign,  // TokenType::kOrEq
-  kBitwiseXorAssign, // TokenType::kCaretEq
-  kShlAssign,        // TokenType::kShlEq
-  kShrAssign,        // TokenType::kShrEq
-
-  // Special Assignment
-  kAssign, // TokenType::kEq
-
-  // Pointer/Dereference
-  kDeref, // TokenType::kStar
-  kRef,   // TokenType::kAnd
-};
 enum class SymbolKind {
   kVariable,
   kFunction,
@@ -89,6 +43,7 @@ struct SymbolInfo {
   StringRef ident;
   SymbolKind kind;
   stype::TypePtr type;
+  bool is_place_mut;
 };
 
 class TypeInfo {
@@ -167,6 +122,55 @@ struct Module {
   std::unordered_map<StringRef, stype::TraitType> traits;
 
   explicit Module(StringRef _ident): ident(std::move(_ident)) {}
+};
+
+
+enum class Operator {
+  kInvalid,
+
+  // Arithmetic Operators
+  kAdd, // TokenType::kPlus
+  kSub, // TokenType::kMinus
+  kMul, // TokenType::kStar
+  kDiv, // TokenType::kSlash
+  kMod, // TokenType::kPercent
+
+  // Compound Assignment Operators
+  kAddAssign, // TokenType::kPlusEq
+  kSubAssign, // TokenType::kMinusEq
+  kMulAssign, // TokenType::kStarEq
+  kDivAssign, // TokenType::kSlashEq
+  kModAssign, // TokenType::kPercentEq
+
+  // Logical and Comparison Operators
+  kLogicalNot,        // TokenType::kNot
+  kLogicalAnd, // TokenType::kAndAnd
+  kLogicalOr,  // TokenType::kOrOr
+  kEq,         // TokenType::kEqEq
+  kNe,         // TokenType::kNe
+  kGt,         // TokenType::kGt
+  kLt,         // TokenType::kLt
+  kGe,         // TokenType::kGe
+  kLe,         // TokenType::kLe
+
+  // Bitwise Operators
+  kBitwiseAnd,       // TokenType::kAnd
+  kBitwiseOr,        // TokenType::kOr
+  kBitwiseXor,       // TokenType::kCaret
+  kShl,              // TokenType::kShl
+  kShr,              // TokenType::kShr
+  kBitwiseAndAssign, // TokenType::kAndEq
+  kBitwiseOrAssign,  // TokenType::kOrEq
+  kBitwiseXorAssign, // TokenType::kCaretEq
+  kShlAssign,        // TokenType::kShlEq
+  kShrAssign,        // TokenType::kShrEq
+
+  // Special Assignment
+  kAssign, // TokenType::kEq
+
+  // Pointer/Dereference
+  kDeref, // TokenType::kStar
+  kRef,   // TokenType::kAnd
 };
 
 }

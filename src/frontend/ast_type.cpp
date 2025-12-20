@@ -61,16 +61,16 @@ void ExprType::combine_hash_impl(std::size_t &seed, std::size_t h) {
   seed ^= HASH_MAGIC_NUM + h + (seed << 6) + (seed >> 2);
 }
 
-void PrimitiveType::combine_hash(std::size_t &seed) const {
+void PrimeType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(_prime));
 }
 
-bool PrimitiveType::equals_impl(const ExprType &other) const {
-  return _prime == static_cast<const PrimitiveType&>(other).prime();
+bool PrimeType::equals_impl(const ExprType &other) const {
+  return _prime == static_cast<const PrimeType&>(other).prime();
 }
 
-std::string PrimitiveType::to_string() const {
+std::string PrimeType::to_string() const {
   switch(_prime) {
   case TypePrime::kBool: return "bool";
   case TypePrime::kChar: return "char";
@@ -112,32 +112,22 @@ std::string ArrayType::to_string() const {
   return res;
 }
 
-void MutType::combine_hash(std::size_t &seed) const {
-  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
-  _inner->combine_hash(seed);
-}
-
-bool MutType::equals_impl(const ExprType &other) const {
-  return *_inner == *static_cast<const MutType&>(other).inner();
-}
-
-std::string MutType::to_string() const {
-  std::string res = "mut ";
-  res += _inner->to_string();
-  return res;
-}
-
 void RefType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
+  combine_hash_impl(seed, static_cast<std::size_t>(_ref_is_mut));
   _inner->combine_hash(seed);
 }
 
 bool RefType::equals_impl(const ExprType &other) const {
-  return *_inner == *static_cast<const RefType&>(other).inner();
+  const auto &other_ref = static_cast<const RefType&>(other);
+  if(_ref_is_mut != other_ref.ref_is_mut()) return false;
+  if(*_inner != *other_ref.inner()) return false;
+  return true;
 }
 
 std::string RefType::to_string() const {
   std::string res = "&";
+  if(_ref_is_mut) res += "mut ";
   res += _inner->to_string();
   return res;
 }

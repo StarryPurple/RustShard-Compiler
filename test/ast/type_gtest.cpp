@@ -25,14 +25,14 @@ class AstTypeTest : public ::testing::Test {
 
     void SetUp() override {
       // Create and register core primitive types in the pool.
-      i32_type = pool.make_type<PrimitiveType>(TypePrime::kI32);
-      u32_type = pool.make_type<PrimitiveType>(TypePrime::kU32);
-      bool_type = pool.make_type<PrimitiveType>(TypePrime::kBool);
-      char_type = pool.make_type<PrimitiveType>(TypePrime::kChar);
-      f64_type = pool.make_type<PrimitiveType>(TypePrime::kF64);
+      i32_type = pool.make_type<PrimeType>(TypePrime::kI32);
+      u32_type = pool.make_type<PrimeType>(TypePrime::kU32);
+      bool_type = pool.make_type<PrimeType>(TypePrime::kBool);
+      char_type = pool.make_type<PrimeType>(TypePrime::kChar);
+      f64_type = pool.make_type<PrimeType>(TypePrime::kF64);
 
       auto u32_array = pool.make_type<ArrayType>(u32_type, 10);
-      auto bool_ref_mut = pool.make_type<RefType>(pool.make_type<MutType>(bool_type));
+      auto bool_ref_mut = pool.make_type<RefType>(bool_type, true);
       complex_base_type = pool.make_type<TupleType>(
         std::vector<TypePtr>{u32_array, bool_ref_mut}
       );
@@ -51,14 +51,14 @@ These tests verify the fundamental behavior of primitive types, including their 
 
 TEST_F(AstTypeTest, PrimitiveEquality) {
   // `i32` vs `i32`
-  ASSERT_EQ(*i32_type, *pool.make_raw_type<PrimitiveType>(TypePrime::kI32));
+  ASSERT_EQ(*i32_type, *pool.make_raw_type<PrimeType>(TypePrime::kI32));
   // `i32` vs `u32`
   ASSERT_NE(*i32_type, *u32_type);
 }
 
 TEST_F(AstTypeTest, PrimitiveHashConsistency) {
   // `hash(i32)` vs `hash(i32)`
-  ASSERT_EQ(i32_type->hash(), pool.make_raw_type<PrimitiveType>(TypePrime::kI32)->hash());
+  ASSERT_EQ(i32_type->hash(), pool.make_raw_type<PrimeType>(TypePrime::kI32)->hash());
   // `hash(i32)` vs `hash(u32)`
   ASSERT_NE(i32_type->hash(), u32_type->hash());
 }
@@ -122,8 +122,8 @@ TEST_F(AstTypeTest, StructComparison) {
 
 TEST_F(AstTypeTest, SliceAndReferenceComparison) {
   // `&i32` vs `&i32`
-  auto ref1 = pool.make_raw_type<RefType>(i32_type);
-  auto ref2 = pool.make_raw_type<RefType>(i32_type);
+  auto ref1 = pool.make_raw_type<RefType>(i32_type, false);
+  auto ref2 = pool.make_raw_type<RefType>(i32_type, false);
   ASSERT_EQ(*ref1, *ref2);
   // Test discarded: no more mutability support.
   /*
@@ -152,16 +152,16 @@ This test models `&str` and `&[u8]` as the same type to simplify the type system
 
 TEST_F(AstTypeTest, StringSliceAndByteSliceAsSameType) {
   // `[u8]` is the underlying type for string literals.
-  auto u8_type = pool.make_raw_type<PrimitiveType>(TypePrime::kU8);
+  auto u8_type = pool.make_raw_type<PrimeType>(TypePrime::kU8);
   auto u8_slice = pool.make_raw_type<SliceType>(TypePtr(u8_type));
 
   // `&[u8]` is the type of string literals and byte slices.
-  auto u8_ref_slice = pool.make_raw_type<RefType>(TypePtr(u8_slice));
+  auto u8_ref_slice = pool.make_raw_type<RefType>(TypePtr(u8_slice), false);
 
   // `&[u8]` is NOT equal to `&[char]`.
-  auto char_type = pool.make_raw_type<PrimitiveType>(TypePrime::kChar);
+  auto char_type = pool.make_raw_type<PrimeType>(TypePrime::kChar);
   auto char_slice = pool.make_raw_type<SliceType>(TypePtr(char_type));
-  auto char_ref_slice = pool.make_raw_type<RefType>(TypePtr(char_slice));
+  auto char_ref_slice = pool.make_raw_type<RefType>(TypePtr(char_slice), false);
 
   ASSERT_NE(*u8_ref_slice, *char_ref_slice);
 }
@@ -178,7 +178,7 @@ TEST_F(AstTypeTest, TypePoolCorrectness) {
   size_t initial_pool_size = pool.size();
 
   // Request an existing type. No new types should be created.
-  auto existing_i32 = pool.make_type<PrimitiveType>(TypePrime::kI32);
+  auto existing_i32 = pool.make_type<PrimeType>(TypePrime::kI32);
   ASSERT_EQ(pool.size(), initial_pool_size);
   ASSERT_EQ(existing_i32, i32_type);
 

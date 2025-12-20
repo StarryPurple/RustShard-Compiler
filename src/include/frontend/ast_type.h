@@ -77,7 +77,6 @@ enum class TypeKind {
   kInvalid,
   kPrimitive,
   kArray,
-  kMut,
   kRef,
   kStruct,
   kTuple,
@@ -114,9 +113,9 @@ private:
   const ExprType* remove_alias() const;
 };
 
-class PrimitiveType : public ExprType {
+class PrimeType : public ExprType {
 public:
-  explicit PrimitiveType(TypePrime prime)
+  explicit PrimeType(TypePrime prime)
   : ExprType(TypeKind::kPrimitive), _prime(prime) {}
   TypePrime prime() const { return _prime; }
   bool is_integer() const {
@@ -156,30 +155,19 @@ private:
   usize_t _length;
 };
 
-class MutType : public ExprType {
-public:
-  explicit MutType(TypePtr inner)
-  : ExprType(TypeKind::kMut), _inner(std::move(inner)) {}
-  TypePtr inner() const { return _inner; }
-  void combine_hash(std::size_t &seed) const override;
-  std::string to_string() const override;
-protected:
-  bool equals_impl(const ExprType &other) const override;
-private:
-  TypePtr _inner;
-};
-
 class RefType : public ExprType {
 public:
-  explicit RefType(TypePtr inner)
-  : ExprType(TypeKind::kRef), _inner(std::move(inner)) {}
+  explicit RefType(TypePtr inner, bool ref_is_mut)
+  : ExprType(TypeKind::kRef), _inner(std::move(inner)), _ref_is_mut(ref_is_mut) {}
   TypePtr inner() const { return _inner; }
+  bool ref_is_mut() const { return _ref_is_mut; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
 private:
   TypePtr _inner;
+  bool _ref_is_mut;
 };
 
 class StructType : public ExprType {
@@ -420,16 +408,6 @@ public:
   }
   TypePtr make_unit() {
     return make_type<TupleType>(std::vector<TypePtr>());
-  }
-
-  // strip one layer of mutability.
-  // mut T -> T, &mut T -> &T, mut &T -> &T, mut &mut T -> &mut T
-  TypePtr strip_mut(TypePtr type) {
-    if(auto m = type.get_if<MutType>()) return m->inner();
-    if(auto r = type.get_if<RefType>())
-      if(auto m = TypePtr(r).get_if<MutType>())
-        return make_type<RefType>(m->inner());
-    return type;
   }
 
   std::size_t size() const { return _pool.size(); }

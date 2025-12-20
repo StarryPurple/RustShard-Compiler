@@ -18,7 +18,6 @@
 #define INSOMNIA_AST_H
 
 #include <memory>
-#include <optional>
 #include <variant>
 #include <vector>
 
@@ -517,27 +516,29 @@ class Expression : public BasicNode, public TypeInfo {
 public:
   Expression() = default;
   virtual bool has_block() const = 0;
-  bool has_constant() const { return static_cast<bool>(_const_value); }
-  bool is_lvalue() const { return _is_lvalue; }
-  void set_is_lvalue() { _is_lvalue = true; }
-  bool is_
+  bool has_constant() const { return static_cast<bool>(_cval); }
+  bool is_lside() const { return _is_lside; }
+  void set_lside() { _is_lside = true; }
+  bool is_place_mut() const { return _is_place_mut; }
+  void set_place_mut() { _is_place_mut = true; }
 protected:
-  sconst::ConstValPtr _const_value;
+  sconst::ConstValPtr _cval;
 private:
-  bool _is_lvalue = false;
+  bool _is_lside = false;
+  bool _is_place_mut = false;
 
   // for ConstEvaluator
-  void set_const_value(sconst::ConstValPtr value) {
-    _const_value = std::move(value);
+  void set_cval(sconst::ConstValPtr value) {
+    _cval = std::move(value);
   }
   /*
   template <class T>
-  void set_const_value(sem_type::TypePtr type, const T &value) {
-    (*_const_value)->set(std::move(type), value);
+  void set_cval(sem_type::TypePtr type, const T &value) {
+    (*_cval)->set(std::move(type), value);
   }
   */
 public:
-  EXPOSE_FIELD_CONST_REFERENCE(const_value, _const_value);
+  EXPOSE_FIELD_CONST_REFERENCE(cval, _cval);
 };
 
 class ExpressionWithoutBlock : public Expression {

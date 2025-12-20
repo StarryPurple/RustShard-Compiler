@@ -6,14 +6,22 @@
 namespace insomnia::rust_shard::ast {
 /*************************** ConstEvaluator ***************************************/
 
+void ConstEvaluator::preVisit(AssignmentExpression &node) {
+  node.expr1()->set_lside();
+}
+
+void ConstEvaluator::preVisit(CompoundAssignmentExpression &node) {
+  node.expr1()->set_lside();
+}
+
 void ConstEvaluator::postVisit(LiteralExpression &node) {
-  using stype::PrimitiveType;
+  using stype::PrimeType;
   auto prime = node.prime();
-  stype::TypePtr type = _type_pool->make_type<PrimitiveType>(prime);
+  stype::TypePtr type = _type_pool->make_type<PrimeType>(prime);
   std::visit([&](auto &&arg) {
-    sconst::ConstPrimitive primitive_val(prime, arg);
-    node.set_const_value(
-      _const_pool->make_const<sconst::ConstPrimitive>(type, primitive_val)
+    sconst::ConstPrime primitive_val(prime, arg);
+    node.set_cval(
+      _const_pool->make_const<sconst::ConstPrime>(type, primitive_val)
     );
   }, node.spec_value());
 }
@@ -25,14 +33,22 @@ void ConstEvaluator::postVisit(BorrowExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner const evaluation failed");
     return;
   }
-  auto inner = node.expr()->const_value();
-  auto tp = inner->type();
-  if(node.is_mut()) tp = _type_pool->make_type<stype::MutType>(tp);
-  tp = _type_pool->make_type<stype::RefType>(inner->type());
-  node.set_const_value(_const_pool->make_const<sconst::ConstReference>(
-    tp,
-    inner
-  ));
+  // &x: x must be a lvalue
+  // &mut x: x must be a PlaceMut lvalue
+  if(!node.expr()->is_lside()) {
+    _recorder->tagged_report(kErrTag, "Target not referable");
+    return;
+  }
+  auto cval = node.expr()->cval();
+  auto tp = cval->type();
+  bool is_place_mut = false;
+  if(node.is_mut() && !is_place_mut) {
+    _recorder->tagged_report(kErrTag, "Target not mutably referable");
+    return;
+  }
+  tp = _type_pool->make_type<stype::RefType>(tp, node.is_mut());
+  cval = _const_pool->make_const<sconst::ConstRef>(tp, cval, node.is_mut());
+  node.set_cval(cval);
 }
 
 void ConstEvaluator::postVisit(DereferenceExpression &node) {
@@ -40,12 +56,21 @@ void ConstEvaluator::postVisit(DereferenceExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner const evaluation failed");
     return;
   }
-  auto inner = node.expr()->const_value();
-  if(auto ref = inner->get_if<sconst::ConstReference>()) {
-    node.set_const_value(ref->ref);
+  // *((mut) &x) -> x (rside), invalid (lside)
+  // *((mut) &mut x) -> x (rside), x (lside)
+  auto cval = node.expr()->cval();
+  auto tp = cval->type();
+  if(auto r = tp.get_if<stype::RefType>()) {
+    if(node.is_lside() && !r->ref_is_mut()) {
+      _recorder->tagged_report(kErrTag, "Dereferencing " + tp->to_string() + " at lside");
+    }
+    tp = r->inner();
+    cval = cval->get<sconst::ConstRef>().inner;
   } else {
-    _recorder->tagged_report(kErrTag, "Dereferencing a not-borrowed type");
+    _recorder->tagged_report(kErrTag, "Dereferencing a not-reference type");
+    return;
   }
+  node.set_cval(cval);
 }
 
 void ConstEvaluator::postVisit(NegationExpression &node) {
@@ -53,8 +78,8 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner const evaluation failed");
     return;
   }
-  auto inner = node.expr()->const_value();
-  auto primitive = inner->get_if<sconst::ConstPrimitive>();
+  auto inner = node.expr()->cval();
+  auto primitive = inner->get_if<sconst::ConstPrime>();
   if(!primitive) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in negation expression");
     return;
@@ -66,7 +91,7 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
         _recorder->tagged_report(kErrTag, "Invalid operator kSub in negation expression");
         return;
       }
-      auto prime = inner->type().get<stype::PrimitiveType>()->prime();
+      auto prime = inner->type().get<stype::PrimeType>()->prime();
       if constexpr(type_utils::is_one_of<T, std::int64_t>) {
         using stype::TypePrime;
         if(
@@ -80,7 +105,7 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
           return;
         }
       }
-      node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+      node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
         inner->type(), // still primitive
         prime,
         -arg // negation
@@ -89,7 +114,7 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
       if(node.oper() != Operator::kLogicalNot) {
         _recorder->tagged_report(kErrTag, "Invalid operator kLogicalNot in negation expression");
       }
-      node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+      node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
         inner->type(), // still primitive
         stype::TypePrime::kBool, // ???
         !arg // logic not
@@ -105,10 +130,10 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
-  auto inner1 = node.expr1()->const_value();
-  auto inner2 = node.expr2()->const_value();
-  auto prime1 = inner1->get_if<sconst::ConstPrimitive>();
-  auto prime2 = inner2->get_if<sconst::ConstPrimitive>();
+  auto inner1 = node.expr1()->cval();
+  auto inner2 = node.expr2()->cval();
+  auto prime1 = inner1->get_if<sconst::ConstPrime>();
+  auto prime2 = inner2->get_if<sconst::ConstPrime>();
   if (!prime1 || !prime2) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in arithmetic/logical expression");
     return;
@@ -123,10 +148,10 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
       if constexpr(type_utils::is_one_of<T1, std::int64_t, std::uint64_t>) {
         if constexpr(type_utils::is_one_of<T2, std::uint64_t>) {
           if(oper == Operator::kShl) {
-            node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+            node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
               inner1->type(), arg1 << arg2));
           } else {
-            node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
+            node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
               inner1->type(), arg1 >> arg2));
           }
         } else {
@@ -158,19 +183,19 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
           _recorder->tagged_report(kErrTag, "Division by zero");
           return;
         }
-        auto prime1 = inner1->type().get<stype::PrimitiveType>()->prime();
+        auto prime1 = inner1->type().get<stype::PrimeType>()->prime();
         switch(oper) {
         case Operator::kAdd:
-          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), prime1, arg1 + arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 + arg2));
           break;
         case Operator::kSub:
-          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), prime1, arg1 - arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 - arg2));
           break;
         case Operator::kMul:
-          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), prime1, arg1 * arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 * arg2));
           break;
         case Operator::kDiv:
-          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), prime1, arg1 / arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 / arg2));
           break;
         case Operator::kMod: {
           T val = 0;
@@ -179,18 +204,18 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
           } else {
             val = arg1 % arg2;
           }
-          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), prime1, val));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, val));
         } break;
         case Operator::kBitwiseAnd:
         case Operator::kBitwiseOr:
         case Operator::kBitwiseXor:
           if constexpr(std::is_integral_v<T>) {
             if(oper == Operator::kBitwiseAnd)
-              node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), prime1, arg1 & arg2));
+              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 & arg2));
             else if(oper == Operator::kBitwiseOr)
-              node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), prime1, arg1 | arg2));
+              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 | arg2));
             else
-              node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), prime1, arg1 ^ arg2));
+              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 ^ arg2));
           } else {
             _recorder->tagged_report(kErrTag, "Bitwise operation on non-integer type");
           }
@@ -201,9 +226,9 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
         }
       } else if constexpr(std::is_same_v<T, bool>) {
         if(oper == Operator::kLogicalAnd) {
-          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), stype::TypePrime::kBool, arg1 && arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), stype::TypePrime::kBool, arg1 && arg2));
         } else if(oper == Operator::kLogicalOr) {
-          node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(inner1->type(), stype::TypePrime::kBool, arg1 || arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), stype::TypePrime::kBool, arg1 || arg2));
         } else {
           _recorder->tagged_report(kErrTag, "Invalid operator for arithmetic/logical expression (boolean logical)");
         }
@@ -219,10 +244,10 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
-  auto inner1 = node.expr1()->const_value();
-  auto inner2 = node.expr2()->const_value();
-  auto prime1 = inner1->get_if<sconst::ConstPrimitive>();
-  auto prime2 = inner2->get_if<sconst::ConstPrimitive>();
+  auto inner1 = node.expr1()->cval();
+  auto inner2 = node.expr2()->cval();
+  auto prime1 = inner1->get_if<sconst::ConstPrime>();
+  auto prime2 = inner2->get_if<sconst::ConstPrime>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in comparison expression");
     return;
@@ -254,8 +279,8 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
           _recorder->tagged_report(kErrTag, "Invalid operator in comparison expression");
           return;
         }
-        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
-          _type_pool->make_type<stype::PrimitiveType>(stype::TypePrime::kBool),
+        node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
+          _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kBool),
           stype::TypePrime::kBool,
           result
         ));
@@ -278,8 +303,8 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
-  auto inner1 = node.expr1()->const_value();
-  auto prime1 = inner1->get_if<sconst::ConstPrimitive>();
+  auto inner1 = node.expr1()->cval();
+  auto prime1 = inner1->get_if<sconst::ConstPrime>();
   if(!prime1) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in boolean expression");
     return;
@@ -290,15 +315,15 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
     return;
   }
   if(oper == Operator::kLogicalAnd && !*result1) {
-    node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
-      _type_pool->make_type<stype::PrimitiveType>(stype::TypePrime::kBool),
+    node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
+      _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kBool),
       stype::TypePrime::kBool,
       false));
     return;
   }
   if(oper == Operator::kLogicalOr && *result1) {
-    node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
-      _type_pool->make_type<stype::PrimitiveType>(stype::TypePrime::kBool),
+    node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
+      _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kBool),
       stype::TypePrime::kBool,
       true));
     return;
@@ -309,8 +334,8 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
-  auto inner2 = node.expr2()->const_value();
-  auto prime2 = inner2->get_if<sconst::ConstPrimitive>();
+  auto inner2 = node.expr2()->cval();
+  auto prime2 = inner2->get_if<sconst::ConstPrime>();
   if(!prime2) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in boolean expression");
     return;
@@ -321,7 +346,7 @@ void ConstEvaluator::visit(LazyBooleanExpression &node) {
     return;
   }
 
-  node.set_const_value(inner2);
+  node.set_cval(inner2);
 }
 
 void ConstEvaluator::postVisit(TypeCastExpression &node) {
@@ -329,14 +354,14 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner const evaluation failed");
     return;
   }
-  auto inner = node.expr()->const_value();
-  auto primitive = inner->get_if<sconst::ConstPrimitive>();
+  auto inner = node.expr()->cval();
+  auto primitive = inner->get_if<sconst::ConstPrime>();
   if(!primitive) {
     _recorder->tagged_report(kErrTag, "Inner type not primitive in type cast expression");
     return;
   }
 
-  auto target_type = node.type_no_bounds()->get_type().get_if<stype::PrimitiveType>();
+  auto target_type = node.type_no_bounds()->get_type().get_if<stype::PrimeType>();
   if(!target_type) {
     _recorder->tagged_report(kErrTag, "Target type not primitive in type cast expression");
     return;
@@ -348,8 +373,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     switch(target_prime) {
     case TypePrime::kBool:
       if constexpr(type_utils::is_one_of<T, bool>) {
-        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
-          _type_pool->make_type<stype::PrimitiveType>(TypePrime::kBool),
+        node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
+          _type_pool->make_type<stype::PrimeType>(TypePrime::kBool),
           TypePrime::kBool,
           arg));
       } else {
@@ -371,8 +396,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
         case TypePrime::kISize: val = static_cast<std::intptr_t>(arg); break;
         default: break;
         }
-        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
-          _type_pool->make_type<stype::PrimitiveType>(target_prime),
+        node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
+          _type_pool->make_type<stype::PrimeType>(target_prime),
           target_prime,
           val
         ));
@@ -396,8 +421,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
         case TypePrime::kUSize: val = static_cast<std::uintptr_t>(arg); break;
         default: break;
         }
-        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
-          _type_pool->make_type<stype::PrimitiveType>(target_prime),
+        node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
+          _type_pool->make_type<stype::PrimeType>(target_prime),
           target_prime,
           val
         ));
@@ -409,8 +434,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
 
     case TypePrime::kF32: {
       if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
-        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
-          _type_pool->make_type<stype::PrimitiveType>(target_prime),
+        node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
+          _type_pool->make_type<stype::PrimeType>(target_prime),
           target_prime,
           static_cast<float>(arg)
         ));
@@ -420,8 +445,8 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     } break;
     case TypePrime::kF64: {
       if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
-        node.set_const_value(_const_pool->make_const<sconst::ConstPrimitive>(
-          _type_pool->make_type<stype::PrimitiveType>(target_prime),
+        node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
+          _type_pool->make_type<stype::PrimeType>(target_prime),
           target_prime,
           static_cast<double>(arg)
         ));
@@ -442,7 +467,7 @@ void ConstEvaluator::postVisit(GroupedExpression &node) {
     _recorder->tagged_report(kErrTag, "Inner expression const evaluation failed");
     return;
   }
-  node.set_const_value(node.expr()->const_value());
+  node.set_cval(node.expr()->cval());
 }
 }
 
@@ -454,6 +479,7 @@ const std::string TypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
 const std::string TypeFiller::kErrTypeNotMatch = "Error: Type not match between evaluation and declaration";
 const std::string TypeFiller::kErrConstevalFailed = "Error: Necessary const evaluation failed";
 const std::string TypeFiller::kErrIdentNotResolved = "Error: Identifier not resolved as expected";
+const std::string TypeFiller::kErrNoPlaceMutability = "Error: Place mutability required not exist";
 
 void TypeFiller::postVisit(Function &node) {
   // check whether every control block share same return types.
@@ -494,8 +520,7 @@ void TypeFiller::postVisit(Function &node) {
     if(auto s = ps->self_param_opt().get()) {
       // self param
       auto pt = _type_pool->make_type<stype::SelfType>();
-      if(s->is_mut()) pt = _type_pool->make_type<stype::MutType>(pt);
-      if(s->is_ref()) pt = _type_pool->make_type<stype::RefType>(pt);
+      if(s->is_ref()) pt = _type_pool->make_type<stype::RefType>(pt, s->is_mut());
       params.push_back(pt);
     }
     // other params
@@ -614,8 +639,7 @@ void TypeFiller::postVisit(ReferenceType &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside reference chain");
     return;
   }
-  if(node.is_mut()) type = _type_pool->make_type<stype::MutType>(type);
-  type = _type_pool->make_type<stype::RefType>(type);
+  type = _type_pool->make_type<stype::RefType>(type, node.is_mut());
   node.set_type(type);
 }
 
@@ -630,7 +654,7 @@ void TypeFiller::postVisit(ArrayType &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "non-evaluable array length");
     return;
   }
-  auto cval = node.const_expr()->const_value()->get_if<sconst::ConstPrimitive>();
+  auto cval = node.const_expr()->cval()->get_if<sconst::ConstPrime>();
   if(!cval) {
     _recorder->tagged_report(kErrTypeNotResolved, "array length not a primitive type");
     return;
@@ -771,7 +795,7 @@ void TypeFiller::postVisit(TypePath &node) {
 }
 
 void TypeFiller::postVisit(LiteralExpression &node) {
-  node.set_type(_type_pool->make_type<stype::PrimitiveType>(node.prime()));
+  node.set_type(_type_pool->make_type<stype::PrimeType>(node.prime()));
 }
 
 void TypeFiller::postVisit(PathInExpression &node) {
@@ -790,6 +814,7 @@ void TypeFiller::postVisit(PathInExpression &node) {
     return;
   }
   if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable || info->kind == SymbolKind::kFunction) {
+    if(info->kind == SymbolKind::kVariable && info->is_place_mut) node.set_place_mut();
     node.set_type(info->type);
   } else {
     _recorder->tagged_report(kErrIdentNotResolved, "Invalid type associated with the identifier");
@@ -803,8 +828,7 @@ void TypeFiller::postVisit(BorrowExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in BorrowExpression");
     return;
   }
-  if(node.is_mut()) type = _type_pool->make_type<stype::MutType>(type);
-  type = _type_pool->make_type<stype::RefType>(type);
+  type = _type_pool->make_type<stype::RefType>(type, node.is_mut());
   node.set_type(type);
 }
 
@@ -814,8 +838,8 @@ void TypeFiller::postVisit(DereferenceExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in DereferenceExpression");
     return;
   }
-  type = _type_pool->strip_mut(type);
   if(auto inner = type.get_if<stype::RefType>()) {
+    if(inner->ref_is_mut()) node.set_place_mut();
     type = stype::TypePtr(inner);
   } else {
     _recorder->tagged_report(kErrTypeNotMatch, "Type not a reference");
@@ -844,8 +868,8 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ArithmeticOrLogicalExpression");
     return;
   }
-  auto prime1 = type1.get_if<stype::PrimitiveType>();
-  auto prime2 = type2.get_if<stype::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimeType>();
+  auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -911,8 +935,8 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ComparisonExpression");
     return;
   }
-  auto prime1 = type1.get_if<stype::PrimitiveType>();
-  auto prime2 = type2.get_if<stype::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimeType>();
+  auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -925,7 +949,7 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
   case Operator::kGe:
   case Operator::kLe:
     if(prime1->prime() == prime2->prime()) {
-      node.set_type(_type_pool->make_type<stype::PrimitiveType>(stype::TypePrime::kBool));
+      node.set_type(_type_pool->make_type<stype::PrimeType>(stype::TypePrime::kBool));
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator < > <= >= == !=");
       return;
@@ -947,8 +971,8 @@ void TypeFiller::postVisit(LazyBooleanExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in LazyBooleanExpression");
     return;
   }
-  auto prime1 = type1.get_if<stype::PrimitiveType>();
-  auto prime2 = type2.get_if<stype::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimeType>();
+  auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -979,8 +1003,8 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "To type not got in TypeCastExpression");
     return;
   }
-  auto from_prime = from_type.get_if<stype::PrimitiveType>();
-  auto to_prime = to_type.get_if<stype::PrimitiveType>();
+  auto from_prime = from_type.get_if<stype::PrimeType>();
+  auto to_prime = to_type.get_if<stype::PrimeType>();
   if(!from_prime || !to_prime) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1019,53 +1043,48 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
 }
 
 void TypeFiller::preVisit(AssignmentExpression &node) {
-  node.expr1()->set_is_lvalue();
+  node.expr1()->set_lside();
 }
 
 void TypeFiller::postVisit(AssignmentExpression &node) {
-  auto to_type = node.expr1()->get_type();
+  if(!node.expr1()->is_place_mut()) {
+    _recorder->tagged_report(kErrNoPlaceMutability, "To type not a place mutable type");
+    return;
+  }
+  const auto to_type = node.expr1()->get_type();
   if(!to_type) {
     _recorder->tagged_report(kErrTypeNotResolved, "To type not got in AssignmentExpression");
     return;
   }
-  auto from_type = node.expr2()->get_type();
+  const auto from_type = node.expr2()->get_type();
   if(!from_type) {
     _recorder->tagged_report(kErrTypeNotResolved, "From type not got in AssignmentExpression");
     return;
   }
+  auto t = to_type, f = from_type;
   // Accepted assignment:
   // mut T <- T
   // &T <- &T
   // &T <- &mut T
   // &mut T <- &mut T
-  // Also, we allow auto dereference:
-  //
-  from_type = _type_pool->strip_mut(from_type); // unneeded mut in FromType
-  if(auto m = to_type.get_if<stype::MutType>()) {
-    // ToType with mut:
-    if(from_type != to_type) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform assignment to other type."
-        " ToType: " + to_type->to_string() + ", FromType: " + from_type->to_string());
-      return;
-    }
-  } else {
-    // ToType without mut:
-    if(auto f = from_type.get_if<stype::RefType>(), t = to_type.get_if<stype::RefType>();
-      !f || !t) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform assignment to non-reference immutable type."
-        " ToType: " + to_type->to_string() + ", FromType: " + from_type->to_string());
-      return;
-    } else if(_type_pool->strip_mut(stype::TypePtr(t)) != stype::TypePtr(f)) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform assignment to other reference type."
-        " ToType: " + to_type->to_string() + ", FromType: " + from_type->to_string());
-      return;
-    }
+  bool flag = true;
+  if(node.expr1()->is_place_mut()) {
+    // mut T <- T
+    if(t != f) flag = false;
+  } else if(auto rt = t.get_if<stype::RefType>(), rf = f.get_if<stype::RefType>();
+    !rt || !rf || rt->inner() != rf->inner() || (rt->ref_is_mut() && !rf->ref_is_mut())) {
+    flag = false;
+  }
+  if(flag) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Invalid assignment: "
+      + to_type->to_string() + " <- " + from_type->to_string());
+    return;
   }
   node.set_type(to_type);
 }
 
 void TypeFiller::preVisit(CompoundAssignmentExpression &node) {
-  node.expr1()->set_is_lvalue();
+  node.expr1()->set_lside();
 }
 
 void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
@@ -1079,8 +1098,8 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in CompoundAssignmentExpression");
     return;
   }
-  auto prime1 = type1.get_if<stype::PrimitiveType>();
-  auto prime2 = type2.get_if<stype::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimeType>();
+  auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1173,7 +1192,7 @@ void TypeFiller::postVisit(ArrayExpression &node) {
       _recorder->tagged_report(kErrConstevalFailed, "Type length not evaluated");
       return;
     }
-    auto length_prime = arr->len_expr()->const_value()->get_if<sconst::ConstPrimitive>();
+    auto length_prime = arr->len_expr()->cval()->get_if<sconst::ConstPrime>();
     if(!length_prime) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type length not a primitive");
       return;
@@ -1203,49 +1222,42 @@ void TypeFiller::postVisit(IndexExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Index type not got in IndexExpression");
     return;
   }
-  bool is_mut1 = false, is_ref = false, is_mut2 = false;
-  if(auto m = expr_type.get_if<stype::MutType>()) {
-    expr_type = m->inner();
-    is_mut1 = true;
-  }
-  auto expr_arr = expr_type.get_if<stype::ArrayType>();
-  if(!expr_arr) {
-    // try to dereference one layer
-    if(auto r = expr_type.get_if<stype::RefType>()) {
-      expr_type = r->inner();
-      is_ref = true;
-    } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Expr type is neither an array, nor a reference of array."
-        " Type: " + expr_type->to_string());
-      return;
-    }
-    if(auto m = expr_type.get_if<stype::MutType>()) {
-      expr_type = m->inner();
-      is_mut2 = true;
-    }
-    expr_arr = expr_type.get_if<stype::ArrayType>();
-    if(!expr_type) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Expr type is neither an array, nor a reference of array."
-        " Type: " + expr_type->to_string());
-      return;
-    }
-  }
-  auto index_primitive = index_type.get_if<stype::PrimitiveType>();
+
+  // out_of_range is a runtime problem
+  auto index_primitive = index_type.get_if<stype::PrimeType>();
   if(!index_primitive || !index_primitive->is_integer()) {
     _recorder->tagged_report(kErrTypeNotMatch, "Index not an integer");
     return;
   }
-  // out_of_range is a runtime problem
-
-  auto tp = expr_arr->inner();
-  if((!is_ref && is_mut1) || (is_ref && is_mut2 && node.is_lvalue()))
-    tp = _type_pool->make_type<stype::MutType>(tp);
-  tp = _type_pool->make_type<stype::RefType>(tp);
-  node.set_type(tp);
 
   // (mut) [T; N] -> &(mut) T
   // (mut) &[T; N] -> &T
-  // (mut) &mut [T; N] -> &T (rvalue), &mut T (lvalue)
+  // (mut) &mut [T; N] -> &T (rside), &mut T (lside)
+
+  if(auto a = expr_type.get_if<stype::ArrayType>()) {
+    auto tp = a->inner();
+    bool is_mut = node.expr_obj()->is_place_mut();
+    tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
+    node.set_type(tp);
+    if(is_mut) node.set_place_mut();
+    return;
+  }
+  if(auto r = expr_type.get_if<stype::RefType>()) {
+    auto a = r->inner().get_if<stype::ArrayType>();
+    if(!a) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Indexing target not an array or array reference: "
+        + expr_type->to_string());
+      return;
+    }
+    auto tp = a->inner();
+    bool is_mut = r->ref_is_mut() && node.is_lside();
+    tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
+    node.set_type(tp);
+    if(is_mut) node.set_place_mut();
+    return;
+  }
+  _recorder->tagged_report(kErrTypeNotMatch, "Indexing target not an array or array reference: "
+    + expr_type->to_string());
 }
 
 void TypeFiller::postVisit(TupleExpression &node) {
@@ -1342,8 +1354,8 @@ void TypeFiller::postVisit(RangeExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in RangeExpr");
     return;
   }
-  auto prime1 = type1.get_if<stype::PrimitiveType>();
-  auto prime2 = type2.get_if<stype::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimeType>();
+  auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1361,7 +1373,7 @@ void TypeFiller::postVisit(RangeFromExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in RangeFromExpr");
     return;
   }
-  auto prime = type.get_if<stype::PrimitiveType>();
+  auto prime = type.get_if<stype::PrimeType>();
   if(!prime) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1379,7 +1391,7 @@ void TypeFiller::postVisit(RangeToExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in RangeToExpr");
     return;
   }
-  auto prime = type.get_if<stype::PrimitiveType>();
+  auto prime = type.get_if<stype::PrimeType>();
   if(!prime) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1407,8 +1419,8 @@ void TypeFiller::postVisit(RangeInclusiveExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in RangeInclusiveExpr");
     return;
   }
-  auto prime1 = type1.get_if<stype::PrimitiveType>();
-  auto prime2 = type2.get_if<stype::PrimitiveType>();
+  auto prime1 = type1.get_if<stype::PrimeType>();
+  auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1426,7 +1438,7 @@ void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in RangeToInclusiveExpr");
     return;
   }
-  auto prime = type.get_if<stype::PrimitiveType>();
+  auto prime = type.get_if<stype::PrimeType>();
   if(!prime) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
     return;
@@ -1523,7 +1535,7 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
   }
-  auto cond_prime = cond_type.get_if<stype::PrimitiveType>();
+  auto cond_prime = cond_type.get_if<stype::PrimeType>();
   if(!cond_prime || cond_prime->prime() != stype::TypePrime::kBool) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
@@ -1558,7 +1570,7 @@ void TypeFiller::postVisit(IfExpression &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
   }
-  auto cond_prime = cond_type.get_if<stype::PrimitiveType>();
+  auto cond_prime = cond_type.get_if<stype::PrimeType>();
   if(!cond_prime || cond_prime->prime() != stype::TypePrime::kBool) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
@@ -1643,15 +1655,20 @@ void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, stype::TypePtr type) {
 
 void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type) {
   // always success
-  bool is_mut = pattern->is_mut();
-  // let mut x = r <=> let x = mut r
-  // let ref y = r <=> let y = &r
-  // let ref mut z = r <=> let z = &mut r
-  if(pattern->is_mut()) type = _type_pool->make_type<stype::MutType>(type);
-  if(pattern->is_ref()) type = _type_pool->make_type<stype::RefType>(type);
+
+  // r: R
+  // let mut x = r, x: mut R
+  // let ref y = r, y: &R
+  // let ref mut z = r, z: &mut R
+  bool is_place_mut = false;
+  if(pattern->is_ref()) {
+    type = _type_pool->make_type<stype::RefType>(type, pattern->is_mut());
+  } else if(pattern->is_mut()) {
+    is_place_mut = true;
+  }
   auto info = add_symbol(pattern->ident(), SymbolInfo{
     .node = pattern, .ident = pattern->ident(), .kind = SymbolKind::kVariable,
-    .type = type
+    .type = type, .is_place_mut = is_place_mut
   });
   if(!info) {
     _recorder->report("Variable identifier already defined");
@@ -1715,19 +1732,12 @@ void TypeFiller::bind_struct(StructPattern *pattern, stype::TypePtr type) {
 }
 
 void TypeFiller::bind_reference(ReferencePattern *pattern, stype::TypePtr type) {
-  if(auto t = type.get_if<stype::RefType>(); !t) {
+  if(auto r = type.get_if<stype::RefType>(); !r) {
     _recorder->report("Type binding failed: not a reference");
     return;
-  } else {
-    type = t->inner();
-  }
-  if(pattern->is_mut()) {
-    if(auto t = type.get_if<stype::MutType>(); !t) {
-      _recorder->report("Type binding failed: reference mutability mismatch");
-      return;
-    } else {
-      type = t->inner();
-    }
+  } else if(pattern->is_mut() ^ r->ref_is_mut()) {
+    _recorder->report("Type binding failed: reference mutability mismatch");
+    return;
   }
   auto sub_pattern = pattern->pattern().get();
   bind_pattern(sub_pattern, type);
