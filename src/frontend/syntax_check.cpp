@@ -469,9 +469,174 @@ void ConstEvaluator::postVisit(GroupedExpression &node) {
   }
   node.set_cval(node.expr()->cval());
 }
+
+/********************* PreTypeFiller ***************************/
+
+const std::string PreTypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
+
+void PreTypeFiller::postVisit(TypePath &node) {
+  // Enumeration/crate/generics
+  // Since we only support single crate / no generic / simple enumeration,
+  // we only have to check enumeration items.
+  if(node.is_absolute()) {
+    // ... I don't know.
+  }
+  for(auto it = node.segments().begin(); it != node.segments().end(); ++it) {
+    // PathIdentSegment ->
+    // IDENTIFIER | "super" | "self" | "Self" | "crate"
+    auto ident = (*it)->ident_segment()->ident();
+    if(ident == "super") {
+      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"super\" is not supported yet");
+      return;
+    } else if(ident == "self") {
+      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"self\" is not supported yet");
+      return;
+    } else if(ident == "Self") {
+      // set a temporary SelfType here.
+      node.set_type(_type_pool->make_type<stype::SelfType>());
+      return;
+    } else if(ident == "crate") {
+      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"crate\" is not supported yet");
+      return;
+    }
+    auto info = find_symbol(ident);
+    if(!info) {
+      _recorder->tagged_report(kErrTypeNotResolved, "TypePath identifier unrecognizable");
+      return;
+    }
+    switch(info->kind) {
+    case SymbolKind::kConstant: {
+      if(!info->type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Constant type not determined");
+        return;
+      }
+      auto ait = it; ++ait;
+      if(ait != node.segments().end()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Constant as a type path interval");
+        return;
+      }
+      node.set_type(info->type);
+    } break;
+    case SymbolKind::kEnum: {
+      // check whether the next one is a valid field.
+      if(!info->type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Enum type not determined");
+        return;
+      }
+      ++it;
+      if(it == node.segments().end()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Enum variant error, expected an enum item");
+        return;
+      }
+      auto ait = it; ++ait;
+      if(ait != node.segments().end()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Enum variant as a type path interval");
+        return;
+      }
+      auto item_ident = (*it)->ident_segment()->ident();
+      auto enum_type = info->type.get_if<stype::EnumType>();
+      if(!enum_type) {
+        throw std::runtime_error("Fatal error: enum type mismatch undetected");
+      }
+      if(auto vit = enum_type->variants().find(item_ident); vit == enum_type->variants().end()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Not a valid enum variant");
+        return;
+      } else if(!vit->second) {
+        throw std::runtime_error("Fatal error: enum variant type not set");
+      } else {
+        node.set_type(stype::TypePtr(vit->second));
+      }
+    } break;
+    case SymbolKind::kStruct: {
+      if(!info->type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Struct type not determined");
+        return;
+      }
+      auto ait = it; ++ait;
+      if(ait != node.segments().end()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Struct as a type path interval");
+        return;
+      }
+      node.set_type(info->type);
+    } break;
+    case SymbolKind::kPrimitiveType: {
+      if(!info->type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "PrimitiveType type not determined");
+        return;
+      }
+      auto ait = it; ++ait;
+      if(ait != node.segments().end()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "PrimitiveType as a type path interval");
+        return;
+      }
+      node.set_type(info->type);
+    } break;
+    case SymbolKind::kTypeAlias: {
+      if(!info->type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "TypeAlias type not determined");
+        return;
+      }
+      auto ait = it; ++ait;
+      if(ait != node.segments().end()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "TypeAlias as a type path interval");
+        return;
+      }
+      node.set_type(info->type);
+    } break;
+    case SymbolKind::kFunction:
+    case SymbolKind::kTrait:
+    case SymbolKind::kVariable: {
+      // ???
+      throw std::runtime_error("TypePath for function/trait/variable not implemented yet");
+      return;
+    } break;
+    }
+  }
+  if(!node.get_type()) {
+    throw std::runtime_error("Fatal error: type not set in TypePath");
+  }
 }
 
-namespace insomnia::rust_shard::ast {
+void PreTypeFiller::postVisit(Function &node) {
+  ScopedVisitor::postVisit(node); // exit the inner scope first. Add the symbol to the outer scope.
+  std::vector<stype::TypePtr> params;
+  if(node.params_opt()) {
+    if(node.params_opt()->self_param_opt()) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Self param unimplemented...");
+      return;
+    }
+    for(auto &param: node.params_opt()->func_params()) {
+      if(param->has_name()) {
+        auto ptr = static_cast<FunctionParamPattern *>(param.get());
+        auto tp = ptr->type()->get_type();
+        if(!tp) {
+          _recorder->tagged_report(kErrTypeNotResolved, "Function parameter pattern type tag not resolved");
+          return;
+        }
+        params.push_back(tp);
+      } else {
+        auto ptr = static_cast<FunctionParamType *>(param.get());
+        auto tp = ptr->type()->get_type();
+        if(!tp) {
+          _recorder->tagged_report(kErrTypeNotResolved, "Function parameter type tag not resolved");
+          return;
+        }
+        params.push_back(tp);
+      }
+    }
+  }
+  stype::TypePtr ret_type = node.res_type_opt() ? node.res_type_opt()->get_type() : _type_pool->make_unit();
+  if(!ret_type)  {
+    _recorder->tagged_report(kErrTypeNotResolved, "Function result type tag not resolved");
+    return;
+  }
+  auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), std::move(params), ret_type);
+  add_symbol(node.ident(), SymbolInfo{
+    .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction, .type = func_type
+  });
+  node.set_type(func_type); // ...
+}
+
 
 /********************** TypeFiller *****************************/
 
@@ -482,6 +647,8 @@ const std::string TypeFiller::kErrIdentNotResolved = "Error: Identifier not reso
 const std::string TypeFiller::kErrNoPlaceMutability = "Error: Place mutability required not exist";
 
 void TypeFiller::postVisit(Function &node) {
+  ScopedVisitor::postVisit(node); // exit the function scope first
+
   // check whether every control block share same return types.
   // allow never type and self type.
   if(node.body_opt() && !node.body_opt()->get_type()) {
@@ -672,126 +839,7 @@ void TypeFiller::postVisit(SliceType &node) {
 }
 
 void TypeFiller::postVisit(TypePath &node) {
-  // Enumeration/crate/generics
-  // Since we only support single crate / no generic / simple enumeration,
-  // we only have to check enumeration items.
-  if(node.is_absolute()) {
-    // ... I don't know.
-  }
-  for(auto it = node.segments().begin(); it != node.segments().end(); ++it) {
-    // PathIdentSegment ->
-    // IDENTIFIER | "super" | "self" | "Self" | "crate"
-    auto ident = (*it)->ident_segment()->ident();
-    if(ident == "super") {
-      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"super\" is not supported yet");
-      return;
-    } else if(ident == "self") {
-      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"self\" is not supported yet");
-      return;
-    } else if(ident == "Self") {
-      // set a temporary SelfType here.
-      node.set_type(_type_pool->make_type<stype::SelfType>());
-      return;
-    } else if(ident == "crate") {
-      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"crate\" is not supported yet");
-      return;
-    }
-    auto info = find_symbol(ident);
-    if(!info) {
-      _recorder->tagged_report(kErrTypeNotResolved, "TypePath identifier unrecognizable");
-      return;
-    }
-    switch(info->kind) {
-    case SymbolKind::kConstant: {
-      if(!info->type) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Constant type not determined");
-        return;
-      }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Constant as a type path interval");
-        return;
-      }
-      node.set_type(info->type);
-    } break;
-    case SymbolKind::kEnum: {
-      // check whether the next one is a valid field.
-      if(!info->type) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Enum type not determined");
-        return;
-      }
-      ++it;
-      if(it == node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Enum variant error, expected an enum item");
-        return;
-      }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Enum variant as a type path interval");
-        return;
-      }
-      auto item_ident = (*it)->ident_segment()->ident();
-      auto enum_type = info->type.get_if<stype::EnumType>();
-      if(!enum_type) {
-        throw std::runtime_error("Fatal error: enum type mismatch undetected");
-      }
-      if(auto vit = enum_type->variants().find(item_ident); vit == enum_type->variants().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Not a valid enum variant");
-        return;
-      } else if(!vit->second) {
-        throw std::runtime_error("Fatal error: enum variant type not set");
-      } else {
-        node.set_type(stype::TypePtr(vit->second));
-      }
-    } break;
-    case SymbolKind::kStruct: {
-      if(!info->type) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Struct type not determined");
-        return;
-      }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Struct as a type path interval");
-        return;
-      }
-      node.set_type(info->type);
-    } break;
-    case SymbolKind::kPrimitiveType: {
-      if(!info->type) {
-        _recorder->tagged_report(kErrTypeNotResolved, "PrimitiveType type not determined");
-        return;
-      }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "PrimitiveType as a type path interval");
-        return;
-      }
-      node.set_type(info->type);
-    } break;
-    case SymbolKind::kTypeAlias: {
-      if(!info->type) {
-        _recorder->tagged_report(kErrTypeNotResolved, "TypeAlias type not determined");
-        return;
-      }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "TypeAlias as a type path interval");
-        return;
-      }
-      node.set_type(info->type);
-    } break;
-    case SymbolKind::kFunction:
-    case SymbolKind::kTrait:
-    case SymbolKind::kVariable: {
-      // ???
-      throw std::runtime_error("TypePath for function/trait/variable not implemented yet");
-      return;
-    } break;
-    }
-  }
-  if(!node.get_type()) {
-    throw std::runtime_error("Fatal error: type not set in TypePath");
-  }
+  // not needed.
 }
 
 void TypeFiller::postVisit(LiteralExpression &node) {
@@ -1067,15 +1115,15 @@ void TypeFiller::postVisit(AssignmentExpression &node) {
   // &T <- &T
   // &T <- &mut T
   // &mut T <- &mut T
-  bool flag = true;
+  bool to_accept = true;
   if(node.expr1()->is_place_mut()) {
     // mut T <- T
-    if(t != f) flag = false;
+    if(t != f) to_accept = false;
   } else if(auto rt = t.get_if<stype::RefType>(), rf = f.get_if<stype::RefType>();
     !rt || !rf || rt->inner() != rf->inner() || (rt->ref_is_mut() && !rf->ref_is_mut())) {
-    flag = false;
+    to_accept = false;
   }
-  if(flag) {
+  if(!to_accept) {
     _recorder->tagged_report(kErrTypeNotMatch, "Invalid assignment: "
       + to_type->to_string() + " <- " + from_type->to_string());
     return;
@@ -1086,6 +1134,28 @@ void TypeFiller::postVisit(AssignmentExpression &node) {
 void TypeFiller::preVisit(CompoundAssignmentExpression &node) {
   node.expr1()->set_lside();
 }
+
+void TypeFiller::visit(Function &node) {
+  ScopedVisitor::preVisit(node); // enter the inner scope
+  if(node.params_opt()) node.params_opt()->accept(*this);
+  if(node.res_type_opt()) node.res_type_opt()->accept(*this);
+
+  // register the parameter names
+  if(node.params_opt()) {
+    // ignore self param
+
+    if(node.params_opt()) for(auto &param: node.params_opt()->func_params()) {
+      if(param->has_name()) {
+        auto ptr = static_cast<FunctionParamPattern*>(param.get());
+        bind_pattern(ptr->pattern().get(), ptr->type()->get_type());
+      }
+    }
+  }
+
+  if(node.body_opt()) node.body_opt()->accept(*this);
+  ScopedVisitor::postVisit(node);
+}
+
 
 void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   auto type1 = node.expr1()->get_type();
@@ -1312,7 +1382,7 @@ void TypeFiller::postVisit(CallExpression &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "Function expect no param");
     return;
   }
-  node.set_type(func_type->return_type());
+  node.set_type(func_type->ret_type());
 }
 
 void TypeFiller::postVisit(MethodCallExpression &node) {
@@ -1497,7 +1567,8 @@ void TypeFiller::postVisit(FunctionBodyExpr &node) {
       return;
     }
     if(t != type) {
-      _recorder->tagged_report(kErrTypeNotMatch, "FunctionBodyExpression has different return type");
+      _recorder->tagged_report(kErrTypeNotMatch, "FunctionBodyExpression has different return type,"
+        " " + t->to_string() + " vs " + type->to_string());
       return;
     }
   }

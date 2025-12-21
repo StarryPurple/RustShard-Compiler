@@ -9,9 +9,10 @@
 
 namespace insomnia::rust_shard::ast {
 
-// check branch syntax (break/continue/return) and collect them.
-// set scopes and collect symbols (for all vis items, not variables)
-// After this, all scopes shall be settled.
+/* Check branch syntax (break/continue/return) and collect them.
+ * set scopes and collect symbols (for all vis items, not variables)
+ * After this, all scopes shall be settled.
+ */
 class SymbolCollector : public RecursiveVisitor {
   static const std::string kDuplicateDefinitionErr, kControlStatementErr, kScopeErr;
 public:
@@ -46,11 +47,13 @@ public:
     // no postVisit
   }
   void preVisit(Function &node) override {
+    /* No, not here. Later in PreTypeFiller.
     auto info = add_symbol(node.ident(), SymbolInfo{
       .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction
     }); // add to outer scope
     if(!info)
       _recorder->report("Function symbol already defined: " + std::string(node.ident()));
+    */
     _scopes.push_back(std::make_unique<Scope>());
   }
   void postVisit(Function &node) override {
@@ -183,10 +186,11 @@ private:
   }
 };
 
-// Automatically enters/exits scopes & Collect module references.
-// Affected:
-// preVisit, postVisit: Crate, BlockExpression, Function, InherentImpl, TraitImpl, Trait
-// visit: MatchArms,
+/* Automatically enters/exits scopes & Collect module references.
+ * Affected:
+ * preVisit, postVisit: Crate, BlockExpression, Function, InherentImpl, TraitImpl, Trait
+ * visit: MatchArms,
+ */
 class ScopedVisitor : public RecursiveVisitor {
 public:
   ScopedVisitor() = default;
@@ -263,12 +267,13 @@ private:
   std::vector<Scope*> _scopes;
 };
 
-// Collect struct, enum, const item and type alias.
-// After this, all types (including builtin ones) shall be registered in symbol type pool
-// (incomplete. some relationships not filled.) Including: builtin primitive types, structs,
-// enumeration, enumeration item (singleton type), type aliases, and traits.
-// (enumeration/enumeration_item relationship has been filled.)
-// The type filling progress is ready to launch.
+/* Collect struct, enum, const item and type alias.
+ * After this, all types (including builtin ones) shall be registered in symbol type pool
+ * (incomplete. some relationships not filled.) Including: builtin primitive types, structs,
+ * enumeration, enumeration item (singleton type), type aliases, traits.
+ * (enumeration/enumeration_item relationship has been filled.)
+ * The type filling progress is ready to launch.
+ */
 class TypeDeclarator : public ScopedVisitor {
 public:
   TypeDeclarator(ErrorRecorder *recorder, stype::TypePool *type_pool)
@@ -278,6 +283,19 @@ public:
     ScopedVisitor::preVisit(node);
     node.scope()->load_builtin(_type_pool);
   }
+
+  /* not here.
+  void preVisit(Function &node) override {
+    ScopedVisitor::preVisit(node);
+    auto info = find_symbol(node.ident());
+    if(!info) {
+      _recorder->report("Symbol not found for Function");
+      return;
+    }
+    info->type = _type_pool->make_type<stype::FunctionType>(node.ident());
+    node.set_type(info->type);
+  }
+  */
 
   void preVisit(StructStruct &node) override {
     auto info = find_symbol(node.ident());
@@ -317,7 +335,7 @@ public:
         ++dis;
       }
     }
-    enum_ptr->set_variants(std::move(enum_variants));
+    enum_ptr->set_details(std::move(enum_variants));
   }
 
   void preVisit(TypeAlias &node) override {
@@ -345,8 +363,9 @@ private:
   stype::TypePool *_type_pool;
 };
 
-// Resolve symbol reliance relationship (used in Type Path)
-// After this, one node shall know its parent resolution region and its children.
+/* Resolve symbol reliance relationship (used in Type Path)
+ * After this, one node shall know its parent resolution region and its children.
+ */
 class SymbolResolver : public RecursiveVisitor {
 public:
   SymbolResolver(ErrorRecorder *recorder, stype::TypePool *type_pool, ResolutionTree *res_tree)
@@ -362,8 +381,27 @@ private:
   ResolutionTree *_res_tree;
 };
 
-// A helper class that evaluates const items.
-// if evaluation fails, the ConstValue in the expression will not be set.
+/* Set all type tags (TypePath).
+ * Fill empty FuncType and EnumType (TraitType?)
+ */
+class PreTypeFiller: public ScopedVisitor {
+  static const std::string kErrTypeNotResolved;
+public:
+  PreTypeFiller(ErrorRecorder *recorder, stype::TypePool *type_pool)
+  : _recorder(recorder), _type_pool(type_pool) {}
+
+  void postVisit(TypePath &node) override;
+  void postVisit(Function &node) override;
+  // void postVisit(Enumeration &node) override;
+
+private:
+  ErrorRecorder *_recorder;
+  stype::TypePool *_type_pool;
+};
+
+/* A helper class that evaluates const items.
+ * if evaluation fails, the ConstValue in the expression will not be set.
+ */
 class ConstEvaluator: public RecursiveVisitor {
   static const std::string kErrTag;
 public:
@@ -429,11 +467,13 @@ private:
 #define ISM_RS_POST_VISIT_OVERRIDE_METHOD(Node) \
   void postVisit(Node &node) override;
 
-// fill the struct, enum, const and alias types.
+/* fill types of ast nodes.
+ * fill the struct, enum, const and alias types.
+ */
 class TypeFiller : public ScopedVisitor {
   static const std::string
-  kErrTypeNotResolved, kErrTypeNotMatch, kErrConstevalFailed,
-  kErrIdentNotResolved, kErrNoPlaceMutability;
+    kErrTypeNotResolved, kErrTypeNotMatch, kErrConstevalFailed,
+    kErrIdentNotResolved, kErrNoPlaceMutability;
   bool constEvaluate(Expression &node) {
     if(node.has_constant()) return true;
     node.accept(_evaluator);
@@ -455,6 +495,9 @@ public:
   // assignment: bind lvalue property
   void preVisit(AssignmentExpression &node) override;
   void preVisit(CompoundAssignmentExpression &node) override;
+
+  // register parameter
+  void visit(Function &node) override;
 
   // set the types
   void postVisit(LetStatement &node) override;

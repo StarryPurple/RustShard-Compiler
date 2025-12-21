@@ -82,7 +82,17 @@ std::string run_compiler_logic(const std::string &source_code) {
         std::cerr << tag << ": " << error << std::endl;
       return "Fail";
     }
-
+    ast::PreTypeFiller pre_type_filler(error_recorder.get(), type_pool.get());
+    ast_tree.traverse(pre_type_filler);
+    if(error_recorder->has_error()) {
+      std::cout << "Fail" << std::endl;
+      std::cerr << "Pre type declaration error." << std::endl;
+      for(const auto &error: error_recorder->untagged_errors())
+        std::cerr << error << std::endl;
+      for(const auto &[tag, error]: error_recorder->tagged_errors())
+        std::cerr << tag << ": " << error << std::endl;
+      return "Fail";
+    }
     ast::TypeFiller type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
     ast_tree.traverse(type_filler);
     if(error_recorder->has_error()) {

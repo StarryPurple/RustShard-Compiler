@@ -224,7 +224,7 @@ public:
   explicit EnumType(StringRef ident)
   : ExprType(TypeKind::kEnum), _ident(std::move(ident)) {}
   StringRef ident() const { return _ident; }
-  void set_variants(variant_map_t &&variants) {
+  void set_details(variant_map_t &&variants) {
     _variants = std::move(variants);
   }
   const variant_map_t& variants() const {
@@ -244,12 +244,20 @@ public:
   FunctionType(
     StringRef ident,
     std::vector<TypePtr> &&params,
-    TypePtr return_type
+    TypePtr ret_type
   ): ExprType(TypeKind::kFunction), _ident(std::move(ident)),
-  _params(std::move(params)), _ret_type(std::move(return_type)) {}
+  _params(std::move(params)), _ret_type(std::move(ret_type)) {}
+  /*
+  explicit FunctionType(StringRef ident)
+  : ExprType(TypeKind::kFunction), _ident(std::move(ident)) {}
+  void set_details(std::vector<TypePtr> &&params, TypePtr ret_type) {
+    _params = std::move(params);
+    _ret_type = std::move(_ret_type);
+  }
+  */
   StringRef ident() const { return _ident; }
   const std::vector<TypePtr>& params() const { return _params; }
-  TypePtr return_type() const { return _ret_type; }
+  TypePtr ret_type() const { return _ret_type; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:

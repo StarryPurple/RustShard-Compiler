@@ -13,7 +13,10 @@ void ASTTree::traverse(RecursiveVisitor &r_visitor) {
 }
 
 SymbolInfo* Scope::add_symbol(const StringRef &ident, const SymbolInfo &symbol) {
-  if(_symbol_set.contains(ident)) return nullptr;
+  if(_symbol_set.contains(ident)) {
+    throw std::runtime_error("Symbol" + std::string(ident) + " already added");
+    return nullptr;
+  }
   _symbol_set.emplace(ident, symbol);
   return find_symbol(ident);
 }

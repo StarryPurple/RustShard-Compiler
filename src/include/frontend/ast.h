@@ -105,6 +105,7 @@ public:
 class FunctionParam : public BasicNode {
 public:
   FunctionParam() = default;
+  virtual bool has_name() = 0;
 private:
   // Intentional blank.
 public:
@@ -118,6 +119,7 @@ public:
     std::unique_ptr<Type> &&type
   ): _pattern(std::move(pattern)), _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool has_name() override { return true; }
 private:
   std::unique_ptr<PatternNoTopAlt> _pattern;
   std::unique_ptr<Type> _type;
@@ -132,6 +134,7 @@ public:
     std::unique_ptr<Type> &&type
   ): _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool has_name() override { return false; }
 private:
   std::unique_ptr<Type> _type;
 public:
