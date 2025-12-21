@@ -1,5 +1,5 @@
-#ifndef INSOMNIA_LEXER_H
-#define INSOMNIA_LEXER_H
+#ifndef RUST_SHARD_FRONTEND_LEXER_H
+#define RUST_SHARD_FRONTEND_LEXER_H
 
 #include <cstdint>
 #include <cstring>
@@ -153,4 +153,4 @@ public:
 
 }
 
-#endif // INSOMNIA_LEXER_H
+#endif // RUST_SHARD_FRONTEND_LEXER_H

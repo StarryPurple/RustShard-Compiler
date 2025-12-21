@@ -1,5 +1,5 @@
-#ifndef INSOMNIA_COMMON_H
-#define INSOMNIA_COMMON_H
+#ifndef RUST_SHARD_COMMON_H
+#define RUST_SHARD_COMMON_H
 
 #include <string>
 
@@ -12,4 +12,4 @@ using StringRef = std::string;
 
 }
 
-#endif // INSOMNIA_COMMON_H
+#endif // RUST_SHARD_COMMON_H

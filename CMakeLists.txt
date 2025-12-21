@@ -4,13 +4,13 @@ project(RustShardCompiler)
 set(CMAKE_CXX_STANDARD 20)
 
 add_library(frontend_lib STATIC
-    src/frontend/ast_type.cpp
+    src/frontend/type.cpp
     src/frontend/lexer.cpp
     src/frontend/parser.cpp
-    src/frontend/ast_recursive_visitor.cpp
+    src/frontend/recursive_visitor.cpp
     src/frontend/syntax_check.cpp
-    src/frontend/ast_defs.cpp
-    src/frontend/ast_constant.cpp
+    src/frontend/defs.cpp
+    src/frontend/constant.cpp
 )
 
 target_include_directories(frontend_lib PUBLIC

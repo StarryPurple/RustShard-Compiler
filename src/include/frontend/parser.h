@@ -1,8 +1,9 @@
-#ifndef INSOMNIA_PARSER_H
-#define INSOMNIA_PARSER_H
+#ifndef RUST_SHARD_FRONTEND_PARSER_H
+#define RUST_SHARD_FRONTEND_PARSER_H
+
 #include "ast.h"
 #include "lexer.h"
-#include "ast_recursive_visitor.h"
+#include "recursive_visitor.h"
 
 #define PARSE_FUNCTION_GEN_METHOD(Node) \
   std::unique_ptr<Node> parse##Node();
@@ -134,4 +135,4 @@ private:
 }
 
 #undef PARSE_FUNCTION_GEN_METHOD
-#endif // INSOMNIA_PARSER_H
+#endif // RUST_SHARD_FRONTEND_PARSER_H

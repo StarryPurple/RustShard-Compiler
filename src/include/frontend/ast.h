@@ -14,17 +14,17 @@
  *   (A -> (B C)*) struct Group { B obj_b; C obj_c; }; std::vector<Group> _groups;
  */
 // the builtin type for TUPLE_INDEX is not fixed... Maybe fix it someday.
-#ifndef INSOMNIA_AST_H
-#define INSOMNIA_AST_H
+#ifndef RUST_SHARD_FRONTEND_AST_H
+#define RUST_SHARD_FRONTEND_AST_H
 
 #include <memory>
 #include <variant>
 #include <vector>
 
-#include "ast_constant.h"
-#include "ast_fwd.h"
-#include "ast_defs.h"
-#include "ast_visitor.h"
+#include "constant.h"
+#include "fwd.h"
+#include "defs.h"
+#include "visitor.h"
 
 namespace insomnia::rust_shard::ast {
 
@@ -1568,4 +1568,4 @@ public:
 }
 
 #undef EXPOSE_FIELD_CONST_REFERENCE
-#endif // INSOMNIA_AST_H
+#endif // RUST_SHARD_FRONTEND_AST_H

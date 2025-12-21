@@ -1,10 +1,10 @@
-#ifndef INSOMNIA_SYNTAX_CHECK_H
-#define INSOMNIA_SYNTAX_CHECK_H
+#ifndef RUST_SHARD_FRONTEND_SYNTAX_CHECK_H
+#define RUST_SHARD_FRONTEND_SYNTAX_CHECK_H
 
 #include <unordered_map>
 
-#include "ast_recursive_visitor.h"
-#include "ast_type.h"
+#include "recursive_visitor.h"
+#include "type.h"
 #include "parser.h"
 
 namespace insomnia::rust_shard::ast {
@@ -490,7 +490,7 @@ public:
 
   // decide the types
 
-  INSOMNIA_RUST_SHARD_AST_TYPED_VISITABLE_NODES_LIST(ISM_RS_POST_VISIT_OVERRIDE_METHOD);
+  RUST_SHARD_AST_TYPED_VISITABLE_NODES_LIST(ISM_RS_POST_VISIT_OVERRIDE_METHOD);
 
   // assignment: bind lvalue property
   void preVisit(AssignmentExpression &node) override;
@@ -529,7 +529,7 @@ private:
 }
 
 
-#endif // INSOMNIA_SYNTAX_CHECK_H
+#endif // RUST_SHARD_FRONTEND_SYNTAX_CHECK_H
 
 
 
