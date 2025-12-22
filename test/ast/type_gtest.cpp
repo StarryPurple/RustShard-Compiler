@@ -5,7 +5,7 @@
 #include <memory>
 #include <concepts>
 
-#include "ast_type.h"
+#include "type.h"
 
 using namespace insomnia::rust_shard::stype;
 using insomnia::rust_shard::StringRef;

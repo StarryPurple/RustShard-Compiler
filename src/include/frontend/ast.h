@@ -524,11 +524,15 @@ public:
   void set_lside() { _is_lside = true; }
   bool is_place_mut() const { return _is_place_mut; }
   void set_place_mut() { _is_place_mut = true; }
+  bool always_returns() const { return _always_returns; }
+  void set_always_returns() { _always_returns = true; }
+  virtual bool allow_auto_deref() const { return false; }
 protected:
   sconst::ConstValPtr _cval;
 private:
   bool _is_lside = false;
   bool _is_place_mut = false;
+  bool _always_returns = false;
 
   // for ConstEvaluator
   void set_cval(sconst::ConstValPtr value) {
@@ -819,6 +823,7 @@ public:
     std::unique_ptr<Expression> &&expr_index
   ): _expr_obj(std::move(expr_obj)), _expr_index(std::move(expr_index)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool allow_auto_deref() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr_obj;
   std::unique_ptr<Expression> _expr_index;
@@ -983,6 +988,7 @@ public:
     StringRef ident
   ): _expr(std::move(expr)), _ident(ident) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool allow_auto_deref() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
   StringRef _ident;

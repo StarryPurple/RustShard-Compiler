@@ -1110,19 +1110,19 @@ void TypeFiller::postVisit(AssignmentExpression &node) {
     return;
   }
   auto t = to_type, f = from_type;
-  // Accepted assignment:
+  // Accepted assignment: (rt <- rf)
   // mut T <- T
   // &T <- &T
   // &T <- &mut T
   // &mut T <- &mut T
-  bool to_accept = true;
-  if(node.expr1()->is_place_mut()) {
-    // mut T <- T
-    if(t != f) to_accept = false;
-  } else if(auto rt = t.get_if<stype::RefType>(), rf = f.get_if<stype::RefType>();
-    !rt || !rf || rt->inner() != rf->inner() || (rt->ref_is_mut() && !rf->ref_is_mut())) {
-    to_accept = false;
-  }
+  // (auto deref acceptable) &mut T <- T
+  bool to_accept = false;
+  if(node.expr1()->is_place_mut() && t == f) to_accept = true;
+  auto rt = t.get_if<stype::RefType>(), rf = f.get_if<stype::RefType>();
+  if(rt && rf && rt->inner() == rf->inner() && (!rt->ref_is_mut() || rf->ref_is_mut()))
+    to_accept = true;
+  if(node.expr1()->allow_auto_deref() && rt && !rf && rt->ref_is_mut() && rt->inner() == f)
+    to_accept = true; // ...
   if(!to_accept) {
     _recorder->tagged_report(kErrTypeNotMatch, "Invalid assignment: "
       + to_type->to_string() + " <- " + from_type->to_string());
@@ -1398,19 +1398,14 @@ void TypeFiller::postVisit(FieldExpression &node) {
 void TypeFiller::postVisit(ContinueExpression &node) {
   // ???
   // always success
+  node.set_type(_type_pool->make_never());
+  node.set_always_returns();
 }
 
 void TypeFiller::postVisit(BreakExpression &node) {
-  if(!node.expr_opt()) {
-    node.set_type(_type_pool->make_unit());
-    return;
-  }
-  auto type = node.expr_opt()->get_type();
-  if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in BreakExpression");
-    return;
-  }
-  node.set_type(type);
+  // set never type
+  node.set_type(_type_pool->make_never());
+  node.set_always_returns();
 }
 
 void TypeFiller::postVisit(RangeExpr &node) {
@@ -1521,16 +1516,9 @@ void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
 }
 
 void TypeFiller::postVisit(ReturnExpression &node) {
-  if(!node.expr_opt()) {
-    node.set_type(_type_pool->make_unit());
-    return;
-  }
-  auto type = node.expr_opt()->get_type();
-  if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got in ReturnExpression");
-    return;
-  }
-  node.set_type(type);
+  // set never type as result
+  node.set_type(_type_pool->make_never());
+  node.set_always_returns();
 }
 
 void TypeFiller::postVisit(UnderscoreExpression &node) {
@@ -1539,43 +1527,115 @@ void TypeFiller::postVisit(UnderscoreExpression &node) {
 }
 
 void TypeFiller::postVisit(BlockExpression &node) {
-  if(!node.stmts_opt() || !node.stmts_opt()->expr_opt()) {
+  // Rule:
+  // If there is a final expr_opt, use its type.
+  // Or, check the return / break / continue.
+  // If there's a never-type, terminate and set the block as never-type.
+  if(!node.stmts_opt()) {
     node.set_type(_type_pool->make_unit());
     return;
   }
-  auto type = node.stmts_opt()->expr_opt()->get_type();
-  if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not got");
-    return;
+  bool always_returns = false;
+  for(auto &stmt: node.stmts_opt()->stmts()) {
+    auto ptr = dynamic_cast<ExpressionStatement*>(stmt.get());
+    if(!ptr) continue;
+    if(ptr->expr()->always_returns()) {
+      always_returns = true;
+      break;
+    }
   }
-  node.set_type(type);
+  stype::TypePtr t = _type_pool->make_unit();
+  if(node.stmts_opt()->expr_opt()) {
+    t = node.stmts_opt()->expr_opt()->get_type();
+    if(!t) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Expr stmt exists, but type not got");
+      return;
+    }
+    if(node.stmts_opt()->expr_opt()->always_returns())
+      always_returns = true;
+  }
+  if(always_returns) {
+    t = _type_pool->make_never();
+    node.set_always_returns();
+  }
+  node.set_type(t);
 }
 
 void TypeFiller::postVisit(FunctionBodyExpr &node) {
-  auto type = _type_pool->make_unit();
-  if(node.stmts_opt() && node.stmts_opt()->expr_opt()) {
-    type = node.stmts_opt()->expr_opt()->get_type();
-    if(!type) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Param type not got in FunctionBodyExpr");
-      return;
-    }
-  }
-  for(const auto &elem: node.func_returns()) {
-    auto t = elem->get_type();
+  stype::TypePtr rt;
+  if(!node.func_returns().empty()) {
+    // check whether these return types cooperate
+    auto &opt = node.func_returns().front()->expr_opt();
+    auto t = opt ? opt->get_type() : _type_pool->make_unit();
     if(!t) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Return type not got in FunctionBodyExpr");
+      _recorder->tagged_report(kErrIdentNotResolved, "Return type not resolved");
       return;
     }
-    if(t != type) {
-      _recorder->tagged_report(kErrTypeNotMatch, "FunctionBodyExpression has different return type,"
-        " " + t->to_string() + " vs " + type->to_string());
-      return;
+    for(auto &elem: node.func_returns()) {
+      auto &opt2 = elem->expr_opt();
+      auto t2 = opt2 ? opt2->get_type() : _type_pool->make_unit();
+      if(!t2) {
+        _recorder->tagged_report(kErrIdentNotResolved, "Return type not resolved");
+        return;
+      }
+      if(t != t2) {
+        _recorder->tagged_report(kErrTypeNotMatch, "FunctionBodyExpression has different return type,"
+          " " + t->to_string() + " vs " + t2->to_string());
+        return;
+      }
+    }
+    rt = t;
+  }
+
+  stype::TypePtr st;
+  if(!node.stmts_opt()) {
+    st = _type_pool->make_unit();
+  } else {
+    bool always_returns = false;
+    for(auto &stmt: node.stmts_opt()->stmts()) {
+      auto ptr = dynamic_cast<ExpressionStatement*>(stmt.get());
+      if(!ptr) continue;
+      if(ptr->expr()->always_returns()) {
+        always_returns = true;
+        break;
+      }
+    }
+    st = _type_pool->make_unit();
+    if(node.stmts_opt()->expr_opt()) {
+      st = node.stmts_opt()->expr_opt()->get_type();
+      if(!st) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Expr stmt exists, but type not got");
+        return;
+      }
+      if(node.stmts_opt()->expr_opt()->always_returns())
+        always_returns = true;
+    }
+    if(always_returns) {
+      st = _type_pool->make_never();
+      node.set_always_returns();
     }
   }
-  node.set_type(type);
+
+  if(!rt) {
+    // no return expr.
+    node.set_type(st);
+  } else {
+    // st == never: see rt.
+    // st != never: st shall be equal to rt.
+    if(st == _type_pool->make_never()) {
+      node.set_type(rt);
+    } else if(st != rt) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Func tail expr type not the same with return type");
+      return;
+    } else {
+      node.set_type(st);
+    }
+  }
 }
 
+
 void TypeFiller::postVisit(InfiniteLoopExpression &node) {
+  // loop {...}
   if(node.loop_breaks().empty()) {
     node.set_type(_type_pool->make_type<stype::NeverType>());
     return;
@@ -1597,10 +1657,13 @@ void TypeFiller::postVisit(InfiniteLoopExpression &node) {
       return;
     }
   }
+  if(node.block_expr()->always_returns())
+    node.set_always_returns();
   node.set_type(type);
 }
 
 void TypeFiller::postVisit(PredicateLoopExpression &node) {
+  // while ... {}
   auto cond_type = node.cond()->expr()->get_type();
   if(!cond_type) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
@@ -1632,10 +1695,14 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
       return;
     }
   }
+
+  if(node.cond()->expr()->always_returns() || node.block_expr()->always_returns())
+    node.set_always_returns();
   node.set_type(type);
 }
 
 void TypeFiller::postVisit(IfExpression &node) {
+  // if ... {} else ...
   auto cond_type = node.cond()->expr()->get_type();
   if(!cond_type) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
@@ -1646,6 +1713,9 @@ void TypeFiller::postVisit(IfExpression &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
     return;
   }
+
+  bool always_returns = true;
+  if(!node.block_expr()->always_returns()) always_returns = false;
 
   auto type = node.block_expr()->get_type();
   if(!type) {
@@ -1658,16 +1728,26 @@ void TypeFiller::postVisit(IfExpression &node) {
     if constexpr(!std::is_same_v<T, std::monostate>) {
       // T = std::unique_ptr<BlockExpression/IfExpression>
       auto t = arg->get_type();
-      if(!t || t != type) {
+      if(!t) success = false;
+      if(type == _type_pool->make_never()) {
+        type = t;
+      } else if(t != _type_pool->make_never() && t != type) {
         success = false;
       }
+      if(!arg->always_returns()) always_returns = false;
+    } else {
+      always_returns = false; // no else/elif, impossible to be always returning
     }
   }, node.else_spec());
   if(!success) {
     _recorder->tagged_report(kErrTypeNotMatch, "Type not match between if blocks");
     return;
   }
+
+  if(node.cond()->expr()->always_returns()) always_returns = true;
+
   node.set_type(type);
+  if(always_returns) node.set_always_returns();
 }
 
 void TypeFiller::postVisit(MatchExpression &node) {

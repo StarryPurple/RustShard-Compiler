@@ -93,7 +93,8 @@ enum class TypeKind {
 
 // referred to boost::hash_combine
 // Heh, CRTP..., NVI...
-// TODO: Add a pretty printer. Maybe in another language...
+// Add a pretty printer. Maybe in another language...
+// Added/.
 class ExprType : public std::enable_shared_from_this<ExprType> {
 public:
   explicit ExprType(TypeKind kind) : _kind(kind) {}
@@ -416,6 +417,9 @@ public:
   }
   TypePtr make_unit() {
     return make_type<TupleType>(std::vector<TypePtr>());
+  }
+  TypePtr make_never() {
+    return make_type<NeverType>();
   }
 
   std::size_t size() const { return _pool.size(); }
