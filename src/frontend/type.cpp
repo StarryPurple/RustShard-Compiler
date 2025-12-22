@@ -13,7 +13,8 @@ StringRef prime_strs(TypePrime prime) {
     {TypePrime::kU32, "u32"}, {TypePrime::kU64, "u64"},
     {TypePrime::kISize, "isize"}, {TypePrime::kUSize, "usize"},
     {TypePrime::kF32, "f32"}, {TypePrime::kF64, "f64"},
-    {TypePrime::kString, "str"}
+    {TypePrime::kString, "str"}, {TypePrime::kXInt, "Xint"},
+    {TypePrime::kXFloat, "Xfloat"}
   };
   return table.at(prime);
 }
@@ -28,7 +29,7 @@ const std::vector<TypePrime>& type_primes() {
     TypePrime::kISize, TypePrime::kUSize,
     TypePrime::kF32, TypePrime::kF64,
     TypePrime::kString
-  };
+  }; // no Xint and Xfloat
   return table;
 }
 

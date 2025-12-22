@@ -2,6 +2,7 @@
 #define RUST_SHARD_FRONTEND_SYNTAX_CHECK_H
 
 #include <unordered_map>
+#include <utility>
 
 #include "recursive_visitor.h"
 #include "type.h"
@@ -245,6 +246,8 @@ public:
   }
 
 protected:
+  std::vector<Scope*> _scopes;
+
   SymbolInfo* add_symbol(StringRef ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
   }
@@ -262,9 +265,6 @@ protected:
     }
     return nullptr;
   }
-
-private:
-  std::vector<Scope*> _scopes;
 };
 
 /* Collect struct, enum, const item and type alias.
@@ -381,87 +381,104 @@ private:
   ResolutionTree *_res_tree;
 };
 
-/* Set all type tags (TypePath).
- * Fill empty FuncType and EnumType (TraitType?)
- */
-class PreTypeFiller: public ScopedVisitor {
-  static const std::string kErrTypeNotResolved;
-public:
-  PreTypeFiller(ErrorRecorder *recorder, stype::TypePool *type_pool)
-  : _recorder(recorder), _type_pool(type_pool) {}
-
-  void postVisit(TypePath &node) override;
-  void postVisit(Function &node) override;
-  // void postVisit(Enumeration &node) override;
-
-private:
-  ErrorRecorder *_recorder;
-  stype::TypePool *_type_pool;
-};
 
 /* A helper class that evaluates const items.
  * if evaluation fails, the ConstValue in the expression will not be set.
  */
-class ConstEvaluator: public RecursiveVisitor {
+class ConstEvaluator: public ScopedVisitor {
   static const std::string kErrTag;
 public:
   ConstEvaluator(ErrorRecorder *recorder, stype::TypePool *type_pool, sconst::ConstPool *const_pool)
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool) {}
 
+  bool constEvaluate(Expression &node, std::vector<Scope*> cur_scopes) {
+    // fetch the scopes from the root to this expression node.
+    if(node.has_constant()) return true;
+    _scopes = std::move(cur_scopes);
+    node.accept(*this);
+    if(!node.has_constant()) {
+      _recorder->report("const evaluation failed");
+      return false;
+    }
+    return true;
+  }
+
   // bind lvalue property
   void preVisit(AssignmentExpression &node) override;
   void preVisit(CompoundAssignmentExpression &node) override;
 
-  void postVisit(LiteralExpression &node);
-  void postVisit(BorrowExpression &node);
-  void postVisit(DereferenceExpression &node);
-  void postVisit(NegationExpression &node);
-  void postVisit(ArithmeticOrLogicalExpression &node);
-  void postVisit(ComparisonExpression &node);
-  void visit(LazyBooleanExpression &node);
-  void postVisit(TypeCastExpression &node);
-  void postVisit(GroupedExpression &node);
+  void postVisit(LiteralExpression &node) override;
+  void postVisit(BorrowExpression &node) override;
+  void postVisit(DereferenceExpression &node) override;
+  void postVisit(NegationExpression &node) override;
+  void postVisit(ArithmeticOrLogicalExpression &node) override;
+  void postVisit(ComparisonExpression &node) override;
+  void visit(LazyBooleanExpression &node) override;
+  void postVisit(TypeCastExpression &node) override;
+  void postVisit(GroupedExpression &node) override;
 
-  void postVisit(ArrayExpression &node) {
-    _recorder->report("Array expression consteval is not supported");
-  }
-  void postVisit(IndexExpression &node) {
+  void postVisit(PathInExpression &node) override;
+  void postVisit(ArrayExpression &node) override;
+  void postVisit(IndexExpression &node) override {
     _recorder->report("Index expression consteval is not supported");
   }
-  void postVisit(TupleExpression &node) {
+  void postVisit(TupleExpression &node) override {
     _recorder->report("Tuple expression consteval is not supported");
   }
-  void postVisit(TupleIndexingExpression &node) {
+  void postVisit(TupleIndexingExpression &node) override {
     _recorder->report("Tuple index expression consteval is not supported");
   }
-  void postVisit(StructExpression &node) {
+  void postVisit(StructExpression &node) override {
     _recorder->report("Struct expression consteval is not supported");
   }
-  void postVisit(FieldExpression &node) {
+  void postVisit(FieldExpression &node) override {
     _recorder->report("Field expression consteval is not supported");
   }
-  void postVisit(ContinueExpression &node) {
+  void postVisit(ContinueExpression &node) override {
     _recorder->report("Continue expression consteval is not supported");
   }
-  void postVisit(BreakExpression &node) {
+  void postVisit(BreakExpression &node) override {
     _recorder->report("Break expression consteval is not supported");
   }
-  void postVisit(AssignmentExpression &node) {
+  void postVisit(AssignmentExpression &node) override {
     _recorder->report("Assignment consteval is not supported");
   }
-  void postVisit(CompoundAssignmentExpression &node) {
+  void postVisit(CompoundAssignmentExpression &node) override {
     _recorder->report("Compound assignment consteval is not supported");
   }
-  void postVisit(CallExpression &node) {
+  void postVisit(CallExpression &node) override {
     _recorder->report("Function consteval is not supported");
   }
-  void postVisit(MethodCallExpression &node) {
+  void postVisit(MethodCallExpression &node) override {
     _recorder->report("Method function consteval is not supported");
   }
 private:
   ErrorRecorder *_recorder;
   stype::TypePool *_type_pool;
   sconst::ConstPool *_const_pool;
+};
+
+/* Set all type tags (TypePath).
+ * Fill empty FuncType and EnumType (TraitType?)
+ */
+class PreTypeFiller: public ScopedVisitor {
+  static const std::string kErrTypeNotResolved;
+public:
+  PreTypeFiller(ErrorRecorder *recorder, stype::TypePool *type_pool, sconst::ConstPool *const_pool)
+  : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool),
+    _evaluator(recorder, type_pool, const_pool) {}
+
+  void postVisit(TypePath &node) override;
+  void postVisit(Function &node) override;
+  // void postVisit(Enumeration &node) override;
+
+  void postVisit(ConstantItem &node) override;
+
+private:
+  ErrorRecorder *_recorder;
+  stype::TypePool *_type_pool;
+  sconst::ConstPool *_const_pool;
+  ConstEvaluator _evaluator;
 };
 
 #define ISM_RS_POST_VISIT_OVERRIDE_METHOD(Node) \
@@ -474,15 +491,6 @@ class TypeFiller : public ScopedVisitor {
   static const std::string
     kErrTypeNotResolved, kErrTypeNotMatch, kErrConstevalFailed,
     kErrIdentNotResolved, kErrNoPlaceMutability;
-  bool constEvaluate(Expression &node) {
-    if(node.has_constant()) return true;
-    node.accept(_evaluator);
-    if(!node.has_constant()) {
-      _recorder->report("const evaluation failed");
-      return false;
-    }
-    return true;
-  }
 public:
   TypeFiller(ErrorRecorder *recorder, stype::TypePool *type_pool, sconst::ConstPool *const_pool)
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool),

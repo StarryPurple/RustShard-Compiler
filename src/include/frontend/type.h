@@ -67,7 +67,8 @@ enum class TypePrime {
   kI8, kI16, kI32, kI64, kISize, // order related with PrimitiveType.
   kU8, kU16, kU32, kU64, kUSize, // order related with PrimitiveType.
   kF32, kF64,
-  kString
+  kString,
+  kXInt, kXFloat, // no suffix; to be coerced.
 };
 
 StringRef prime_strs(TypePrime prime);

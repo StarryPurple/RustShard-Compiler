@@ -470,6 +470,77 @@ void ConstEvaluator::postVisit(GroupedExpression &node) {
   node.set_cval(node.expr()->cval());
 }
 
+void ConstEvaluator::postVisit(PathInExpression &node) {
+  if(node.segments().size() != 1) {
+    _recorder->report("Unimplemented PathInExpression constant");
+    return;
+  }
+  auto ident = node.segments().front()->ident_seg()->ident();
+  auto info = find_symbol(ident);
+  if(!info || info->kind != SymbolKind::kConstant) {
+    _recorder->report("Unrecognized identifier as constant");
+    return;
+  }
+  node.set_cval(info->cval);
+}
+
+void ConstEvaluator::postVisit(ArrayExpression &node) {
+  stype::TypePtr tp;
+  std::vector<sconst::ConstValPtr> vec;
+  if(node.elements_opt()) {
+    if(node.elements_opt()->is_explicit()) {
+      auto ptr = static_cast<ExplicitArrayElements*>(node.elements_opt().get());
+      bool is_first = true;
+      for(auto &elem: ptr->expr_list()) {
+        if(!elem->has_constant()) {
+          _recorder->report("Array elements have no constant value");
+          return;
+        }
+        if(!is_first && tp != elem->cval()->type()) {
+          _recorder->report("Array elements have different types");
+          return;
+        }
+        tp = elem->cval()->type();
+        is_first = false;
+        vec.push_back(elem->cval());
+      }
+    } else {
+      auto ptr = static_cast<RepeatedArrayElements*>(node.elements_opt().get());
+      if(!ptr->len_expr()->has_constant()) {
+        _recorder->report("Repeated Array have no constant length");
+        return;
+      }
+      if(!ptr->val_expr()->has_constant()) {
+        _recorder->report("Repeated Array have no constant value");
+        return;
+      }
+      auto cprime = ptr->val_expr()->cval()->get_if<sconst::ConstPrime>();
+      if(!cprime) {
+        _recorder->report("Repeated Array has a non-prime length");
+        return;
+      }
+      auto length_opt = cprime->get_usize();
+      if(!length_opt) {
+        _recorder->report("Repeated Array has a non_usize length");
+        return;
+      }
+      vec.resize(*length_opt, ptr->val_expr()->cval());
+      tp = ptr->val_expr()->cval()->type();
+    }
+  }
+  if(!tp) {
+    _recorder->report("Unresolved type in Array Expression");
+    return;
+  }
+  tp = _type_pool->make_type<stype::ArrayType>(tp, vec.size());
+  auto cval = _const_pool->make_const<sconst::ConstArray>(
+    tp,
+    std::move(vec)
+  );
+  node.set_cval(cval);
+}
+
+
 /********************* PreTypeFiller ***************************/
 
 const std::string PreTypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
@@ -637,11 +708,30 @@ void PreTypeFiller::postVisit(Function &node) {
   node.set_type(func_type); // ...
 }
 
+void PreTypeFiller::postVisit(ConstantItem &node) {
+  // ignore type tag...
+  if(node.const_expr_opt()) {
+    _evaluator.constEvaluate(*node.const_expr_opt(), _scopes);
+    if(!node.const_expr_opt()->has_constant()) {
+      _recorder->report("Const evaluation failed");
+      return;
+    }
+    auto cval = node.const_expr_opt()->cval();
+    auto info = find_symbol(node.ident());
+    if(!info || info->kind != SymbolKind::kConstant) {
+      _recorder->report("Invalid constant");
+      return;
+    }
+    info->type = cval->type();
+    info->cval = cval;
+  }
+}
+
 
 /********************** TypeFiller *****************************/
 
 const std::string TypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
-const std::string TypeFiller::kErrTypeNotMatch = "Error: Type not match between evaluation and declaration";
+const std::string TypeFiller::kErrTypeNotMatch = "Error: Type not match";
 const std::string TypeFiller::kErrConstevalFailed = "Error: Necessary const evaluation failed";
 const std::string TypeFiller::kErrIdentNotResolved = "Error: Identifier not resolved as expected";
 const std::string TypeFiller::kErrNoPlaceMutability = "Error: Place mutability required not exist";
@@ -816,7 +906,7 @@ void TypeFiller::postVisit(ArrayType &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside array");
     return;
   }
-  constEvaluate(*node.const_expr());
+  _evaluator.constEvaluate(*node.const_expr(), _scopes);
   if(!node.const_expr()->has_constant()) {
     _recorder->tagged_report(kErrTypeNotResolved, "non-evaluable array length");
     return;
@@ -826,12 +916,12 @@ void TypeFiller::postVisit(ArrayType &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "array length not a primitive type");
     return;
   }
-  auto length = cval->get_usize();
-  if(!length) {
+  auto length_opt = cval->get_usize();
+  if(!length_opt) {
     _recorder->tagged_report(kErrTypeNotResolved, "array length not an index value");
     return;
   }
-  node.set_type(_type_pool->make_type<stype::ArrayType>(std::move(type), *length));
+  node.set_type(_type_pool->make_type<stype::ArrayType>(std::move(type), *length_opt));
 }
 
 void TypeFiller::postVisit(SliceType &node) {
@@ -1257,7 +1347,7 @@ void TypeFiller::postVisit(ArrayExpression &node) {
       throw std::runtime_error("Repeated array collapsed");
       return;
     }
-    constEvaluate(*arr->len_expr());
+    _evaluator.constEvaluate(*arr->len_expr(), _scopes);
     if(!arr->len_expr()->has_constant()) {
       _recorder->tagged_report(kErrConstevalFailed, "Type length not evaluated");
       return;
@@ -1267,8 +1357,8 @@ void TypeFiller::postVisit(ArrayExpression &node) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type length not a primitive");
       return;
     }
-    auto length = length_prime->get_usize();
-    if(!length) {
+    auto length_opt = length_prime->get_usize();
+    if(!length_opt) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type length not an unsigned value");
       return;
     }
@@ -1277,7 +1367,7 @@ void TypeFiller::postVisit(ArrayExpression &node) {
       _recorder->tagged_report(kErrTypeNotResolved, "Expr type not got in ArrayExpression");
       return;
     }
-    node.set_type(_type_pool->make_type<stype::ArrayType>(type, *length));
+    node.set_type(_type_pool->make_type<stype::ArrayType>(type, *length_opt));
   }
 }
 

@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "common.h"
+#include "constant.h"
 #include "fwd.h"
 #include "type.h"
 
@@ -43,7 +44,8 @@ struct SymbolInfo {
   StringRef ident;
   SymbolKind kind;
   stype::TypePtr type;
-  bool is_place_mut;
+  bool is_place_mut; // variable
+  sconst::ConstValPtr cval; // const
 };
 
 class TypeInfo {

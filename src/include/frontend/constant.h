@@ -88,6 +88,8 @@ struct ConstTuple : public ConstBase {
 struct ConstArray : public ConstBase {
   std::vector<ConstValPtr> array;
 
+  explicit ConstArray(std::vector<ConstValPtr> &&arr)
+  : array(std::move(arr)) {}
   std::size_t length() const { return array.size(); }
   bool operator==(const ConstArray &) const = default;
 };

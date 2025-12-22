@@ -69,7 +69,7 @@ int main() {
         break;
       }
 
-      ast::PreTypeFiller pre_type_filler(error_recorder.get(), type_pool.get());
+      ast::PreTypeFiller pre_type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
       ast_tree.traverse(pre_type_filler);
       if(error_recorder->has_error()) {
         std::cout << "Fail" << std::endl;
