@@ -105,6 +105,13 @@ void Scope::load_builtin(stype::TypePool *pool) {
         pool->make_type<PrimeType>(TypePrime::kI32)
       )
     }, {
+      // fn readInt() -> i32
+      "readInt", pool->make_type<FunctionType>(
+        "readInt",
+        std::vector<TypePtr>{},
+        pool->make_type<PrimeType>(TypePrime::kI32)
+      )
+    }, {
       // fn exit(code: i32) -> ()
       "exit", pool->make_type<FunctionType>(
       "exit",

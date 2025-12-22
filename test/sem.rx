@@ -1,39 +1,27 @@
 /*
 Test Package: Semantic-1
-Test Target: basic
+Test Target: misc
 Author: Wenxin Zheng
 Time: 2025-08-08
 Verdict: Success
-Comment: basic test, complex Fibonacci calculation with even sum and bitwise operations
+Comment: misc test, simple sum calculation with function
 */
 
+// Simple sum calculation function
+// Calculate sum of numbers from 1 to n
+fn calculate_sum(n: i32) -> i32 {
+    let mut sum = 0;
+    let mut i = 1;
+    while (i <= n) {
+        sum += i;
+        i += 1;
+    }
+    return sum;
+}
+
 fn main() {
-    const N: usize = 24;
-    let mut fib: [usize; 25] = [0usize; N + 1];
-    fib[0] = 0;
-    fib[1] = 1;
-    let mut idx: usize = 2usize;
-    while (idx <= N) {
-        let a: usize = fib[idx - 1];
-        let b: usize = fib[idx - 2];
-        fib[idx] = a + b;
-        idx += 1;
-    }
-    let mut cursor: usize = 0usize;
-    let mut acc: usize  = 0usize;
-    while (cursor <= N) {
-        acc += fib[cursor];
-        cursor += 1;
-    }
-    let mut even_sum: usize = 0usize;
-    let mut p: usize = 0usize;
-    while (p <= N) {
-        let v: usize = fib[p];
-        if (v & 1 == 0) {
-            even_sum += v;
-        }
-        p += 1;
-    }
-    let final_value: usize = acc ^ even_sum;
+    let n = readInt();
+    let result = calculate_sum(n);
+    printInt(result);
     exit(0);
 }

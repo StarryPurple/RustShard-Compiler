@@ -46,15 +46,6 @@ public:
   template <class T> requires std::derived_from<T, ExprType>
   std::shared_ptr<T> get_if() const { return std::dynamic_pointer_cast<T>(_ptr); } // NOLINT
 
-  /*
-  // uses static_pointer_cast. use it only when you have confirmed its inner type.
-  template <class T> requires std::derived_from<T, ExprType>
-  T* as() const { return static_cast<T*>(_ptr.get()); }
-
-  // uses dynamic_pointer_cast.
-  template <class T> requires std::derived_from<T, ExprType>
-  T* as_if() const { return dynamic_cast<T*>(_ptr.get()); }
-  */
 };
 
 struct TypePath {
@@ -68,7 +59,7 @@ enum class TypePrime {
   kU8, kU16, kU32, kU64, kUSize, // order related with PrimitiveType.
   kF32, kF64,
   kString,
-  kXInt, kXFloat, // no suffix; to be coerced.
+  kNatI, kNegI, kFloat, // undetermined types: Natural number, negative integer, floating point.
 };
 
 StringRef prime_strs(TypePrime prime);
@@ -100,16 +91,43 @@ class ExprType : public std::enable_shared_from_this<ExprType> {
 public:
   explicit ExprType(TypeKind kind) : _kind(kind) {}
   virtual ~ExprType() = default;
+
   TypeKind kind() const { return _kind; } // type of this layer
-  bool operator==(const ExprType &other) const;
+
+  bool operator==(const ExprType &other) const {
+    auto lhs = remove_alias(), rhs = other.remove_alias();
+    if(lhs->kind() != rhs->kind()) return false;
+    return lhs->equals_impl(*rhs);
+  }
+
   bool operator!=(const ExprType &other) const { return !(*this == other); }
+
   virtual void combine_hash(std::size_t &seed) const = 0; // hash of this layer
-  std::size_t hash() const; // calls this->combine_hash(seed = 0) and returns the seed.
+
+  // calls this->combine_hash(seed = 0) and returns the seed.
+  std::size_t hash() const {
+    std::size_t seed = 0;
+    this->combine_hash(seed);
+    return seed;
+  }
+
   virtual std::string to_string() const = 0;
+
+  // whether this_tp <- from_tp is allowed.
+  // 1. tt = ft
+  // 2. i32... <- NatI, u32... <- NatI, i32... <- NegI, f32... <- Float
+  // 3. ft = never_tp
+  // 4. recursive
+  bool is_convertible_from(const ExprType &other) const {
+    auto lhs = remove_alias(), rhs = other.remove_alias();
+    if(lhs->kind() != rhs->kind()) return false;
+    return lhs->convertible_impl(*rhs);
+  }
 protected:
   TypeKind _kind;
 
   virtual bool equals_impl(const ExprType &other) const = 0;
+  virtual bool convertible_impl(const ExprType &other) const = 0;
   static void combine_hash_impl(std::size_t &seed, std::size_t h);
 private:
   const ExprType* remove_alias() const;
@@ -120,24 +138,29 @@ public:
   explicit PrimeType(TypePrime prime)
   : ExprType(TypeKind::kPrimitive), _prime(prime) {}
   TypePrime prime() const { return _prime; }
+  bool is_number() const {
+    return _prime != TypePrime::kBool && _prime != TypePrime::kChar && _prime != TypePrime::kString;
+  }
   bool is_integer() const {
-    return is_signed_integer() || is_unsigned_integer();
+    return is_signed() || is_unsigned();
   }
   bool is_floating_point() const {
     return _prime == TypePrime::kF32 || _prime == TypePrime::kF64;
   }
-  bool is_signed_integer() const {
+  bool is_signed() const {
     return _prime == TypePrime::kI8 || _prime == TypePrime::kI16 || _prime == TypePrime::kI32
-      || _prime == TypePrime::kI64 || _prime == TypePrime::kISize;
+      || _prime == TypePrime::kI64 || _prime == TypePrime::kISize || _prime == TypePrime::kNatI
+      || _prime == TypePrime::kNegI;
   }
-  bool is_unsigned_integer() const {
+  bool is_unsigned() const {
     return _prime == TypePrime::kU8 || _prime == TypePrime::kU16 || _prime == TypePrime::kU32
-      || _prime == TypePrime::kU64 || _prime == TypePrime::kUSize;
+      || _prime == TypePrime::kU64 || _prime == TypePrime::kUSize || _prime == TypePrime::kNatI;
   }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   TypePrime _prime;
 };
@@ -152,6 +175,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   TypePtr _inner;
   usize_t _length;
@@ -167,6 +191,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   TypePtr _inner;
   bool _ref_is_mut;
@@ -186,6 +211,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   StringRef _ident;
   std::map<StringRef, TypePtr> _fields;
@@ -200,6 +226,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   std::vector<TypePtr> _members;
 };
@@ -213,6 +240,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   TypePtr _inner;
 };
@@ -236,6 +264,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   StringRef _ident;
   variant_map_t _variants;
@@ -264,6 +293,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   StringRef _ident;
   std::vector<TypePtr> _params;
@@ -305,6 +335,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   StringRef _ident;
   std::unordered_map<StringRef, TypePtr> _asso_funcs, _asso_types, _asso_consts;
@@ -313,14 +344,15 @@ private:
 class RangeType : public ExprType {
 public:
   explicit RangeType(TypePtr type)
-  : ExprType(TypeKind::kRange), _type(std::move(type)) {}
-  TypePtr type() const { return _type; }
+  : ExprType(TypeKind::kRange), _inner(std::move(type)) {}
+  TypePtr inner() const { return _inner; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
-  TypePtr _type;
+  TypePtr _inner;
 };
 
 class EnumVariantType : public ExprType {
@@ -341,6 +373,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   StringRef _ident;
   discriminant_t _discriminant;
@@ -360,6 +393,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   StringRef _ident;
   TypePtr _type;
@@ -372,6 +406,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 };
 
 class SelfType : public ExprType {
@@ -381,6 +416,7 @@ public:
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
+  bool convertible_impl(const ExprType &other) const override;
 private:
   // nothing
 };

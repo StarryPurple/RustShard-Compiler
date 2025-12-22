@@ -406,7 +406,7 @@ EmptyStatement ->
 # No bind-failure else expression
 LetStatement ->
     "let" PatternNoTopAlt (':' Type)?
-    ('=' Expression)? 
+    ('=' Expression)? ';'
 
 # The ast nodes will just use ExprStatement -> Expression.
 # The semi problem will be handled in parser.

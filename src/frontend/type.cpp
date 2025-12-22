@@ -13,8 +13,8 @@ StringRef prime_strs(TypePrime prime) {
     {TypePrime::kU32, "u32"}, {TypePrime::kU64, "u64"},
     {TypePrime::kISize, "isize"}, {TypePrime::kUSize, "usize"},
     {TypePrime::kF32, "f32"}, {TypePrime::kF64, "f64"},
-    {TypePrime::kString, "str"}, {TypePrime::kXInt, "Xint"},
-    {TypePrime::kXFloat, "Xfloat"}
+    {TypePrime::kString, "str"}, {TypePrime::kNatI, "NatI"},
+    {TypePrime::kNegI, "NegI"}, {TypePrime::kFloat, "float"},
   };
   return table.at(prime);
 }
@@ -29,7 +29,7 @@ const std::vector<TypePrime>& type_primes() {
     TypePrime::kISize, TypePrime::kUSize,
     TypePrime::kF32, TypePrime::kF64,
     TypePrime::kString
-  }; // no Xint and Xfloat
+  }; // no NatI, NegI, Float
   return table;
 }
 
@@ -38,23 +38,11 @@ bool TypePtr::operator==(const TypePtr &other) const {
   return *_ptr == *other._ptr;
 }
 
-std::size_t ExprType::hash() const {
-  std::size_t seed = 0;
-  this->combine_hash(seed);
-  return seed;
-}
-
 const ExprType* ExprType::remove_alias() const {
   auto current = this;
   while(current->kind() == TypeKind::kAlias)
     current = static_cast<const AliasType *>(current);
   return current;
-}
-
-bool ExprType::operator==(const ExprType &other) const {
-  auto lhs = remove_alias(), rhs = other.remove_alias();
-  if(lhs->kind() != rhs->kind()) return false;
-  return lhs->equals_impl(*rhs);
 }
 
 void ExprType::combine_hash_impl(std::size_t &seed, std::size_t h) {
@@ -69,6 +57,17 @@ void PrimeType::combine_hash(std::size_t &seed) const {
 
 bool PrimeType::equals_impl(const ExprType &other) const {
   return _prime == static_cast<const PrimeType&>(other).prime();
+}
+
+bool PrimeType::convertible_impl(const ExprType &other) const {
+  const auto &other_prime = static_cast<const PrimeType&>(other);
+  // i32... <- NatI, u32... <- NatI, i32... <- NegI, f32... <- Float
+  auto pf = other_prime.prime();
+  if(pf == _prime) return true;
+  if(pf == TypePrime::kNatI && is_integer()) return true;
+  if(pf == TypePrime::kNegI && is_signed()) return true;
+  if(pf == TypePrime::kFloat && is_floating_point()) return true;
+  return false;
 }
 
 std::string PrimeType::to_string() const {
@@ -88,6 +87,9 @@ std::string PrimeType::to_string() const {
   case TypePrime::kF32: return "f32";
   case TypePrime::kF64: return "f64";
   case TypePrime::kString: return "String";
+  case TypePrime::kNatI: return "NatI";
+  case TypePrime::kNegI: return "NegI";
+  case TypePrime::kFloat: return "Float";
   }
   return "unrecognized prime";
 }
@@ -102,6 +104,12 @@ bool ArrayType::equals_impl(const ExprType &other) const {
   const auto &other_array = static_cast<const ArrayType&>(other);
   if(_length != other_array.length()) return false;
   return *_inner == *other_array.inner();
+}
+
+bool ArrayType::convertible_impl(const ExprType &other) const {
+  const auto &other_array = static_cast<const ArrayType&>(other);
+  if(_length != other_array.length()) return false;
+  return _inner->is_convertible_from(*other_array.inner());
 }
 
 std::string ArrayType::to_string() const {
@@ -124,6 +132,12 @@ bool RefType::equals_impl(const ExprType &other) const {
   if(_ref_is_mut != other_ref.ref_is_mut()) return false;
   if(*_inner != *other_ref.inner()) return false;
   return true;
+}
+
+bool RefType::convertible_impl(const ExprType &other) const {
+  const auto &other_ref = static_cast<const RefType&>(other);
+  if(_ref_is_mut != other_ref.ref_is_mut()) return false;
+  return _inner->is_convertible_from(*other_ref.inner());
 }
 
 std::string RefType::to_string() const {
@@ -162,6 +176,11 @@ bool StructType::equals_impl(const ExprType &other) const {
   return true;
 }
 
+bool StructType::convertible_impl(const ExprType &other) const {
+  const auto &other_struct = static_cast<const StructType&>(other);
+  return *this == other_struct;
+}
+
 std::string StructType::to_string() const {
   return _ident;
 }
@@ -178,6 +197,17 @@ bool TupleType::equals_impl(const ExprType &other) const {
   for(auto it = _members.begin(), other_it = other_members.begin();
     it != _members.end(); ++it, ++other_it) {
     if(**it != **other_it) return false;
+    }
+  return true;
+}
+
+bool TupleType::convertible_impl(const ExprType &other) const {
+  const auto &other_tuple = static_cast<const TupleType&>(other);
+  const auto &other_members = other_tuple.members();
+  if(_members.size() != other_members.size()) return false;
+  for(auto it = _members.begin(), other_it = other_members.begin();
+    it != _members.end(); ++it, ++other_it) {
+    if(!(*it)->is_convertible_from(**other_it)) return false;
     }
   return true;
 }
@@ -200,6 +230,10 @@ void SliceType::combine_hash(std::size_t &seed) const {
 
 bool SliceType::equals_impl(const ExprType &other) const {
   return *_inner == *static_cast<const SliceType&>(other).inner();
+}
+
+bool SliceType::convertible_impl(const ExprType &other) const {
+  return _inner->is_convertible_from(*static_cast<const SliceType&>(other).inner());
 }
 
 std::string SliceType::to_string() const {
@@ -237,6 +271,11 @@ bool EnumType::equals_impl(const ExprType &other) const {
   */
 }
 
+bool EnumType::convertible_impl(const ExprType &other) const {
+  const auto &other_struct = static_cast<const EnumType&>(other);
+  return *this == other_struct;
+}
+
 std::string EnumType::to_string() const {
   return _ident;
 }
@@ -263,6 +302,11 @@ bool FunctionType::equals_impl(const ExprType &other) const {
   return true;
 }
 
+bool FunctionType::convertible_impl(const ExprType &other) const {
+  const auto &other_func = static_cast<const FunctionType&>(other);
+  return *this == other_func;
+}
+
 std::string FunctionType::to_string() const {
   std::string res = "fn(";
   for(int i = 0; i < _params.size(); ++i) {
@@ -285,23 +329,33 @@ bool TraitType::equals_impl(const ExprType &other) const {
   return _ident == other_trait.ident();
 }
 
+bool TraitType::convertible_impl(const ExprType &other) const {
+  const auto &other_trait = static_cast<const TraitType&>(other);
+  return *this == other_trait;
+}
+
 std::string TraitType::to_string() const {
   return _ident;
 }
 
 void RangeType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
-  _type->combine_hash(seed);
+  _inner->combine_hash(seed);
 }
 
 bool RangeType::equals_impl(const ExprType &other) const {
   const auto &other_range = static_cast<const RangeType&>(other);
-  return *_type == *other_range.type();
+  return *_inner == *other_range.inner();
+}
+
+bool RangeType::convertible_impl(const ExprType &other) const {
+  const auto &other_range = static_cast<const RangeType&>(other);
+  return _inner->is_convertible_from(*other_range.inner());
 }
 
 std::string RangeType::to_string() const {
   std::string res = "Range<";
-  res += _type->to_string();
+  res += _inner->to_string();
   res += ">";
   return res;
 }
@@ -316,6 +370,11 @@ void EnumVariantType::combine_hash(std::size_t &seed) const {
 bool EnumVariantType::equals_impl(const ExprType &other) const {
   const auto other_ev = static_cast<const EnumVariantType&>(other);
   return *parent_enum() == *other_ev.parent_enum() && _ident == other_ev.ident();
+}
+
+bool EnumVariantType::convertible_impl(const ExprType &other) const {
+  const auto other_ev = static_cast<const EnumVariantType&>(other);
+  return *this == other_ev;
 }
 
 std::string EnumVariantType::to_string() const {
@@ -334,6 +393,10 @@ bool AliasType::equals_impl(const ExprType &other) const {
   throw std::runtime_error("ast type system error: comparing align types");
 }
 
+bool AliasType::convertible_impl(const ExprType &other) const {
+  throw std::runtime_error("ast type system error: converting align types");
+}
+
 std::string AliasType::to_string() const {
   std::string res = _ident;
   res += "{a.k.a. ";
@@ -347,6 +410,12 @@ void NeverType::combine_hash(std::size_t &seed) const {
 }
 
 bool NeverType::equals_impl(const ExprType &other) const {
+  const auto &other_never = static_cast<const NeverType&>(other);
+  return true;
+}
+
+bool NeverType::convertible_impl(const ExprType &other) const {
+  const auto &other_never = static_cast<const NeverType&>(other);
   return true;
 }
 
@@ -359,6 +428,11 @@ void SelfType::combine_hash(std::size_t &seed) const {
 }
 
 bool SelfType::equals_impl(const ExprType &other) const {
+  const auto &other_self = static_cast<const SelfType&>(other);
+  return true;
+}
+
+bool SelfType::convertible_impl(const ExprType &other) const {
   const auto &other_self = static_cast<const SelfType&>(other);
   return true;
 }

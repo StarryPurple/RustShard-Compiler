@@ -992,6 +992,25 @@ void TypeFiller::postVisit(NegationExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in NegationExpression");
     return;
   }
+  // requires to be a primitive type
+  auto prime = type.get_if<stype::PrimeType>();
+  if(!prime) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Negation on not primitive type");
+    return;
+  }
+  if(!prime->is_number()) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Negation on non number");
+    return;
+  }
+  if(prime->is_unsigned() && prime->prime() != stype::TypePrime::kNatI) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Negation on unsigned integer");
+    return;
+  }
+  if(prime->prime() == stype::TypePrime::kNatI) {
+    type = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kNegI);
+  } else if(prime->prime() == stype::TypePrime::kNegI) {
+    type = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kNatI);
+  }
   node.set_type(std::move(type));
 }
 
@@ -1009,13 +1028,13 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in ArithmeticOrLogicalExpression");
     return;
   }
   switch(node.oper()) {
   case Operator::kShl:
   case Operator::kShr:
-    if(prime1->is_integer() && prime2->is_unsigned_integer()) {
+    if(prime1->is_signed() && prime2->is_unsigned()) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator << >>");
@@ -1076,7 +1095,7 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in ComparisonExpression");
     return;
   }
   switch(node.oper()) {
@@ -1112,7 +1131,7 @@ void TypeFiller::postVisit(LazyBooleanExpression &node) {
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in LazyBooleanExpression");
     return;
   }
   switch(node.oper()) {
@@ -1144,7 +1163,7 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
   auto from_prime = from_type.get_if<stype::PrimeType>();
   auto to_prime = to_type.get_if<stype::PrimeType>();
   if(!from_prime || !to_prime) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in TypeCastExpression");
     return;
   }
   switch(to_prime->prime()) {
@@ -1207,11 +1226,13 @@ void TypeFiller::postVisit(AssignmentExpression &node) {
   // &mut T <- &mut T
   // (auto deref acceptable) &mut T <- T
   bool to_accept = false;
-  if(node.expr1()->is_place_mut() && t == f) to_accept = true;
+  if(node.expr1()->is_place_mut() && t->is_convertible_from(*f)) to_accept = true;
   auto rt = t.get_if<stype::RefType>(), rf = f.get_if<stype::RefType>();
-  if(rt && rf && rt->inner() == rf->inner() && (!rt->ref_is_mut() || rf->ref_is_mut()))
+  // &T <- &T...
+  if(rt && rf && rt->inner()->is_convertible_from(*rf->inner()) && (!rt->ref_is_mut() || rf->ref_is_mut()))
     to_accept = true;
-  if(node.expr1()->allow_auto_deref() && rt && !rf && rt->ref_is_mut() && rt->inner() == f)
+  // auto deref
+  if(node.expr1()->allow_auto_deref() && rt && !rf && rt->ref_is_mut() && rt->inner()->is_convertible_from(*f))
     to_accept = true; // ...
   if(!to_accept) {
     _recorder->tagged_report(kErrTypeNotMatch, "Invalid assignment: "
@@ -1261,13 +1282,13 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in CompoundAssignmentExpression");
     return;
   }
   switch(node.oper()) {
   case Operator::kShlAssign:
   case Operator::kShrAssign:
-    if(prime1->is_integer() && prime2->is_unsigned_integer()) {
+    if(prime1->is_integer() && prime2->is_unsigned()) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator <<= >>=");
@@ -1392,7 +1413,7 @@ void TypeFiller::postVisit(IndexExpression &node) {
 
   // (mut) [T; N] -> &(mut) T
   // (mut) &[T; N] -> &T
-  // (mut) &mut [T; N] -> &T (rside), &mut T (lside)
+  // (mut) &mut [T; N] -> &mut T
 
   if(auto a = expr_type.get_if<stype::ArrayType>()) {
     auto tp = a->inner();
@@ -1410,10 +1431,10 @@ void TypeFiller::postVisit(IndexExpression &node) {
       return;
     }
     auto tp = a->inner();
-    bool is_mut = r->ref_is_mut() && node.is_lside();
+    bool is_mut = r->ref_is_mut();
     tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
     node.set_type(tp);
-    if(is_mut) node.set_place_mut();
+    if(is_mut && node.is_place_mut()) node.set_place_mut();
     return;
   }
   _recorder->tagged_report(kErrTypeNotMatch, "Indexing target not an array or array reference: "
@@ -1462,7 +1483,12 @@ void TypeFiller::postVisit(CallExpression &node) {
       flag = false;
     } else {
       for(int i = 0; i < exprs.size(); ++i) {
-        if(params[i] != exprs[i]->get_type()) {
+        auto expr_type = exprs[i]->get_type();
+        if(!expr_type) {
+          _recorder->tagged_report(kErrTypeNotResolved, "Function parameter type not resolved");
+          return;
+        }
+        if(!params[i]->is_convertible_from(*expr_type)) {
           flag = false; break;
         }
       }
@@ -1512,7 +1538,7 @@ void TypeFiller::postVisit(RangeExpr &node) {
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in RangeExpr");
     return;
   }
   if(!prime1->is_integer()) {
@@ -1530,7 +1556,7 @@ void TypeFiller::postVisit(RangeFromExpr &node) {
   }
   auto prime = type.get_if<stype::PrimeType>();
   if(!prime) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in RangeFromExpr");
     return;
   }
   if(!prime->is_integer()) {
@@ -1548,7 +1574,7 @@ void TypeFiller::postVisit(RangeToExpr &node) {
   }
   auto prime = type.get_if<stype::PrimeType>();
   if(!prime) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in RangeToExpr");
     return;
   }
   if(!prime->is_integer()) {
@@ -1577,7 +1603,7 @@ void TypeFiller::postVisit(RangeInclusiveExpr &node) {
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in RangeInclusiveExpr");
     return;
   }
   if(!prime1->is_integer()) {
@@ -1595,7 +1621,7 @@ void TypeFiller::postVisit(RangeToInclusiveExpr &node) {
   }
   auto prime = type.get_if<stype::PrimeType>();
   if(!prime) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in RangeToInclusiveExpr");
     return;
   }
   if(!prime->is_integer()) {
@@ -1861,11 +1887,22 @@ void TypeFiller::postVisit(LetStatement &node) {
   }
   if(node.type_opt()) {
     auto type_tag = node.type_opt()->get_type();
-    if(type_tag && type_tag != type) {
+    // (auto deref) allow T <- &(mut) T
+    if(!type_tag) {
+      _recorder->tagged_report(kErrIdentNotResolved, "Type tag not resolved");
+      return;
+    }
+    bool allow_convert = type_tag->is_convertible_from(*type);
+    if(auto r = type.get_if<stype::RefType>();
+      node.expr_opt()->allow_auto_deref() && r && type_tag->is_convertible_from(*r->inner())) {
+      allow_convert = true;
+    }
+    if(!allow_convert) {
       _recorder->tagged_report(kErrTypeNotMatch, "type mismatch inside let statement."
         " Type tag: " + type_tag->to_string() + "; Expr type: " + type->to_string());
       return;
     }
+    type = type_tag;
   }
   bind_pattern(node.pattern().get(), type);
 }

@@ -1162,7 +1162,7 @@ std::unique_ptr<Expression> Parser::parseExpression(TokenType delim) {
 }
 
 std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
-  using Prime = insomnia::rust_shard::stype::TypePrime;
+  using Prime = stype::TypePrime;
   Backtracker tracker(*_ast_ctx);
   auto current_token = _ast_ctx->current();
   _ast_ctx->consume();
@@ -1201,10 +1201,9 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     if(!suffix_str.empty()) {
       REPORT_FAILURE_AND_RETURN("IntegerLiteral: unknown suffix " + std::string(suffix_str));
     }
-    // Treat as i32 as default
     std::int64_t value = std::stoll(value_str);
     tracker.commit();
-    return std::make_unique<LiteralExpression>(Prime::kI32, value);
+    return std::make_unique<LiteralExpression>(value >= 0 ? Prime::kNatI : Prime::kNegI, value);
   }
   case TokenType::kFloatLiteral: {
     auto lexeme = current_token.lexeme;
@@ -1227,9 +1226,8 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     if(!suffix_str.empty()) {
       REPORT_FAILURE_AND_RETURN("FloatingPointLiteral: unknown suffix " + std::string(suffix_str));
     }
-    // Treat as f64 as default
     tracker.commit();
-    return std::make_unique<LiteralExpression>(Prime::kF64, std::stod(value_str));
+    return std::make_unique<LiteralExpression>(Prime::kFloat, std::stod(value_str));
   }
   case TokenType::kStringLiteral: {
     tracker.commit();
@@ -1577,6 +1575,7 @@ std::unique_ptr<LetStatement> Parser::parseLetStatement() {
     e = parseExpression();
     EXPECT_POINTER_NOT_EMPTY(e);
   }
+  MATCH_TOKEN(kSemi);
   tracker.commit();
   return std::make_unique<LetStatement>(std::move(pnta), std::move(t), std::move(e));
 }
