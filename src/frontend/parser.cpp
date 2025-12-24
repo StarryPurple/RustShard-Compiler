@@ -321,7 +321,7 @@ std::unique_ptr<FunctionParamType> Parser::parseFunctionParamType() {
 std::unique_ptr<SelfParam> Parser::parseSelfParam() {
   Backtracker tracker(*_ast_ctx);
   bool is_ref = false;
-  if(CHECK_TOKEN(kRef)) {
+  if(CHECK_TOKEN(kAnd)) { // "&", while kRef is "ref"
     is_ref = true;
     _ast_ctx->consume();
   }

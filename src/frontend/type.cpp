@@ -33,6 +33,14 @@ const std::vector<TypePrime>& type_primes() {
   return table;
 }
 
+size_t TypePtr::Hash::operator()(const TypePtr &tp) const {
+  return tp->hash();
+}
+
+bool TypePtr::Equal::operator()(const TypePtr &A, const TypePtr &B) const {
+  return *A == *B;
+}
+
 bool TypePtr::operator==(const TypePtr &other) const {
   if(!_ptr || !other._ptr) return _ptr == other._ptr;
   return *_ptr == *other._ptr;

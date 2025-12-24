@@ -546,6 +546,7 @@ void ConstEvaluator::postVisit(ArrayExpression &node) {
 /********************* PreTypeFiller ***************************/
 
 const std::string PreTypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
+const std::string PreTypeFiller::kErrTypeInvalid = "Error: Invalid type";
 
 void PreTypeFiller::postVisit(ParenthesizedType &node) {
   auto type = node.type()->get_type();
@@ -619,17 +620,22 @@ void PreTypeFiller::postVisit(TypePath &node) {
     // IDENTIFIER | "super" | "self" | "Self" | "crate"
     auto ident = (*it)->ident_segment()->ident();
     if(ident == "super") {
-      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"super\" is not supported yet");
+      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"super\" is not supported here");
       return;
     } else if(ident == "self") {
-      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"self\" is not supported yet");
+      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"self\" is not supported here");
       return;
     } else if(ident == "Self") {
       // set a temporary SelfType here.
-      node.set_type(_type_pool->make_type<stype::SelfType>());
+      auto self_type = back_scope()->self_type();
+      if(!self_type) {
+        _recorder->tagged_report(kErrTypeInvalid, "Self type is invalid: might not be in impl block");
+        return;
+      }
+      node.set_type(self_type);
       return;
     } else if(ident == "crate") {
-      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"crate\" is not supported yet");
+      _recorder->tagged_report(kErrTypeNotResolved, "keyword \"crate\" is not supported here");
       return;
     }
     auto info = find_symbol(ident);
@@ -733,14 +739,25 @@ void PreTypeFiller::postVisit(TypePath &node) {
 void PreTypeFiller::postVisit(Function &node) {
   ScopedVisitor::postVisit(node); // exit the inner scope first. Add the symbol to the outer scope.
   std::vector<stype::TypePtr> params;
+  stype::TypePtr self_type;
   if(node.params_opt()) {
-    if(node.params_opt()->self_param_opt()) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Self param unimplemented...");
-      return;
+    if(auto &sp = node.params_opt()->self_param_opt()) {
+      if(!back_scope()->self_type()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Self type not resolved or using self param outside impl items");
+        return;
+      }
+      self_type = back_scope()->self_type();
+      if(sp->is_mut() && !sp->is_ref()) {
+        _recorder->tagged_report(kErrTypeInvalid, "\"mut self\" is not supported");
+        return;
+      }
+      if(sp->is_ref()) {
+        self_type = _type_pool->make_type<stype::RefType>(self_type, sp->is_mut());
+      }
     }
     for(auto &param: node.params_opt()->func_params()) {
       if(param->has_name()) {
-        auto ptr = static_cast<FunctionParamPattern *>(param.get());
+        auto ptr = static_cast<FunctionParamPattern*>(param.get());
         auto tp = ptr->type()->get_type();
         if(!tp) {
           _recorder->tagged_report(kErrTypeNotResolved, "Function parameter pattern type tag not resolved");
@@ -748,7 +765,7 @@ void PreTypeFiller::postVisit(Function &node) {
         }
         params.push_back(tp);
       } else {
-        auto ptr = static_cast<FunctionParamType *>(param.get());
+        auto ptr = static_cast<FunctionParamType*>(param.get());
         auto tp = ptr->type()->get_type();
         if(!tp) {
           _recorder->tagged_report(kErrTypeNotResolved, "Function parameter type tag not resolved");
@@ -763,11 +780,10 @@ void PreTypeFiller::postVisit(Function &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Function result type tag not resolved");
     return;
   }
-  auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), std::move(params), ret_type);
+  auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), self_type, std::move(params), ret_type);
   add_symbol(node.ident(), SymbolInfo{
     .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction, .type = func_type
   });
-  node.set_type(func_type); // ...
 }
 
 void PreTypeFiller::postVisit(ConstantItem &node) {
@@ -798,6 +814,42 @@ void PreTypeFiller::postVisit(ConstantItem &node) {
     info->type = tp;
     info->cval = cval;
   }
+}
+
+void PreTypeFiller::postVisit(SelfParam &node) {
+  auto tp = back_scope()->self_type();
+  if(!tp) {
+    _recorder->tagged_report(kErrTypeInvalid, "SelfParam not inside impl block");
+    return;
+  }
+  if(node.is_mut() && !node.is_ref()) {
+    _recorder->tagged_report(kErrTypeInvalid, "SelfParam does not support \"mut self\"");
+    return;
+  }
+  if(node.type_opt()) {
+    _recorder->tagged_report(kErrTypeInvalid, "SelfParam does not support type tag");
+    return;
+  }
+  if(node.is_ref()) tp = _type_pool->make_type<stype::RefType>(tp, node.is_mut());
+  tp = _type_pool->make_type<stype::SelfType>(tp);
+  node.set_type(tp);
+}
+
+void PreTypeFiller::visit(InherentImpl &node) {
+  ScopedVisitor::preVisit(node); // enter impl scope
+
+  node.type()->accept(*this);
+  auto tp = node.type()->get_type();
+  if(!tp) {
+    _recorder->tagged_report(kErrTypeNotResolved, "InherentImpl target type not resolved");
+    return;
+  }
+  back_scope()->set_self_type(tp);
+
+  for(const auto &asso_item: node.asso_items())
+    asso_item->accept(*this);
+
+  ScopedVisitor::postVisit(node); // exit impl scope
 }
 
 
@@ -838,7 +890,8 @@ void TypeFiller::postVisit(Function &node) {
   } else {
     _recorder->tagged_report(kErrTypeNotResolved, "Function failed to deduct its return type");
   }
-
+  // update: already registered in PreTypeFiller
+  /*
   // after checking, register this function type to the symbol table.
   auto func_symbol = find_symbol(node.ident());
   if(!func_symbol) {
@@ -849,6 +902,10 @@ void TypeFiller::postVisit(Function &node) {
   if(auto ps = node.params_opt().get()) {
     if(auto s = ps->self_param_opt().get()) {
       // self param
+      if(s->type_opt()) {
+        _recorder->tagged_report(kErrTypeNotMatch, "No type tags for self param");
+        return;
+      }
       auto pt = _type_pool->make_type<stype::SelfType>();
       if(s->is_ref()) pt = _type_pool->make_type<stype::RefType>(pt, s->is_mut());
       params.push_back(pt);
@@ -870,6 +927,7 @@ void TypeFiller::postVisit(Function &node) {
 
   auto func = _type_pool->make_type<stype::FunctionType>(node.ident(), std::move(params), ret_type);
   func_symbol->type = func;
+  */
 }
 
 void TypeFiller::postVisit(StructStruct &node) {
@@ -976,7 +1034,11 @@ void TypeFiller::postVisit(PathInExpression &node) {
     return;
   }
   auto ident = node.segments().back()->ident_seg()->ident();
-  if(ident == "super" || ident == "self" || ident == "Self" || ident == "crate") {
+  if(ident == "Self") {
+    node.set_type(_type_pool->make_type<stype::SelfType>(stype::TypePtr()));
+    return;
+  }
+  if(ident == "super" || ident == "self" || ident == "crate") {
     _recorder->tagged_report(kErrIdentNotResolved, "Not expected keywords here in end of PathInExpression");
     return;
   }

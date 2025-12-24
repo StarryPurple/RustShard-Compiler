@@ -58,35 +58,39 @@ void Scope::load_builtin(stype::TypePool *pool) {
   static const std::vector<std::pair<StringRef, TypePtr>> builtin_functions = {{
       // fn print(s: &str) -> ()
       "print", pool->make_type<FunctionType>(
-      "print",
-      std::vector{
-        pool->make_type<RefType>(pool->make_type<PrimeType>(TypePrime::kString), false),
+        "print",
+        stype::TypePtr(),
+        std::vector{
+          pool->make_type<RefType>(pool->make_type<PrimeType>(TypePrime::kString), false),
       },
       pool->make_unit())
     }, {
       // fn println(s: &str) -> ()
       "println", pool->make_type<FunctionType>(
-      "println",
-      std::vector{
-        pool->make_type<RefType>(pool->make_type<PrimeType>(TypePrime::kString), false),
+        "println",
+        stype::TypePtr(),
+        std::vector{
+          pool->make_type<RefType>(pool->make_type<PrimeType>(TypePrime::kString), false),
       },
       pool->make_unit()
       )
     }, {
       // fn printInt(n: i32) -> ()
       "printInt", pool->make_type<FunctionType>(
-      "printInt",
-      std::vector{
-        pool->make_type<PrimeType>(TypePrime::kI32),
+        "printInt",
+        stype::TypePtr(),
+        std::vector{
+          pool->make_type<PrimeType>(TypePrime::kI32),
       },
       pool->make_unit()
       )
     }, {
       // fn printlnInt(n: i32) -> ()
       "printlnInt", pool->make_type<FunctionType>(
-      "printlnInt",
-      std::vector{
-        pool->make_type<PrimeType>(TypePrime::kI32),
+        "printlnInt",
+        stype::TypePtr(),
+        std::vector{
+          pool->make_type<PrimeType>(TypePrime::kI32),
       },
       pool->make_unit()
       )
@@ -94,29 +98,33 @@ void Scope::load_builtin(stype::TypePool *pool) {
       // fn getString() -> String
       "getString", pool->make_type<FunctionType>(
         "getString",
+        stype::TypePtr(),
         std::vector<TypePtr>{},
-        pool->make_type<PrimeType>(TypePrime::kString)
+          pool->make_type<PrimeType>(TypePrime::kString)
       )
     }, {
       // fn getInt() -> i32
       "getInt", pool->make_type<FunctionType>(
         "getInt",
+        stype::TypePtr(),
         std::vector<TypePtr>{},
-        pool->make_type<PrimeType>(TypePrime::kI32)
+          pool->make_type<PrimeType>(TypePrime::kI32)
       )
     }, {
       // fn readInt() -> i32
       "readInt", pool->make_type<FunctionType>(
         "readInt",
+        stype::TypePtr(),
         std::vector<TypePtr>{},
-        pool->make_type<PrimeType>(TypePrime::kI32)
+          pool->make_type<PrimeType>(TypePrime::kI32)
       )
     }, {
       // fn exit(code: i32) -> ()
       "exit", pool->make_type<FunctionType>(
-      "exit",
-      std::vector{
-        pool->make_type<PrimeType>(TypePrime::kI32),
+        "exit",
+        stype::TypePtr(),
+        std::vector{
+          pool->make_type<PrimeType>(TypePrime::kI32),
       },
       pool->make_unit()
       )

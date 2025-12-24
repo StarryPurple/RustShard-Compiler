@@ -22,6 +22,10 @@ using usize_t = std::uint64_t;
 class TypePtr {
   std::shared_ptr<ExprType> _ptr;
 public:
+
+  struct Hash { size_t operator()(const TypePtr &tp) const; };
+  struct Equal { bool operator()(const TypePtr &A, const TypePtr &B) const; };
+
   TypePtr() = default;
   explicit TypePtr(std::shared_ptr<ExprType> p): _ptr(std::move(p)) {}
   TypePtr(const TypePtr &) = default;
@@ -284,21 +288,15 @@ class FunctionType : public ExprType {
 public:
   FunctionType(
     StringRef ident,
+    TypePtr self_type,
     std::vector<TypePtr> &&params,
     TypePtr ret_type
   ): ExprType(TypeKind::kFunction), _ident(std::move(ident)),
-  _params(std::move(params)), _ret_type(std::move(ret_type)) {}
-  /*
-  explicit FunctionType(StringRef ident)
-  : ExprType(TypeKind::kFunction), _ident(std::move(ident)) {}
-  void set_details(std::vector<TypePtr> &&params, TypePtr ret_type) {
-    _params = std::move(params);
-    _ret_type = std::move(_ret_type);
-  }
-  */
+  _params(std::move(params)), _ret_type(std::move(ret_type)), _self_type(std::move(self_type)) {}
   StringRef ident() const { return _ident; }
   const std::vector<TypePtr>& params() const { return _params; }
   TypePtr ret_type() const { return _ret_type; }
+  TypePtr self_type() const { return _self_type; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
@@ -308,6 +306,7 @@ private:
   StringRef _ident;
   std::vector<TypePtr> _params;
   TypePtr _ret_type;
+  TypePtr _self_type;
 };
 
 class TraitType : public ExprType {
@@ -421,14 +420,18 @@ protected:
 
 class SelfType : public ExprType {
 public:
-  SelfType(): ExprType(TypeKind::kSelf) {}
+  explicit SelfType(TypePtr inner)
+  : ExprType(TypeKind::kSelf), _inner(std::move(inner)) {}
+  TypePtr inner() const { return _inner; }
+  bool has_inner() const { return static_cast<bool>(_inner); }
+  void set_inner(TypePtr inner) { _inner = std::move(inner); }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
 private:
-  // nothing
+  TypePtr _inner;
 };
 
 class TypePool {

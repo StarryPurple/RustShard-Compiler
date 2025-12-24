@@ -267,6 +267,8 @@ protected:
     }
     return nullptr;
   }
+  Scope* back_scope() { return _scopes.back(); }
+  const Scope* back_scope() const { return _scopes.back(); }
 };
 
 /* Collect struct, enum, const item and type alias.
@@ -464,13 +466,14 @@ private:
  * Fill empty FuncType and EnumType (TraitType?)
  */
 class PreTypeFiller: public ScopedVisitor {
-  static const std::string kErrTypeNotResolved;
+  static const std::string kErrTypeNotResolved, kErrTypeInvalid;
 public:
   PreTypeFiller(ErrorRecorder *recorder, stype::TypePool *type_pool, sconst::ConstPool *const_pool)
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool),
     _evaluator(recorder, type_pool, const_pool) {}
 
   // for function type... and other type filling.
+
 
   void postVisit(ParenthesizedType &node) override;
   void postVisit(TupleType &node) override;
@@ -483,6 +486,10 @@ public:
   // void postVisit(Enumeration &node) override;
 
   void postVisit(ConstantItem &node) override;
+
+  void postVisit(SelfParam &node) override;
+
+  void visit(InherentImpl &node) override;
 
 private:
   ErrorRecorder *_recorder;

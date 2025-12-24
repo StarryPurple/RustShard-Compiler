@@ -34,16 +34,32 @@ namespace insomnia::rust_shard::ast {
 
 class Crate : public BasicNode, public ScopeInfo, public ResolutionInfo {
 public:
-  explicit Crate(std::vector<std::unique_ptr<Item>> &&items) : _items(std::move(items)) {}
+  explicit Crate(std::vector<std::unique_ptr<Item>> &&items) : _items(std::move(items)), _methods() {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::string _ident;
   std::vector<std::unique_ptr<Item>> _items;
+  // method table. self type -> {Function}
+  std::unordered_map<
+    stype::TypePtr,
+    std::unordered_map<StringRef, stype::TypePtr>,
+    stype::TypePtr::Hash,
+    stype::TypePtr::Equal> _methods;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
   EXPOSE_FIELD_CONST_REFERENCE(items, _items)
+  EXPOSE_FIELD_CONST_REFERENCE(methods, _methods);
 
   void set_name(std::string ident) { _ident = std::move(ident); }
+  void add_method(stype::TypePtr self_type, std::shared_ptr<stype::FunctionType> func_type) {
+    if(auto it = _methods.find(self_type); it == _methods.end()) {
+      std::unordered_map<StringRef, stype::TypePtr> inner;
+      inner.emplace(func_type->ident(), func_type);
+      _methods.emplace(self_type, std::move(inner));
+    } else {
+      it->second.emplace(func_type->ident(), func_type);
+    }
+  }
 };
 
 class Item : public BasicNode {
@@ -63,7 +79,7 @@ private:
   // Intentional blank.
 };
 
-class Function : public VisItem, public TypeInfo, public ResolutionInfo {
+class Function : public VisItem, public ResolutionInfo {
 public:
   Function(
     bool is_const,
@@ -142,7 +158,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(type, _type)
 };
 
-class SelfParam : public BasicNode {
+class SelfParam : public BasicNode, public TypeInfo {
 public:
   SelfParam(
     bool is_ref, bool is_mut,
