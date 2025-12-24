@@ -133,7 +133,8 @@ bool RefType::equals_impl(const ExprType &other) const {
 
 bool RefType::convertible_impl(const ExprType &other) const {
   const auto &other_ref = static_cast<const RefType&>(other);
-  if(_ref_is_mut != other_ref.ref_is_mut()) return false;
+  // only forbids &mut T <- &T
+  if(_ref_is_mut && !other_ref.ref_is_mut()) return false;
   return _inner->is_convertible_from(*other_ref.inner());
 }
 

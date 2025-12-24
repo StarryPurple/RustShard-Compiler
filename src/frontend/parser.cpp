@@ -747,20 +747,20 @@ std::unique_ptr<PathIdentSegment> Parser::parsePathIdentSegment() {
 }
 
 enum class Precedence {
-  kLowest = 0,          // termination & default defence
-  kAssignment = 1,      // =, +=, -=, etc.
-  kTypeCast = 2,        // as
-  kRange = 3,           // .., ..=
-  kLogicalOr = 4,       // ||
-  kLogicalAnd = 5,      // &&
-  kComparison = 6,      // ==, !=, >, <, >=, <=
-  kBitwise = 7,         // &, |, ^
-  kShift = 8,           // <<, >>
-  kAdditive = 9,        // +, -
-  kMultiplicative = 10, // *, /, %
-  kPrefix = 11,         // -, !, *, &, &&
-  kCallAndMember = 12,  // (), [], ., ::
-  kHighest = 13,        // defence
+  kLowest,         // termination & default defence
+  kAssignment,     // =, +=, -=, etc.
+  kRange,          // .., ..=
+  kLogicalOr,      // ||
+  kLogicalAnd,     // &&
+  kComparison ,    // ==, !=, >, <, >=, <=
+  kBitwise,        // &, |, ^
+  kShift,          // <<, >>
+  kAdditive,       // +, -
+  kMultiplicative, // *, /, %
+  kTypeCast,       // as
+  kPrefix,         // -, !, *(deref), &, &&
+  kCallAndMember,  // (), [], ., ::
+  kHighest,        // defence
 };
 
 std::map<TokenType, int> prefix_precedence = {

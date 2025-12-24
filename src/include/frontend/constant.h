@@ -48,6 +48,8 @@ public:
 
   const ConstValue& operator*() const { return *_ptr; }
   const ConstValue* operator->() const { return _ptr.get(); }
+  ConstValue& operator*() { return *_ptr; }
+  ConstValue* operator->() { return _ptr.get(); }
 };
 
 struct ConstBase {
@@ -123,6 +125,9 @@ public:
   template <class T> requires const_val_list::contains<T>
   void set(stype::TypePtr type, T &&value) {
     _type = std::move(type); _const_val = std::forward<T>(value);
+  }
+  void set_type(stype::TypePtr type) {
+    _type = std::move(type);
   }
   template <class T> requires const_val_list::contains<T>
   const T& get() const;

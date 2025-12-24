@@ -164,7 +164,8 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
     return;
   }
 
-  if(inner1->type() != inner2->type()) {
+  auto tp1 = inner1->type(), tp2 = inner2->type();
+  if(!tp1->is_convertible_from(*tp2) && !tp2->is_convertible_from(*tp1)) {
     _recorder->tagged_report(kErrTag, "Mismatched types in arithmetic/logical expression");
     return;
   }
@@ -174,6 +175,7 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
   std::visit([&]<typename T01, typename T02>(T01 &&arg1, T02 &&arg2) {
     using T1 = std::decay_t<T01>;
     using T2 = std::decay_t<T02>;
+    auto tp12 = tp1->is_convertible_from(*tp2) ? tp1 : tp2;
     if constexpr(!std::is_same_v<T1, T2>) {
       throw std::runtime_error("Type mismatch not checked, inner design has flaws.");
     } else {
@@ -183,19 +185,19 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
           _recorder->tagged_report(kErrTag, "Division by zero");
           return;
         }
-        auto prime1 = inner1->type().get<stype::PrimeType>()->prime();
+        auto prime12 = tp12.get<stype::PrimeType>()->prime();
         switch(oper) {
         case Operator::kAdd:
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 + arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, prime12, arg1 + arg2));
           break;
         case Operator::kSub:
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 - arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, prime12, arg1 - arg2));
           break;
         case Operator::kMul:
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 * arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, prime12, arg1 * arg2));
           break;
         case Operator::kDiv:
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 / arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, prime12, arg1 / arg2));
           break;
         case Operator::kMod: {
           T val = 0;
@@ -204,18 +206,18 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
           } else {
             val = arg1 % arg2;
           }
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, val));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, prime12, val));
         } break;
         case Operator::kBitwiseAnd:
         case Operator::kBitwiseOr:
         case Operator::kBitwiseXor:
           if constexpr(std::is_integral_v<T>) {
             if(oper == Operator::kBitwiseAnd)
-              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 & arg2));
+              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, prime12, arg1 & arg2));
             else if(oper == Operator::kBitwiseOr)
-              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 | arg2));
+              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, prime12, arg1 | arg2));
             else
-              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), prime1, arg1 ^ arg2));
+              node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, prime12, arg1 ^ arg2));
           } else {
             _recorder->tagged_report(kErrTag, "Bitwise operation on non-integer type");
           }
@@ -226,9 +228,9 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
         }
       } else if constexpr(std::is_same_v<T, bool>) {
         if(oper == Operator::kLogicalAnd) {
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), stype::TypePrime::kBool, arg1 && arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, stype::TypePrime::kBool, arg1 && arg2));
         } else if(oper == Operator::kLogicalOr) {
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(inner1->type(), stype::TypePrime::kBool, arg1 || arg2));
+          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, stype::TypePrime::kBool, arg1 || arg2));
         } else {
           _recorder->tagged_report(kErrTag, "Invalid operator for arithmetic/logical expression (boolean logical)");
         }
@@ -782,7 +784,18 @@ void PreTypeFiller::postVisit(ConstantItem &node) {
       _recorder->report("Invalid constant");
       return;
     }
-    info->type = cval->type();
+    auto tp = node.type()->get_type();
+    if(!tp) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Unresolved constant type tag");
+      return;
+    }
+    if(!tp->is_convertible_from(*cval->type())) {
+      _recorder->report("Const type tag " + tp->to_string()
+        + " not convertible from value type " + cval->type()->to_string());
+      return;
+    }
+    cval->set_type(tp);
+    info->type = tp;
     info->cval = cval;
   }
 }
@@ -998,9 +1011,9 @@ void TypeFiller::postVisit(DereferenceExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in DereferenceExpression");
     return;
   }
-  if(auto inner = type.get_if<stype::RefType>()) {
-    if(inner->ref_is_mut()) node.set_place_mut();
-    type = stype::TypePtr(inner);
+  if(auto r = type.get_if<stype::RefType>()) {
+    if(r->ref_is_mut()) node.set_place_mut();
+    type = stype::TypePtr(r->inner());
   } else {
     _recorder->tagged_report(kErrTypeNotMatch, "Type not a reference");
     return;
@@ -1014,22 +1027,32 @@ void TypeFiller::postVisit(NegationExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in NegationExpression");
     return;
   }
+
   // requires to be a primitive type
   auto prime = type.get_if<stype::PrimeType>();
   if(!prime) {
     _recorder->tagged_report(kErrTypeNotMatch, "Negation on not primitive type");
     return;
   }
-  if(!prime->is_number()) {
-    _recorder->tagged_report(kErrTypeNotMatch, "Negation on non number");
-    return;
-  }
-  if(prime->is_signed()) {
-    _recorder->tagged_report(kErrTypeNotMatch, "Negation on signed integer");
-    return;
-  }
-  if(prime->prime() == stype::TypePrime::kInt) {
-    type = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
+
+  switch(node.oper()) {
+  case Operator::kSub: {
+    if(!prime->is_number()) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Negation on non number");
+      return;
+    }
+    if(prime->is_signed()) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Negation on signed integer");
+      return;
+    }
+  } break;
+  case Operator::kLogicalNot: {
+    if(prime->prime() != stype::TypePrime::kBool) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Logical not on non boolean");
+      return;
+    }
+  } break;
+  default: throw std::runtime_error("Invalid negation operand");
   }
   node.set_type(type);
 }
@@ -1125,7 +1148,7 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in ComparisonExpression");
     return;
   }
-  auto type2 = node.expr1()->get_type();
+  auto type2 = node.expr2()->get_type();
   if(!type2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ComparisonExpression");
     return;
@@ -1162,7 +1185,7 @@ void TypeFiller::postVisit(LazyBooleanExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in LazyBooleanExpression");
     return;
   }
-  auto type2 = node.expr1()->get_type();
+  auto type2 = node.expr2()->get_type();
   if(!type2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in LazyBooleanExpression");
     return;
@@ -1176,7 +1199,7 @@ void TypeFiller::postVisit(LazyBooleanExpression &node) {
   switch(node.oper()) {
   case Operator::kLogicalAnd:
   case Operator::kLogicalOr:
-    if(prime1->prime() == prime2->prime() && prime1->prime() == stype::TypePrime::kBool) {
+    if(prime1->prime() == stype::TypePrime::kBool && prime2->prime() == stype::TypePrime::kBool) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator && ||."
@@ -1223,7 +1246,7 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
   case TypePrime::kF64:
     if(from_prime->is_integer() || from_prime->is_float() ||
       from_prime->prime() == TypePrime::kChar || from_prime->prime() == TypePrime::kBool) {
-      node.set_type(from_type);
+      node.set_type(to_type);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Cannot cast type " + from_prime->to_string()
         + " to integer/floating point type " + to_prime->to_string());
@@ -1335,7 +1358,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in CompoundAssignmentExpression");
     return;
   }
-  auto type2 = node.expr1()->get_type();
+  auto type2 = node.expr2()->get_type();
   if(!type2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in CompoundAssignmentExpression");
     return;
@@ -1362,7 +1385,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   case Operator::kMulAssign:
   case Operator::kDivAssign:
   case Operator::kModAssign:
-    if(prime1->prime() == prime2->prime()) {
+    if(type1->is_convertible_from(*type2)) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator += -= *= /= %=");
@@ -1373,7 +1396,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   case Operator::kBitwiseAndAssign:
   case Operator::kBitwiseOrAssign:
   case Operator::kBitwiseXorAssign:
-    if(prime1->prime() == prime2->prime() && prime1->is_integer()) {
+    if(type1->is_convertible_from(*type2) && prime1->is_integer()) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator &= |= ^=");
@@ -1412,15 +1435,17 @@ void TypeFiller::postVisit(ArrayExpression &node) {
     }
     auto type = arr->expr_list().front()->get_type();
     for(auto &elem: arr->expr_list()) {
-      auto t = elem->get_type();
-      if(!t) {
+      auto t2 = elem->get_type();
+      if(!t2) {
         _recorder->tagged_report(kErrTypeNotResolved, "Type not got in ArrayExpression");
         return;
       }
-      if(type != t) {
-        _recorder->tagged_report(kErrTypeNotMatch, "Array type not same");
+      if(!type->is_convertible_from(*t2) && !t2->is_convertible_from(*type)) {
+        _recorder->tagged_report(kErrTypeNotMatch, "Array type not same: "
+          + type->to_string() + " vs " + t2->to_string());
         return;
       }
+      if(t2->is_convertible_from(*type)) type = t2;
     }
     node.set_type(_type_pool->make_type<stype::ArrayType>(type, arr->expr_list().size()));
   } else {
@@ -1590,33 +1615,33 @@ void TypeFiller::postVisit(CallExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Function call type not resolved");
     return;
   }
-  bool flag = true;
   if(!node.params_opt()) {
     // no params.
     if(!func_type->params().empty()) {
-      flag = false;
+      _recorder->tagged_report(kErrTypeNotMatch, "Function called with param(s), but expected no param");
+      return;
     }
   } else {
     const auto &exprs = node.params_opt()->expr_list();
     const auto &params = func_type->params();
     if(exprs.size() != params.size()) {
-      flag = false;
-    } else {
-      for(int i = 0; i < exprs.size(); ++i) {
-        auto expr_type = exprs[i]->get_type();
-        if(!expr_type) {
-          _recorder->tagged_report(kErrTypeNotResolved, "Function parameter type not resolved");
-          return;
-        }
-        if(!params[i]->is_convertible_from(*expr_type)) {
-          flag = false; break;
-        }
+      _recorder->tagged_report(kErrTypeNotMatch, "Function need " + std::to_string(params.size()) + " parameters,"
+        " but is called with" + std::to_string(exprs.size()) + " parameters");
+      return;
+    }
+    for(int i = 0; i < exprs.size(); ++i) {
+      auto expr_type = exprs[i]->get_type();
+      if(!expr_type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Function parameter type not resolved");
+        return;
+      }
+      if(!params[i]->is_convertible_from(*expr_type)) {
+        _recorder->tagged_report(kErrTypeNotMatch, "Function type \"" + func_type->to_string() + "\" expected "
+          + std::to_string(i) + "-th param to be " + params[i]->to_string() + ", but received "
+          + expr_type->to_string());
+        return;
       }
     }
-  }
-  if(!flag) {
-    _recorder->tagged_report(kErrTypeNotMatch, "Function expect no param");
-    return;
   }
   node.set_type(func_type->ret_type());
 }
@@ -1714,7 +1739,7 @@ void TypeFiller::postVisit(RangeExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in RangeExpr");
     return;
   }
-  auto type2 = node.expr1()->get_type();
+  auto type2 = node.expr2()->get_type();
   if(!type2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in RangeExpr");
     return;
@@ -1779,7 +1804,7 @@ void TypeFiller::postVisit(RangeInclusiveExpr &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in RangeInclusiveExpr");
     return;
   }
-  auto type2 = node.expr1()->get_type();
+  auto type2 = node.expr2()->get_type();
   if(!type2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in RangeInclusiveExpr");
     return;
@@ -1865,7 +1890,7 @@ void TypeFiller::postVisit(BlockExpression &node) {
 }
 
 void TypeFiller::postVisit(FunctionBodyExpr &node) {
-  stype::TypePtr rt;
+  stype::TypePtr rt; // the type that "return"s imply
   if(!node.func_returns().empty()) {
     // check whether these return types cooperate
     auto &opt = node.func_returns().front()->expr_opt();
@@ -1892,7 +1917,7 @@ void TypeFiller::postVisit(FunctionBodyExpr &node) {
     rt = t;
   }
 
-  stype::TypePtr st;
+  stype::TypePtr st; // the type that tail expression implies. Might be NeverType due to control flow termination.
   if(!node.stmts_opt()) {
     st = _type_pool->make_unit();
   } else {
@@ -1925,17 +1950,13 @@ void TypeFiller::postVisit(FunctionBodyExpr &node) {
     // no return expr.
     node.set_type(st);
   } else {
-    // st == never: see rt.
-    // st != never: st shall be equal to rt.
-    if(st == _type_pool->make_never()) {
-      node.set_type(rt);
-    } else if(st != rt) {
+    if(!rt->is_coercible_from(*st) && !st->is_coercible_from(*rt)) {
       _recorder->tagged_report(kErrTypeNotMatch, "Func eval type not the same with return type tag: "
         "eval type: "+ st->to_string() + ", return type tag: " + rt->to_string());
       return;
-    } else {
-      node.set_type(st);
     }
+    if(rt->is_coercible_from(*st)) st = rt;
+    node.set_type(st);
   }
 }
 
@@ -1958,10 +1979,12 @@ void TypeFiller::postVisit(InfiniteLoopExpression &node) {
       _recorder->tagged_report(kErrTypeNotResolved, "Result type not got in InfiniteLoopExpression");
       return;
     }
-    if(t != type) {
-      _recorder->tagged_report(kErrTypeNotMatch, "InfiniteLoopExpression has different return type");
+    if(!t->is_coercible_from(*type) && !type->is_coercible_from(*t)) {
+      _recorder->tagged_report(kErrTypeNotMatch, "InfiniteLoopExpression has different return type. "
+        + t->to_string() + " vs " + type->to_string());
       return;
     }
+    if(t->is_coercible_from(*type)) type = t;
   }
   if(node.block_expr()->always_returns())
     node.set_always_returns();
@@ -1996,10 +2019,12 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
       _recorder->tagged_report(kErrTypeNotResolved, "Result type not got in PredicateLoopExpression");
       return;
     }
-    if(t != type) {
-      _recorder->tagged_report(kErrTypeNotMatch, "PredicateLoopExpression has different return type");
+    if(!t->is_coercible_from(*type) && !type->is_coercible_from(*t)) {
+      _recorder->tagged_report(kErrTypeNotMatch, "PredicateLoopExpression has different return type. "
+        + t->to_string() + " vs " + type->to_string());
       return;
     }
+    if(t->is_coercible_from(*type)) type = t;
   }
 
   if(node.cond()->expr()->always_returns() || node.block_expr()->always_returns())
@@ -2038,15 +2063,10 @@ void TypeFiller::postVisit(IfExpression &node) {
         success = false;
         return;
       }
-      if(type == _type_pool->make_never()) {
-        type = t2;
-      } else if(t2 != _type_pool->make_never()) {
-        if(!type->is_convertible_from(*t2) && !t2->is_convertible_from(*type)) {
-          success = false;
-        } else {
-          if(t2->is_convertible_from(*type)) type = t2;
-        }
+      if(!type->is_coercible_from(*t2) && !t2->is_coercible_from(*type)) {
+        success = false;
       }
+      if(t2->is_coercible_from(*type)) type = t2;
       if(!arg->always_returns()) always_returns = false;
     } else {
       always_returns = false; // no else/elif, impossible to be always returning

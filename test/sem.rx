@@ -1,46 +1,80 @@
 /*
 Test Package: Semantic-1
-Test Target: basic
+Test Target: misc
 Author: Wenxin Zheng
 Time: 2025-08-08
 Verdict: Success
-Comment: basic test, quickselect algorithm for finding median
+Comment: misc test, stack implementation with array
 */
 
-fn partition(a: &mut [i32; 11], low: usize, high: usize) -> usize {
-    let pivot: i32 = a[high];
-    let mut i: usize = low;
-    let mut j: usize = low;
-    while (j < high) {
-        if (a[j] < pivot) {
-            let tmp = a[i];
-            a[i] = a[j];
-            a[j] = tmp;
-            i += 1;
+// Stack implementation using array
+// Basic stack operations: push, pop, peek, is_empty
+struct Stack {
+    data: [i32; 50],
+    top: i32,
+}
+
+impl Stack {
+    fn new() -> Stack {
+        Stack {
+            data: [0; 50],
+            top: -1,
         }
-        j += 1;
     }
-    let tmp: i32 = a[i];
-    a[i] = a[high];
-    a[high] = tmp;
-    i
+
+    fn is_empty(&self) -> bool {
+        return self.top == -1;
+    }
+
+    fn push(&mut self, value: i32) -> bool {
+        if (self.top >= 49) {
+            return false; // Stack overflow
+        }
+        self.top += 1;
+        self.data[self.top as usize] = value;
+        return true;
+    }
+
+    fn pop(&mut self) -> i32 {
+        if (self.is_empty()) {
+            return -1; // Stack underflow
+        }
+        let value = self.data[self.top as usize];
+        self.top -= 1;
+        return value;
+    }
+
+    fn peek(&self) -> i32 {
+        if (self.is_empty()) {
+            return -1;
+        }
+        return self.data[self.top as usize];
+    }
 }
-fn select_k(a: &mut [i32; 11], low: usize, high: usize, k: usize) -> i32 {
-    if (low == high) {
-        return a[low];
-    }
-    let p = partition(a, low, high);
-    if (k == p) {
-        a[p]
-    } else if (k < p) {
-        select_k(a, low, p - 1, k)
-    } else {
-        select_k(a, p + 1, high, k)
-    }
-}
+
 fn main() {
-    let mut values: [i32; 11] = [42, 7, 13, 99, 5, 8, 1, 77, 56, 23, 11];
-    let median_index: usize = 5usize;
-    let median: i32 = select_k(&mut values, 0, 10, median_index);
+    let mut stack = Stack::new();
+    let n = readInt();
+
+    let mut i = 0;
+    while (i < n) {
+        let operation = readInt();
+
+        if (operation == 1) {
+            // Push operation
+            let value = readInt();
+            stack.push(value);
+        } else if (operation == 2) {
+            // Pop operation
+            let value = stack.pop();
+            printInt(value);
+        } else if (operation == 3) {
+            // Peek operation
+            let value = stack.peek();
+            printInt(value);
+        }
+
+        i += 1;
+    }
     exit(0);
 }

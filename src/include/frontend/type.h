@@ -116,9 +116,18 @@ public:
   // whether this_tp <- from_tp is allowed.
   // 1. tt = ft
   // 2. i32... <- NatI, u32... <- NatI, i32... <- NegI, f32... <- Float
-  // 4. recursive
+  // 3. recursive
   bool is_convertible_from(const ExprType &other) const {
     auto lhs = remove_alias(), rhs = other.remove_alias();
+    if(lhs->kind() != rhs->kind()) return false;
+    return lhs->convertible_impl(*rhs);
+  }
+  // whether this_tp <- from_tp is allowed.
+  // Alongside the 3 conditions of is_convertible_from, we also allow:
+  // 4. from_tp == NeverType.
+  bool is_coercible_from(const ExprType &other) const {
+    auto lhs = remove_alias(), rhs = other.remove_alias();
+    if(rhs->kind() == TypeKind::kNever) return true;
     if(lhs->kind() != rhs->kind()) return false;
     return lhs->convertible_impl(*rhs);
   }
