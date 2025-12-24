@@ -545,6 +545,66 @@ void ConstEvaluator::postVisit(ArrayExpression &node) {
 
 const std::string PreTypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
 
+void PreTypeFiller::postVisit(ParenthesizedType &node) {
+  auto type = node.type()->get_type();
+  if(!type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside parenthesis");
+    return;
+  }
+  node.set_type(type);
+}
+
+void PreTypeFiller::postVisit(TupleType &node) {
+  std::vector<stype::TypePtr> types;
+  for(const auto &item: node.types()) {
+    auto type = item->get_type();
+    if(!type) {
+      _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside tuple");
+      return;
+    }
+    types.push_back(type);
+  }
+  node.set_type(_type_pool->make_type<stype::TupleType>(std::move(types)));
+}
+
+void PreTypeFiller::postVisit(ReferenceType &node) {
+  auto type = node.type_no_bounds()->get_type();
+  if(!type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside reference chain");
+    return;
+  }
+  type = _type_pool->make_type<stype::RefType>(type, node.is_mut());
+  node.set_type(type);
+}
+
+void PreTypeFiller::postVisit(ArrayType &node) {
+  auto type = node.type()->get_type();
+  if(!type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside array");
+    return;
+  }
+  _evaluator.constEvaluate(*node.const_expr(), _scopes);
+  if(!node.const_expr()->has_constant()) {
+    _recorder->tagged_report(kErrTypeNotResolved, "non-evaluable array length");
+    return;
+  }
+  auto cval = node.const_expr()->cval()->get_if<sconst::ConstPrime>();
+  if(!cval) {
+    _recorder->tagged_report(kErrTypeNotResolved, "array length not a primitive type");
+    return;
+  }
+  auto length_opt = cval->get_usize();
+  if(!length_opt) {
+    _recorder->tagged_report(kErrTypeNotResolved, "array length not an index value");
+    return;
+  }
+  node.set_type(_type_pool->make_type<stype::ArrayType>(std::move(type), *length_opt));
+}
+
+void PreTypeFiller::postVisit(SliceType &node) {
+  _recorder->tagged_report(kErrTypeNotResolved, "Slice not supported yet");
+}
+
 void PreTypeFiller::postVisit(TypePath &node) {
   // Enumeration/crate/generics
   // Since we only support single crate / no generic / simple enumeration,
@@ -869,66 +929,27 @@ void TypeFiller::postVisit(TypeAlias &node) {
 }
 
 void TypeFiller::postVisit(ParenthesizedType &node) {
-  auto type = node.type()->get_type();
-  if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside parenthesis");
-    return;
-  }
-  node.set_type(type);
+  // done in PreTypeFiller.
 }
 
 void TypeFiller::postVisit(TupleType &node) {
-  std::vector<stype::TypePtr> types;
-  for(const auto &item: node.types()) {
-    auto type = item->get_type();
-    if(!type) {
-      _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside tuple");
-      return;
-    }
-    types.push_back(type);
-  }
-  node.set_type(_type_pool->make_type<stype::TupleType>(std::move(types)));
+  // done in PreTypeFiller.
 }
 
 void TypeFiller::postVisit(ReferenceType &node) {
-  auto type = node.type_no_bounds()->get_type();
-  if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside reference chain");
-    return;
-  }
-  type = _type_pool->make_type<stype::RefType>(type, node.is_mut());
-  node.set_type(type);
+  // done in PreTypeFiller.
 }
 
 void TypeFiller::postVisit(ArrayType &node) {
-  auto type = node.type()->get_type();
-  if(!type) {
-    _recorder->tagged_report(kErrTypeNotResolved, "unresolved variable type inside array");
-    return;
-  }
-  _evaluator.constEvaluate(*node.const_expr(), _scopes);
-  if(!node.const_expr()->has_constant()) {
-    _recorder->tagged_report(kErrTypeNotResolved, "non-evaluable array length");
-    return;
-  }
-  auto cval = node.const_expr()->cval()->get_if<sconst::ConstPrime>();
-  if(!cval) {
-    _recorder->tagged_report(kErrTypeNotResolved, "array length not a primitive type");
-    return;
-  }
-  auto length_opt = cval->get_usize();
-  if(!length_opt) {
-    _recorder->tagged_report(kErrTypeNotResolved, "array length not an index value");
-    return;
-  }
-  node.set_type(_type_pool->make_type<stype::ArrayType>(std::move(type), *length_opt));
+  // done in PreTypeFiller
 }
 
 void TypeFiller::postVisit(SliceType &node) {
-  _recorder->tagged_report(kErrTypeNotResolved, "Slice not supported yet");
+  // done in PreTypeFiller.
 }
 
 void TypeFiller::postVisit(TypePath &node) {
+  // done in PreTypeFiller.
   // not needed.
 }
 
@@ -1225,13 +1246,14 @@ void TypeFiller::preVisit(AssignmentExpression &node) {
 }
 
 void TypeFiller::postVisit(AssignmentExpression &node) {
-  if(!node.expr1()->is_place_mut()) {
-    _recorder->tagged_report(kErrNoPlaceMutability, "To type not a place mutable type");
-    return;
-  }
   const auto to_type = node.expr1()->get_type();
   if(!to_type) {
     _recorder->tagged_report(kErrTypeNotResolved, "To type not got in AssignmentExpression");
+    return;
+  }
+  if(!node.expr1()->is_place_mut()) {
+    _recorder->tagged_report(kErrNoPlaceMutability, "To type not place mutable. To type: "
+      + to_type->to_string());
     return;
   }
   const auto from_type = node.expr2()->get_type();
@@ -1431,6 +1453,12 @@ void TypeFiller::postVisit(ArrayExpression &node) {
   }
 }
 
+void TypeFiller::preVisit(IndexExpression &node) {
+  if(node.is_lside()) {
+    node.expr_obj()->set_lside();
+  }
+}
+
 void TypeFiller::postVisit(IndexExpression &node) {
   auto expr_type = node.expr_obj()->get_type();
   if(!expr_type) {
@@ -1445,21 +1473,24 @@ void TypeFiller::postVisit(IndexExpression &node) {
 
   // out_of_range is a runtime problem
   auto index_primitive = index_type.get_if<stype::PrimeType>();
-  if(!index_primitive || !(index_primitive->is_unsigned() || index_primitive->prime() == stype::TypePrime::kInt)) {
+  // In fact, we need an is_unsigned() here...
+  // But the testcases say we shall allow i32. Make them happy.
+  if(!index_primitive || !(index_primitive->is_integer() || index_primitive->prime() == stype::TypePrime::kInt)) {
     _recorder->tagged_report(kErrTypeNotMatch, "Index not an integer");
     return;
   }
 
-  // (mut) [T; N] -> &(mut) T (lside), T (rside)
-  // (mut) &[T; N] -> &T (lside), T (rside)
-  // (mut) &mut [T; N] -> &mut T (lside), T (rside)
+  // (mut1) [T; N] -> (mut1) &(mut1) T (lside), T (rside)
+  // (mut1) &(mut2) [T; N] -> (mut2) &(mut2) T (lside), T (rside)
 
   if(auto a = expr_type.get_if<stype::ArrayType>()) {
     auto tp = a->inner();
-    bool is_mut = node.expr_obj()->is_place_mut();
-    if(node.is_lside()) tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
+    if(node.is_lside()) {
+      bool is_mut1 = node.expr_obj()->is_place_mut();
+      if(is_mut1) node.set_place_mut();
+      tp = _type_pool->make_type<stype::RefType>(tp, is_mut1);
+    }
     node.set_type(tp);
-    if(is_mut) node.set_place_mut();
     return;
   }
   if(auto r = expr_type.get_if<stype::RefType>()) {
@@ -1470,10 +1501,12 @@ void TypeFiller::postVisit(IndexExpression &node) {
       return;
     }
     auto tp = a->inner();
-    bool is_mut = r->ref_is_mut();
-    if(node.is_lside()) tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
+    bool is_mut2 = r->ref_is_mut();
+    if(node.is_lside()) {
+      if(is_mut2) node.set_place_mut();
+      tp = _type_pool->make_type<stype::RefType>(tp, is_mut2);
+    }
     node.set_type(tp);
-    if(is_mut && node.is_place_mut()) node.set_place_mut();
     return;
   }
   _recorder->tagged_report(kErrTypeNotMatch, "Indexing target not an array or array reference: "
@@ -1593,39 +1626,68 @@ void TypeFiller::postVisit(MethodCallExpression &node) {
   return;
 }
 
+void TypeFiller::preVisit(FieldExpression &node) {
+  if(node.is_lside()) {
+    node.expr()->set_lside();
+  }
+}
+
 void TypeFiller::postVisit(FieldExpression &node) {
   // auto deref may happen here.
   auto type = node.expr()->get_type();
   if(!type) {
     _recorder->tagged_report(kErrTypeNotResolved, "FieldExpression type not resolved");
+    return;
   }
   // Assume struct type T has a field x: X, consider a.x with different type of a.
   // allowed circumstances:
-  // a: T, a.x: X
-  // a: mut T, a.x: mut X
-  // a: &T, a.x: &X
-  // a: mut &T, a.x: &X
-  // a: &mut T, a.x: &X
+  // a: T, a.x: X (must rside)
+  // a: mut T, a.x: mut X (lside), X (rside)
+  // a: (mut) &T, a.x: X (must rside)
+  // a: (mut) &mut T, a.x: &mut X (lside), X (rside)
   if(auto s = type.get_if<stype::StructType>()) {
-    // a: (mut) T, a.x: (mut) X
     auto it = s->fields().find(node.ident());
     if(it == s->fields().end()) {
       _recorder->tagged_report(kErrIdentNotResolved, "Field ident not found in type " + s->to_string());
       return;
     }
+    // a: T, a.x: X (must rside)
+    // a: mut T, a.x: mut X (lside), X (rside)
     node.set_type(it->second);
-    if(node.expr()->is_place_mut()) node.set_place_mut();
+    if(node.expr()->is_place_mut()) {
+      node.set_place_mut();
+    } else if(node.is_lside()) {
+      _recorder->tagged_report(kErrNoPlaceMutability, "Field mutability violated");
+      return;
+    }
     return;
   }
   if(auto r = type.get_if<stype::RefType>()) {
-    // a: (mut) &(mut) T, a.x: &T
     if(auto s = r->inner().get_if<stype::StructType>()) {
       auto it = s->fields().find(node.ident());
       if(it == s->fields().end()) {
-        _recorder->tagged_report(kErrIdentNotResolved, "Field ident not found in type " + s->to_string());
+        std::string msg;
+        for(auto &[k, v]: s->fields()) msg = msg + k + " ";
+        _recorder->tagged_report(kErrIdentNotResolved, "Field ident not found in type " + s->to_string()
+          + ". Target: " + std::string(node.ident()) + ", candidates: " + msg);
         return;
       }
-      node.set_type(_type_pool->make_type<stype::RefType>(it->second, false));
+      // a: (mut) &T, a.x: X (must rside)
+      // a: (mut) &mut T, a.x: mut &mut X (lside), X (rside)
+      if(r->ref_is_mut()) {
+        if(node.is_lside()) {
+          node.set_place_mut();
+          node.set_type(_type_pool->make_type<stype::RefType>(it->second, true));
+        } else {
+          node.set_type(it->second);
+        }
+      } else {
+        if(node.is_lside()) {
+          _recorder->tagged_report(kErrNoPlaceMutability, "Field mutability violated");
+          return;
+        }
+        node.set_type(it->second);
+      }
       return;
     }
   }
@@ -1868,7 +1930,8 @@ void TypeFiller::postVisit(FunctionBodyExpr &node) {
     if(st == _type_pool->make_never()) {
       node.set_type(rt);
     } else if(st != rt) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Func tail expr type not the same with return type");
+      _recorder->tagged_report(kErrTypeNotMatch, "Func eval type not the same with return type tag: "
+        "eval type: "+ st->to_string() + ", return type tag: " + rt->to_string());
       return;
     } else {
       node.set_type(st);

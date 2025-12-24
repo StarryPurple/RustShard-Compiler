@@ -470,7 +470,15 @@ public:
   : _recorder(recorder), _type_pool(type_pool), _const_pool(const_pool),
     _evaluator(recorder, type_pool, const_pool) {}
 
+  // for function type... and other type filling.
+
+  void postVisit(ParenthesizedType &node) override;
+  void postVisit(TupleType &node) override;
+  void postVisit(ReferenceType &node) override;
+  void postVisit(ArrayType &node) override;
+  void postVisit(SliceType &node) override;
   void postVisit(TypePath &node) override;
+
   void postVisit(Function &node) override;
   // void postVisit(Enumeration &node) override;
 
@@ -505,6 +513,8 @@ public:
   // assignment: bind lvalue property
   void preVisit(AssignmentExpression &node) override;
   void preVisit(CompoundAssignmentExpression &node) override;
+  void preVisit(IndexExpression &node) override;
+  void preVisit(FieldExpression &node) override;
 
   // register parameter
   void visit(Function &node) override;

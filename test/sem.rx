@@ -4,41 +4,43 @@ Test Target: basic
 Author: Wenxin Zheng
 Time: 2025-08-08
 Verdict: Success
-Comment: basic test, matrix multiplication with type alias and trace calculation
+Comment: basic test, quickselect algorithm for finding median
 */
 
-const N: usize = 3;
-fn mul(a: &[[i32; N]; N], b: &[[i32; N]; N]) -> [[i32; N]; N] {
-    let mut out: [[i32; N]; N] = [[0i32; N]; N];
-    let mut i: usize = 0usize;
-    while (i < N) {
-        let mut j: usize = 0usize;
-        while (j < N) {
-            let mut k: usize = 0usize;
-            let mut cell: i32 = 0i32;
-            while (k < N) {
-                cell += a[i][k] * b[k][j];
-                k += 1;
-            }
-            out[i][j] = cell;
-            j += 1;
+fn partition(a: &mut [i32; 11], low: usize, high: usize) -> usize {
+    let pivot: i32 = a[high];
+    let mut i: usize = low;
+    let mut j: usize = low;
+    while (j < high) {
+        if (a[j] < pivot) {
+            let tmp = a[i];
+            a[i] = a[j];
+            a[j] = tmp;
+            i += 1;
         }
-        i += 1;
+        j += 1;
     }
-    out
+    let tmp: i32 = a[i];
+    a[i] = a[high];
+    a[high] = tmp;
+    i
+}
+fn select_k(a: &mut [i32; 11], low: usize, high: usize, k: usize) -> i32 {
+    if (low == high) {
+        return a[low];
+    }
+    let p = partition(a, low, high);
+    if (k == p) {
+        a[p]
+    } else if (k < p) {
+        select_k(a, low, p - 1, k)
+    } else {
+        select_k(a, p + 1, high, k)
+    }
 }
 fn main() {
-    let a: [[i32; N]; N] = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
-    let b: [[i32; N]; N] = [[9, 8, 7], [6, 5, 4], [3, 2, 1]];
-    let c: [[i32; N]; N] = mul(&a, &b);
-    let d: [[i32; N]; N] = mul(&c, &a);
-    let e: [[i32; N]; N] = mul(&d, &b);
-    let mut trace: i32 = 0i32;
-    let mut idx: usize = 0usize;
-    while (idx < N) {
-        trace += e[idx][idx];
-        idx += 1;
-    }
-    let result: i32 = trace;
+    let mut values: [i32; 11] = [42, 7, 13, 99, 5, 8, 1, 77, 56, 23, 11];
+    let median_index: usize = 5usize;
+    let median: i32 = select_k(&mut values, 0, 10, median_index);
     exit(0);
 }

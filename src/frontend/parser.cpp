@@ -1515,17 +1515,28 @@ std::unique_ptr<Statements> Parser::parseStatements() {
     if(!s) break;
     ss.push_back(std::move(s));
   }
-  std::unique_ptr<ExpressionWithoutBlock> ewb;
-  if(!CHECK_TOKEN(kRCurlyBrace)) {
-    ewb = std::unique_ptr<ExpressionWithoutBlock>(dynamic_cast<ExpressionWithoutBlock*>(parseExpression().release()));
-    EXPECT_POINTER_NOT_EMPTY(ewb);
+  std::unique_ptr<Expression> eb;
+  if(CHECK_TOKEN(kRCurlyBrace)) {
+    // the last statement might be an expression
+    // must be a ExpressionStatement - ExpressionWithBlock without semi comma
+    // check it.
+    if(ss.empty()) REPORT_FAILURE_AND_RETURN("An empty block");
+    if(auto ptr = dynamic_cast<ExpressionStatement*>(ss.back().get()); ptr && !ptr->has_semi()) {
+      eb = ptr->release_expr();
+      ss.pop_back();
+    }
+  } else {
+    // The rest is not a statement
+    // consider a tail expression
+    eb = parseExpression();
+    EXPECT_POINTER_NOT_EMPTY(eb);
   }
   EXPECT_TOKEN(kRCurlyBrace);
-  if(ss.empty() && !ewb) {
+  if(ss.empty() && !eb) {
     REPORT_FAILURE_AND_RETURN("An empty block");
   }
   tracker.commit();
-  return std::make_unique<Statements>(std::move(ss), std::move(ewb));
+  return std::make_unique<Statements>(std::move(ss), std::move(eb));
 }
 
 std::unique_ptr<Statement> Parser::parseStatement() {
@@ -1590,13 +1601,18 @@ std::unique_ptr<ExpressionStatement> Parser::parseExpressionStatement() {
   Backtracker tracker(*_ast_ctx);
   auto expr = parseExpression();
   EXPECT_POINTER_NOT_EMPTY(expr);
+  bool has_semi = false;
   if(expr->has_block()) {
-    if(CHECK_TOKEN(kSemi)) _ast_ctx->consume();
+    if(CHECK_TOKEN(kSemi)) {
+      _ast_ctx->consume();
+      has_semi = true;
+    }
   } else {
     MATCH_TOKEN(kSemi);
+    has_semi = true;
   }
   tracker.commit();
-  return std::make_unique<ExpressionStatement>(std::move(expr));
+  return std::make_unique<ExpressionStatement>(std::move(expr), has_semi);
 }
 
 std::unique_ptr<LoopExpression> Parser::parseLoopExpression() {

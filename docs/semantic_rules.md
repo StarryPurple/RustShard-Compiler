@@ -388,8 +388,12 @@ BlockExpression ->
 #    | ExpressionWithoutBlock
 #    | Statement+ ExpressionWithoutBlock
 
+# Statements ->
+#     Statement* ExpressionWithoutBlock?
+
+# In fact, the testcases requires:
 Statements ->
-    Statement* ExpressionWithoutBlock?
+    Statement* Expression? (Emptyness not allowed)
 
 Statement ->
       EmptyStatement

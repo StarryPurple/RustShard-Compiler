@@ -1159,15 +1159,15 @@ class Statements : public BasicNode {
 public:
   Statements(
     std::vector<std::unique_ptr<Statement>> &&stmts,
-    std::unique_ptr<ExpressionWithoutBlock> &&expr_no_block_opt
-  ): _stmts(std::move(stmts)), _expr_no_block_opt(std::move(expr_no_block_opt)) {}
+    std::unique_ptr<Expression> &&expr_opt
+  ): _stmts(std::move(stmts)), _expr_opt(std::move(expr_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::vector<std::unique_ptr<Statement>> _stmts;
-  std::unique_ptr<ExpressionWithoutBlock> _expr_no_block_opt;
+  std::unique_ptr<Expression> _expr_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(stmts, _stmts)
-  EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_no_block_opt)
+  EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_opt)
 };
 
 class Statement : public BasicNode {
@@ -1218,13 +1218,17 @@ public:
 class ExpressionStatement : public Statement {
 public:
   explicit ExpressionStatement(
-    std::unique_ptr<Expression> &&expr
-  ): _expr(std::move(expr)) {}
+    std::unique_ptr<Expression> &&expr,
+    bool has_semi
+  ): _expr(std::move(expr)), _has_semi(has_semi) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Expression> _expr;
+  bool _has_semi;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
+  EXPOSE_FIELD_CONST_REFERENCE(has_semi, _has_semi)
+  std::unique_ptr<Expression> release_expr() { return std::move(_expr); }
 };
 
 class LoopExpression : public ExpressionWithBlock {
