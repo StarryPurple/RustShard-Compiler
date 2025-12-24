@@ -951,7 +951,8 @@ void TypeFiller::postVisit(PathInExpression &node) {
     _recorder->tagged_report(kErrIdentNotResolved, "Identifier not found as the end of PathInExpression");
     return;
   }
-  if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable || info->kind == SymbolKind::kFunction) {
+  if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable || info->kind == SymbolKind::kFunction
+    || info->kind == SymbolKind::kStruct) {
     if(info->kind == SymbolKind::kVariable && info->is_place_mut) node.set_place_mut();
     node.set_type(info->type);
   } else {
@@ -1002,16 +1003,28 @@ void TypeFiller::postVisit(NegationExpression &node) {
     _recorder->tagged_report(kErrTypeNotMatch, "Negation on non number");
     return;
   }
-  if(prime->is_unsigned() && prime->prime() != stype::TypePrime::kNatI) {
-    _recorder->tagged_report(kErrTypeNotMatch, "Negation on unsigned integer");
+  if(prime->is_signed()) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Negation on signed integer");
     return;
   }
-  if(prime->prime() == stype::TypePrime::kNatI) {
-    type = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kNegI);
-  } else if(prime->prime() == stype::TypePrime::kNegI) {
-    type = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kNatI);
+  if(prime->prime() == stype::TypePrime::kInt) {
+    type = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
   }
-  node.set_type(std::move(type));
+  node.set_type(type);
+}
+
+std::shared_ptr<stype::PrimeType> combine_prime(
+  const std::shared_ptr<stype::PrimeType> &p1, const std::shared_ptr<stype::PrimeType> &p2) {
+  if(p1 == p2) return p1;
+  if(p1->prime() == stype::TypePrime::kInt)
+    return p2->is_integer() ? p2 : nullptr;
+  if(p2->prime() == stype::TypePrime::kInt)
+    return p1->is_integer() ? p1 : nullptr;
+  if(p1->prime() == stype::TypePrime::kFloat)
+    return p2->is_float() ? p2 : nullptr;
+  if(p2->prime() == stype::TypePrime::kFloat)
+    return p1->is_float() ? p1 : nullptr;
+  return nullptr;
 }
 
 void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
@@ -1020,7 +1033,7 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 1 not got in ArithmeticOrLogicalExpression");
     return;
   }
-  auto type2 = node.expr1()->get_type();
+  auto type2 = node.expr2()->get_type();
   if(!type2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ArithmeticOrLogicalExpression");
     return;
@@ -1037,7 +1050,8 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
     if(prime1->is_signed() && prime2->is_unsigned()) {
       node.set_type(type1);
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator << >>");
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator << >>."
+        " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
       return;
     }
     break;
@@ -1047,10 +1061,11 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
   case Operator::kMul:
   case Operator::kDiv:
   case Operator::kMod:
-    if(prime1->prime() == prime2->prime()) {
-      node.set_type(type1);
+    if(auto p = combine_prime(prime1, prime2)) {
+      node.set_type(stype::TypePtr(p));
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator + - * / %");
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator + - * / %."
+        " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
       return;
     }
     break;
@@ -1058,20 +1073,22 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
   case Operator::kBitwiseAnd:
   case Operator::kBitwiseOr:
   case Operator::kBitwiseXor:
-    if(prime1->prime() == prime2->prime() && prime1->is_integer()) {
-      node.set_type(type1);
+    if(auto p = combine_prime(prime1, prime2); p && prime1->is_integer()) {
+      node.set_type(stype::TypePtr(p));
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator & | ^");
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator & | ^."
+        " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
       return;
     }
     break;
 
   case Operator::kLogicalAnd:
   case Operator::kLogicalOr:
-    if(prime1->prime() == prime2->prime() && prime1->prime() == stype::TypePrime::kBool) {
-      node.set_type(type1);
+    if(prime1->prime() == stype::TypePrime::kBool && prime2->prime() == stype::TypePrime::kBool) {
+      node.set_type(type2);
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator && ||");
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator && ||."
+        " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
       return;
     }
     break;
@@ -1105,10 +1122,11 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
   case Operator::kLt:
   case Operator::kGe:
   case Operator::kLe:
-    if(prime1->prime() == prime2->prime()) {
+    if(combine_prime(prime1, prime2)) {
       node.set_type(_type_pool->make_type<stype::PrimeType>(stype::TypePrime::kBool));
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator < > <= >= == !=");
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator < > <= >= == !=."
+        " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
       return;
     }
     break;
@@ -1136,11 +1154,12 @@ void TypeFiller::postVisit(LazyBooleanExpression &node) {
   }
   switch(node.oper()) {
   case Operator::kLogicalAnd:
-  case Operator::kLogicalNot:
+  case Operator::kLogicalOr:
     if(prime1->prime() == prime2->prime() && prime1->prime() == stype::TypePrime::kBool) {
       node.set_type(type1);
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator && ||");
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator && ||."
+        " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
       return;
     }
     break;
@@ -1181,11 +1200,12 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
   case TypePrime::kUSize:
   case TypePrime::kF32:
   case TypePrime::kF64:
-    if(from_prime->is_integer() || from_prime->is_floating_point() ||
+    if(from_prime->is_integer() || from_prime->is_float() ||
       from_prime->prime() == TypePrime::kChar || from_prime->prime() == TypePrime::kBool) {
       node.set_type(from_type);
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Cannot cast type to integer/floating point");
+      _recorder->tagged_report(kErrTypeNotMatch, "Cannot cast type " + from_prime->to_string()
+        + " to integer/floating point type " + to_prime->to_string());
       return;
     }
     break;
@@ -1193,7 +1213,8 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
     if(from_prime->prime() == to_prime->prime()) {
       node.set_type(to_type);
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform type cast to other type");
+      _recorder->tagged_report(kErrTypeNotMatch, "Cannot perform type cast from " + from_prime->to_string()
+        + " to " + to_prime->to_string());
       return;
     }
   }
@@ -1258,12 +1279,30 @@ void TypeFiller::visit(Function &node) {
     if(node.params_opt()) for(auto &param: node.params_opt()->func_params()) {
       if(param->has_name()) {
         auto ptr = static_cast<FunctionParamPattern*>(param.get());
-        bind_pattern(ptr->pattern().get(), ptr->type()->get_type());
+        bind_pattern(ptr->pattern().get(), ptr->type()->get_type(), false); // to be considered...
       }
     }
   }
 
   if(node.body_opt()) node.body_opt()->accept(*this);
+
+  // check
+  if(node.body_opt()) do {
+    auto tp = node.body_opt()->get_type();
+    if(!tp) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Function return type not resolved");
+      break;
+    }
+    auto info = find_symbol(node.ident());
+    auto f = info->type.get_if<stype::FunctionType>(); // ignore empty check...
+    if(!f->ret_type()->is_convertible_from(*tp)
+      || (tp.get_if<stype::NeverType>() && !f->ret_type().get_if<stype::NeverType>())) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Function return type not match with its body."
+        " tag: " + f->ret_type()->to_string() + ", evaluation: " + tp->to_string());
+      break;
+    }
+  } while(false);
+
   ScopedVisitor::postVisit(node);
 }
 
@@ -1406,19 +1445,19 @@ void TypeFiller::postVisit(IndexExpression &node) {
 
   // out_of_range is a runtime problem
   auto index_primitive = index_type.get_if<stype::PrimeType>();
-  if(!index_primitive || !index_primitive->is_integer()) {
+  if(!index_primitive || !(index_primitive->is_unsigned() || index_primitive->prime() == stype::TypePrime::kInt)) {
     _recorder->tagged_report(kErrTypeNotMatch, "Index not an integer");
     return;
   }
 
-  // (mut) [T; N] -> &(mut) T
-  // (mut) &[T; N] -> &T
-  // (mut) &mut [T; N] -> &mut T
+  // (mut) [T; N] -> &(mut) T (lside), T (rside)
+  // (mut) &[T; N] -> &T (lside), T (rside)
+  // (mut) &mut [T; N] -> &mut T (lside), T (rside)
 
   if(auto a = expr_type.get_if<stype::ArrayType>()) {
     auto tp = a->inner();
     bool is_mut = node.expr_obj()->is_place_mut();
-    tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
+    if(node.is_lside()) tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
     node.set_type(tp);
     if(is_mut) node.set_place_mut();
     return;
@@ -1432,7 +1471,7 @@ void TypeFiller::postVisit(IndexExpression &node) {
     }
     auto tp = a->inner();
     bool is_mut = r->ref_is_mut();
-    tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
+    if(node.is_lside()) tp = _type_pool->make_type<stype::RefType>(tp, is_mut);
     node.set_type(tp);
     if(is_mut && node.is_place_mut()) node.set_place_mut();
     return;
@@ -1460,8 +1499,56 @@ void TypeFiller::postVisit(TupleIndexingExpression &node) {
 }
 
 void TypeFiller::postVisit(StructExpression &node) {
-  throw std::runtime_error("StructExpression not supported");
-  return;
+  // check given type
+  auto struct_tp = node.path()->get_type();
+  if(!struct_tp) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Struct constructor name not a recognized struct");
+    return;
+  }
+  auto stp = struct_tp.get_if<stype::StructType>();
+  if(!stp) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Struct constructor name not a recognized struct");
+    return;
+  }
+  std::unordered_map<StringRef, stype::TypePtr> counter;
+  for(auto &[ident, t]: stp->fields()) {
+    counter.emplace(ident, t);
+  }
+  if(node.fields_opt()) for(auto &field: node.fields_opt()->fields()) {
+    if(field->is_named()) {
+      auto ptr = static_cast<NamedStructExprField*>(field.get());
+      auto expr_tp = ptr->expr()->get_type();
+      if(!expr_tp) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Field expr type not resolved");
+        return;
+      }
+      auto it = counter.find(ptr->ident());
+      if(it == counter.end()) {
+        _recorder->tagged_report(kErrIdentNotResolved, "Not a recognized field identifier");
+        return;
+      }
+      if(!it->second) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Duplicated field identifier");
+        return;
+      }
+      if(!it->second->is_convertible_from(*expr_tp)) {
+        _recorder->tagged_report(kErrTypeNotMatch, "Field type not match");
+        return;
+      }
+      it->second = stype::TypePtr();
+    } else {
+      auto ptr = static_cast<IndexStructExprField*>(field.get());
+      _recorder->report("IndexStructExprField not supported");
+      return;
+    }
+  }
+  for(auto &[ident, t]: counter) {
+    if(t) {
+      _recorder->report("StructExpression did not initialize all fields");
+      return;
+    }
+  }
+  node.set_type(struct_tp);
 }
 
 void TypeFiller::postVisit(CallExpression &node) {
@@ -1507,8 +1594,43 @@ void TypeFiller::postVisit(MethodCallExpression &node) {
 }
 
 void TypeFiller::postVisit(FieldExpression &node) {
-  throw std::runtime_error("FieldExpression not supported");
-  return;
+  // auto deref may happen here.
+  auto type = node.expr()->get_type();
+  if(!type) {
+    _recorder->tagged_report(kErrTypeNotResolved, "FieldExpression type not resolved");
+  }
+  // Assume struct type T has a field x: X, consider a.x with different type of a.
+  // allowed circumstances:
+  // a: T, a.x: X
+  // a: mut T, a.x: mut X
+  // a: &T, a.x: &X
+  // a: mut &T, a.x: &X
+  // a: &mut T, a.x: &X
+  if(auto s = type.get_if<stype::StructType>()) {
+    // a: (mut) T, a.x: (mut) X
+    auto it = s->fields().find(node.ident());
+    if(it == s->fields().end()) {
+      _recorder->tagged_report(kErrIdentNotResolved, "Field ident not found in type " + s->to_string());
+      return;
+    }
+    node.set_type(it->second);
+    if(node.expr()->is_place_mut()) node.set_place_mut();
+    return;
+  }
+  if(auto r = type.get_if<stype::RefType>()) {
+    // a: (mut) &(mut) T, a.x: &T
+    if(auto s = r->inner().get_if<stype::StructType>()) {
+      auto it = s->fields().find(node.ident());
+      if(it == s->fields().end()) {
+        _recorder->tagged_report(kErrIdentNotResolved, "Field ident not found in type " + s->to_string());
+        return;
+      }
+      node.set_type(_type_pool->make_type<stype::RefType>(it->second, false));
+      return;
+    }
+  }
+  _recorder->tagged_report(kErrTypeNotMatch, "Unsupported field operation in type " + type->to_string()
+    + ": can't be seen as a struct");
 }
 
 void TypeFiller::postVisit(ContinueExpression &node) {
@@ -1649,6 +1771,7 @@ void TypeFiller::postVisit(BlockExpression &node) {
   // If there's a never-type, terminate and set the block as never-type.
   if(!node.stmts_opt()) {
     node.set_type(_type_pool->make_unit());
+    ScopedVisitor::postVisit(node); // exit this scope
     return;
   }
   bool always_returns = false;
@@ -1665,6 +1788,7 @@ void TypeFiller::postVisit(BlockExpression &node) {
     t = node.stmts_opt()->expr_opt()->get_type();
     if(!t) {
       _recorder->tagged_report(kErrTypeNotResolved, "Expr stmt exists, but type not got");
+      ScopedVisitor::postVisit(node); // exit this scope
       return;
     }
     if(node.stmts_opt()->expr_opt()->always_returns())
@@ -1675,6 +1799,7 @@ void TypeFiller::postVisit(BlockExpression &node) {
     node.set_always_returns();
   }
   node.set_type(t);
+  ScopedVisitor::postVisit(node); // exit this scope
 }
 
 void TypeFiller::postVisit(FunctionBodyExpr &node) {
@@ -1694,11 +1819,13 @@ void TypeFiller::postVisit(FunctionBodyExpr &node) {
         _recorder->tagged_report(kErrIdentNotResolved, "Return type not resolved");
         return;
       }
-      if(t != t2) {
+
+      if(!t->is_convertible_from(*t2) && !t2->is_convertible_from(*t)) {
         _recorder->tagged_report(kErrTypeNotMatch, "FunctionBodyExpression has different return type,"
           " " + t->to_string() + " vs " + t2->to_string());
         return;
       }
+      if(t2->is_convertible_from(*t)) t = t2;
     }
     rt = t;
   }
@@ -1782,12 +1909,12 @@ void TypeFiller::postVisit(PredicateLoopExpression &node) {
   // while ... {}
   auto cond_type = node.cond()->expr()->get_type();
   if(!cond_type) {
-    _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
+    _recorder->tagged_report(kErrTypeNotResolved, "While condition type not resolved");
     return;
   }
   auto cond_prime = cond_type.get_if<stype::PrimeType>();
   if(!cond_prime || cond_prime->prime() != stype::TypePrime::kBool) {
-    _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
+    _recorder->tagged_report(kErrTypeNotMatch, "While condition must be a boolean, not " + cond_type->to_string());
     return;
   }
 
@@ -1821,12 +1948,12 @@ void TypeFiller::postVisit(IfExpression &node) {
   // if ... {} else ...
   auto cond_type = node.cond()->expr()->get_type();
   if(!cond_type) {
-    _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
+    _recorder->tagged_report(kErrTypeNotResolved, "If condition type not resolved");
     return;
   }
   auto cond_prime = cond_type.get_if<stype::PrimeType>();
   if(!cond_prime || cond_prime->prime() != stype::TypePrime::kBool) {
-    _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean");
+    _recorder->tagged_report(kErrTypeNotMatch, "If condition must be a boolean, not " + cond_type->to_string());
     return;
   }
 
@@ -1843,12 +1970,19 @@ void TypeFiller::postVisit(IfExpression &node) {
     using T = std::decay_t<T0>;
     if constexpr(!std::is_same_v<T, std::monostate>) {
       // T = std::unique_ptr<BlockExpression/IfExpression>
-      auto t = arg->get_type();
-      if(!t) success = false;
-      if(type == _type_pool->make_never()) {
-        type = t;
-      } else if(t != _type_pool->make_never() && t != type) {
+      stype::TypePtr t2 = arg->get_type();
+      if(!t2) {
         success = false;
+        return;
+      }
+      if(type == _type_pool->make_never()) {
+        type = t2;
+      } else if(t2 != _type_pool->make_never()) {
+        if(!type->is_convertible_from(*t2) && !t2->is_convertible_from(*type)) {
+          success = false;
+        } else {
+          if(t2->is_convertible_from(*type)) type = t2;
+        }
       }
       if(!arg->always_returns()) always_returns = false;
     } else {
@@ -1904,35 +2038,43 @@ void TypeFiller::postVisit(LetStatement &node) {
     }
     type = type_tag;
   }
-  bind_pattern(node.pattern().get(), type);
+  // with no tag, we need to determine a specific type (kInt -> kI32, kFloat -> kF32)
+  bind_pattern(node.pattern().get(), type, !node.type_opt());
 }
 
-void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, stype::TypePtr type) {
+void TypeFiller::bind_pattern(PatternNoTopAlt *pattern, stype::TypePtr type, bool need_spec) {
   if(auto ident_p = dynamic_cast<IdentifierPattern*>(pattern)) {
-    bind_identifier(ident_p, type);
+    bind_identifier(ident_p, type, need_spec);
   } else if(auto wildcard_p = dynamic_cast<WildcardPattern*>(pattern)) {
-    bind_wildcard(wildcard_p, type);
+    bind_wildcard(wildcard_p, type, need_spec);
   } else if(auto tuple_p = dynamic_cast<TuplePattern*>(pattern)) {
-    bind_tuple(tuple_p, type);
+    bind_tuple(tuple_p, type, need_spec);
   } else if(auto struct_p = dynamic_cast<StructPattern*>(pattern)) {
-    bind_struct(struct_p, type);
+    bind_struct(struct_p, type, need_spec);
   } else if(auto ref_p = dynamic_cast<ReferencePattern*>(pattern)) {
-    bind_reference(ref_p, type);
+    bind_reference(ref_p, type, need_spec);
   } else if(auto literal_p = dynamic_cast<LiteralPattern*>(pattern)) {
-    bind_literal(literal_p, type);
+    bind_literal(literal_p, type, need_spec);
   } else if(auto grouped_p = dynamic_cast<GroupedPattern*>(pattern)) {
-    bind_grouped(grouped_p, type);
+    bind_grouped(grouped_p, type, need_spec);
   } else if(auto slice_p = dynamic_cast<SlicePattern*>(pattern)) {
-    bind_slice(slice_p, type);
+    bind_slice(slice_p, type, need_spec);
   } else if(auto path_p = dynamic_cast<PathPattern*>(pattern)) {
-    bind_path(path_p, type);
+    bind_path(path_p, type, need_spec);
   } else {
     _recorder->tagged_report(kErrTypeNotResolved, "Unsupported type in resolution");
   }
 }
 
-void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type, bool need_spec) {
   // always success
+
+  if(need_spec) {
+    if(auto p = type.get_if<stype::PrimeType>()) {
+      if(p->prime() == stype::TypePrime::kInt) type = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
+      if(p->prime() == stype::TypePrime::kFloat) type = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kF32);
+    }
+  }
 
   // r: R
   // let mut x = r, x: mut R
@@ -1954,12 +2096,12 @@ void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type
   }
 }
 
-void TypeFiller::bind_wildcard(WildcardPattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_wildcard(WildcardPattern *pattern, stype::TypePtr type, bool need_spec) {
   // always success
   // nothing to do here
 }
 
-void TypeFiller::bind_tuple(TuplePattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_tuple(TuplePattern *pattern, stype::TypePtr type, bool need_spec) {
   // let (a, b) = (1, 2) -> a = 1, b = 2
   auto t = type.get_if<stype::TupleType>();
   if(!t) {
@@ -1979,11 +2121,11 @@ void TypeFiller::bind_tuple(TuplePattern *pattern, stype::TypePtr type) {
       _recorder->report("Type binding failed: multi patterns not supported yet");
       return;
     }
-    bind_pattern(sub_pattern->patterns()[i].get(), sub_type);
+    bind_pattern(sub_pattern->patterns()[i].get(), sub_type, need_spec);
   }
 }
 
-void TypeFiller::bind_struct(StructPattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_struct(StructPattern *pattern, stype::TypePtr type, bool need_spec) {
   // let Type { x1: x, y1: y } = Type{ x1: 1, y1: 2, z1: 3 } -> x = 1, y = 2
   auto t = type.get_if<stype::StructType>();
   if(!t) {
@@ -2002,14 +2144,14 @@ void TypeFiller::bind_struct(StructPattern *pattern, stype::TypePtr type) {
     }
     auto id = field->ident();
     if(auto it = t->fields().find(id); it != t->fields().end()) {
-      bind_pattern(sub_pattern->patterns().front().get(), it->second);
+      bind_pattern(sub_pattern->patterns().front().get(), it->second, need_spec);
     } else {
       _recorder->report("Type binding failed: field identifier not exist");
     }
   }
 }
 
-void TypeFiller::bind_reference(ReferencePattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_reference(ReferencePattern *pattern, stype::TypePtr type, bool need_spec) {
   if(auto r = type.get_if<stype::RefType>(); !r) {
     _recorder->report("Type binding failed: not a reference");
     return;
@@ -2018,27 +2160,27 @@ void TypeFiller::bind_reference(ReferencePattern *pattern, stype::TypePtr type) 
     return;
   }
   auto sub_pattern = pattern->pattern().get();
-  bind_pattern(sub_pattern, type);
+  bind_pattern(sub_pattern, type, need_spec);
 }
 
-void TypeFiller::bind_literal(LiteralPattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_literal(LiteralPattern *pattern, stype::TypePtr type, bool need_spec) {
   _recorder->report("Type binding error: literal pattern not supported in let statement");
 }
 
-void TypeFiller::bind_grouped(GroupedPattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_grouped(GroupedPattern *pattern, stype::TypePtr type, bool need_spec) {
   auto sub_pattern = pattern->pattern().get();
   if(sub_pattern->patterns().size() != 1) {
     _recorder->report("Type binding failed: multi pattern not supported yet");
     return;
   }
-  bind_pattern(sub_pattern->patterns().front().get(), type);
+  bind_pattern(sub_pattern->patterns().front().get(), type, need_spec);
 }
 
-void TypeFiller::bind_slice(SlicePattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_slice(SlicePattern *pattern, stype::TypePtr type, bool need_spec) {
   _recorder->report("Slice Not supported yet");
 }
 
-void TypeFiller::bind_path(PathPattern *pattern, stype::TypePtr type) {
+void TypeFiller::bind_path(PathPattern *pattern, stype::TypePtr type, bool need_spec) {
   _recorder->report("Type binding error: path pattern not supported in let statement");
 }
 

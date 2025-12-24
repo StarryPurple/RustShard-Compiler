@@ -13,8 +13,8 @@ StringRef prime_strs(TypePrime prime) {
     {TypePrime::kU32, "u32"}, {TypePrime::kU64, "u64"},
     {TypePrime::kISize, "isize"}, {TypePrime::kUSize, "usize"},
     {TypePrime::kF32, "f32"}, {TypePrime::kF64, "f64"},
-    {TypePrime::kString, "str"}, {TypePrime::kNatI, "NatI"},
-    {TypePrime::kNegI, "NegI"}, {TypePrime::kFloat, "float"},
+    {TypePrime::kString, "str"}, {TypePrime::kInt, "int"},
+    {TypePrime::kFloat, "float"},
   };
   return table.at(prime);
 }
@@ -61,12 +61,10 @@ bool PrimeType::equals_impl(const ExprType &other) const {
 
 bool PrimeType::convertible_impl(const ExprType &other) const {
   const auto &other_prime = static_cast<const PrimeType&>(other);
-  // i32... <- NatI, u32... <- NatI, i32... <- NegI, f32... <- Float
   auto pf = other_prime.prime();
   if(pf == _prime) return true;
-  if(pf == TypePrime::kNatI && is_integer()) return true;
-  if(pf == TypePrime::kNegI && is_signed()) return true;
-  if(pf == TypePrime::kFloat && is_floating_point()) return true;
+  if(pf == TypePrime::kInt && is_integer()) return true;
+  if(pf == TypePrime::kFloat && is_float()) return true;
   return false;
 }
 
@@ -87,8 +85,7 @@ std::string PrimeType::to_string() const {
   case TypePrime::kF32: return "f32";
   case TypePrime::kF64: return "f64";
   case TypePrime::kString: return "String";
-  case TypePrime::kNatI: return "NatI";
-  case TypePrime::kNegI: return "NegI";
+  case TypePrime::kInt: return "Int";
   case TypePrime::kFloat: return "Float";
   }
   return "unrecognized prime";

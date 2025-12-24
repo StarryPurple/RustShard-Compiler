@@ -59,7 +59,7 @@ enum class TypePrime {
   kU8, kU16, kU32, kU64, kUSize, // order related with PrimitiveType.
   kF32, kF64,
   kString,
-  kNatI, kNegI, kFloat, // undetermined types: Natural number, negative integer, floating point.
+  kInt, kFloat, // undetermined types: Integer, floating point.
 };
 
 StringRef prime_strs(TypePrime prime);
@@ -116,7 +116,6 @@ public:
   // whether this_tp <- from_tp is allowed.
   // 1. tt = ft
   // 2. i32... <- NatI, u32... <- NatI, i32... <- NegI, f32... <- Float
-  // 3. ft = never_tp
   // 4. recursive
   bool is_convertible_from(const ExprType &other) const {
     auto lhs = remove_alias(), rhs = other.remove_alias();
@@ -144,17 +143,19 @@ public:
   bool is_integer() const {
     return is_signed() || is_unsigned();
   }
-  bool is_floating_point() const {
+  bool is_float() const {
     return _prime == TypePrime::kF32 || _prime == TypePrime::kF64;
   }
   bool is_signed() const {
     return _prime == TypePrime::kI8 || _prime == TypePrime::kI16 || _prime == TypePrime::kI32
-      || _prime == TypePrime::kI64 || _prime == TypePrime::kISize || _prime == TypePrime::kNatI
-      || _prime == TypePrime::kNegI;
+      || _prime == TypePrime::kI64 || _prime == TypePrime::kISize;
   }
   bool is_unsigned() const {
     return _prime == TypePrime::kU8 || _prime == TypePrime::kU16 || _prime == TypePrime::kU32
-      || _prime == TypePrime::kU64 || _prime == TypePrime::kUSize || _prime == TypePrime::kNatI;
+      || _prime == TypePrime::kU64 || _prime == TypePrime::kUSize;
+  }
+  bool is_undetermined() const {
+    return _prime == TypePrime::kInt || _prime == TypePrime::kFloat;
   }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;

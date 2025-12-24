@@ -18,6 +18,7 @@
 #define RUST_SHARD_FRONTEND_AST_H
 
 #include <memory>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -42,7 +43,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
   EXPOSE_FIELD_CONST_REFERENCE(items, _items)
 
-  void set_name(std::string ident) { _ident = ident; }
+  void set_name(std::string ident) { _ident = std::move(ident); }
 };
 
 class Item : public BasicNode {
@@ -901,6 +902,7 @@ public:
 class StructExprField : public BasicNode {
 public:
   StructExprField() = default;
+  virtual bool is_named() const = 0;
 private:
   // Intentional blank.
 };
@@ -912,6 +914,7 @@ public:
     std::unique_ptr<Expression> &&expr
   ): _ident(ident), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool is_named() const override { return true; }
 private:
   StringRef _ident;
   std::unique_ptr<Expression> _expr;
@@ -927,6 +930,7 @@ public:
     std::unique_ptr<Expression> &&expr
   ): _index(index), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool is_named() const override { return false; }
 private:
   std::uint64_t _index;
   std::unique_ptr<Expression> _expr;

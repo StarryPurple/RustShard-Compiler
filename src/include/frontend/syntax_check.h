@@ -201,6 +201,8 @@ public:
   }
   void postVisit(Crate &node) override {
     _scopes.pop_back();
+    if(!_scopes.empty())
+      throw std::runtime_error("Scope management broke down");
   }
   void preVisit(BlockExpression &node) override {
     _scopes.push_back(node.scope().get());
@@ -513,16 +515,16 @@ public:
   // helpers
   // If type not match, binding will fail
 
-  void bind_pattern(PatternNoTopAlt *pattern, stype::TypePtr type);
-  void bind_identifier(IdentifierPattern *pattern, stype::TypePtr type);
-  void bind_wildcard(WildcardPattern *pattern, stype::TypePtr type);
-  void bind_tuple(TuplePattern *pattern, stype::TypePtr type);
-  void bind_struct(StructPattern *pattern, stype::TypePtr type);
-  void bind_reference(ReferencePattern *pattern, stype::TypePtr type);
-  void bind_literal(LiteralPattern *pattern, stype::TypePtr type);
-  void bind_grouped(GroupedPattern *pattern, stype::TypePtr type);
-  void bind_slice(SlicePattern *pattern, stype::TypePtr type);
-  void bind_path(PathPattern *pattern, stype::TypePtr type);
+  void bind_pattern(PatternNoTopAlt *pattern, stype::TypePtr type, bool need_spec);
+  void bind_identifier(IdentifierPattern *pattern, stype::TypePtr type, bool need_spec);
+  void bind_wildcard(WildcardPattern *pattern, stype::TypePtr type, bool need_spec);
+  void bind_tuple(TuplePattern *pattern, stype::TypePtr type, bool need_spec);
+  void bind_struct(StructPattern *pattern, stype::TypePtr type, bool need_spec);
+  void bind_reference(ReferencePattern *pattern, stype::TypePtr type, bool need_spec);
+  void bind_literal(LiteralPattern *pattern, stype::TypePtr type, bool need_spec);
+  void bind_grouped(GroupedPattern *pattern, stype::TypePtr type, bool need_spec);
+  void bind_slice(SlicePattern *pattern, stype::TypePtr type, bool need_spec);
+  void bind_path(PathPattern *pattern, stype::TypePtr type, bool need_spec);
 
 
 private:

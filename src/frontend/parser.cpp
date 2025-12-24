@@ -1203,7 +1203,7 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     }
     std::int64_t value = std::stoll(value_str);
     tracker.commit();
-    return std::make_unique<LiteralExpression>(value >= 0 ? Prime::kNatI : Prime::kNegI, value);
+    return std::make_unique<LiteralExpression>(Prime::kInt, value);
   }
   case TokenType::kFloatLiteral: {
     auto lexeme = current_token.lexeme;
@@ -1452,7 +1452,10 @@ std::unique_ptr<CallParams> Parser::parseCallParams() {
   while(!CHECK_TOKEN(kRParenthesis)) {
     bool has_comma = CHECK_TOKEN(kComma);
     if(has_comma) _ast_ctx->consume();
-    if(CHECK_TOKEN(kRParenthesis)) break;;
+    if(CHECK_TOKEN(kRParenthesis)) {
+      if(has_comma) REPORT_FAILURE_AND_RETURN("Extra comma at end of CallParams");
+      break;
+    }
     if(!has_comma) REPORT_MISSING_TOKEN_AND_RETURN(kComma);
     auto expr = parseExpression();
     EXPECT_POINTER_NOT_EMPTY(expr);
@@ -1465,6 +1468,7 @@ std::unique_ptr<CallParams> Parser::parseCallParams() {
 std::unique_ptr<ContinueExpression> Parser::parseContinueExpression() {
   Backtracker tracker(*_ast_ctx);
   MATCH_TOKEN(kContinue);
+  EXPECT_TOKEN(kSemi); // I'm not sure.
   tracker.commit();
   return std::make_unique<ContinueExpression>();
 }
@@ -1473,6 +1477,7 @@ std::unique_ptr<BreakExpression> Parser::parseBreakExpression() {
   Backtracker tracker(*_ast_ctx);
   MATCH_TOKEN(kBreak);
   auto expr_opt = parseExpression();
+  EXPECT_TOKEN(kSemi); // I'm not sure.
   tracker.commit();
   return std::make_unique<BreakExpression>(std::move(expr_opt));
 }
@@ -1481,6 +1486,7 @@ std::unique_ptr<ReturnExpression> Parser::parseReturnExpression() {
   Backtracker tracker(*_ast_ctx);
   MATCH_TOKEN(kReturn);
   auto expr_opt = parseExpression();
+  EXPECT_TOKEN(kSemi); // I'm not sure.
   tracker.commit();
   return std::make_unique<ReturnExpression>(std::move(expr_opt));
 }
