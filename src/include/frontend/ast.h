@@ -42,7 +42,7 @@ private:
   // method table. self type -> {Function}
   std::unordered_map<
     stype::TypePtr,
-    std::unordered_map<StringRef, stype::TypePtr>,
+    std::unordered_map<StringRef, std::shared_ptr<stype::FunctionType>>,
     stype::TypePtr::Hash,
     stype::TypePtr::Equal> _methods;
 public:
@@ -51,14 +51,21 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(methods, _methods);
 
   void set_name(std::string ident) { _ident = std::move(ident); }
-  void add_method(stype::TypePtr self_type, std::shared_ptr<stype::FunctionType> func_type) {
-    if(auto it = _methods.find(self_type); it == _methods.end()) {
-      std::unordered_map<StringRef, stype::TypePtr> inner;
+  void add_asso_method(stype::TypePtr caller_type, std::shared_ptr<stype::FunctionType> func_type) {
+    if(auto it = _methods.find(caller_type); it == _methods.end()) {
+      std::unordered_map<StringRef, std::shared_ptr<stype::FunctionType>> inner;
       inner.emplace(func_type->ident(), func_type);
-      _methods.emplace(self_type, std::move(inner));
+      _methods.emplace(caller_type, std::move(inner));
     } else {
       it->second.emplace(func_type->ident(), func_type);
     }
+  }
+  std::shared_ptr<stype::FunctionType> find_asso_method(stype::TypePtr caller_type, StringRef func_ident) {
+    auto it = _methods.find(caller_type);
+    if(it == _methods.end()) return nullptr;
+    auto it2 = it->second.find(func_ident);
+    if(it2 == it->second.end()) return nullptr;
+    return it2->second;
   }
 };
 

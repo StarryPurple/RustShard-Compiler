@@ -1651,7 +1651,9 @@ std::unique_ptr<PredicateLoopExpression> Parser::parsePredicateLoopExpression() 
 std::unique_ptr<IfExpression> Parser::parseIfExpression() {
   Backtracker tracker(*_ast_ctx);
   MATCH_TOKEN(kIf);
+  MATCH_TOKEN(kLParenthesis);
   auto c = parseConditions();
+  MATCH_TOKEN(kLParenthesis);
   EXPECT_POINTER_NOT_EMPTY(c);
   auto be = parseBlockExpression();
   EXPECT_POINTER_NOT_EMPTY(be);

@@ -70,12 +70,8 @@ public:
   const SymbolInfo* find_symbol(const StringRef &ident) const;
   bool set_type(const StringRef &ident, stype::TypePtr type);
 
-  stype::TypePtr self_type() const { return _self_type; }
-  void set_self_type(stype::TypePtr self_type) { _self_type = std::move(self_type); }
-
 private:
   std::unordered_map<StringRef, SymbolInfo> _symbol_set;
-  stype::TypePtr _self_type;
 };
 
 class ScopeInfo {

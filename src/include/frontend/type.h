@@ -288,15 +288,15 @@ class FunctionType : public ExprType {
 public:
   FunctionType(
     StringRef ident,
-    TypePtr self_type,
+    TypePtr self_type_opt,
     std::vector<TypePtr> &&params,
     TypePtr ret_type
   ): ExprType(TypeKind::kFunction), _ident(std::move(ident)),
-  _params(std::move(params)), _ret_type(std::move(ret_type)), _self_type(std::move(self_type)) {}
+  _params(std::move(params)), _ret_type(std::move(ret_type)), _self_type_opt(std::move(self_type_opt)) {}
   StringRef ident() const { return _ident; }
   const std::vector<TypePtr>& params() const { return _params; }
   TypePtr ret_type() const { return _ret_type; }
-  TypePtr self_type() const { return _self_type; }
+  TypePtr self_type_opt() const { return _self_type_opt; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
 protected:
@@ -306,7 +306,7 @@ private:
   StringRef _ident;
   std::vector<TypePtr> _params;
   TypePtr _ret_type;
-  TypePtr _self_type;
+  TypePtr _self_type_opt;
 };
 
 class TraitType : public ExprType {

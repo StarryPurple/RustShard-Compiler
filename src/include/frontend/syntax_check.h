@@ -198,11 +198,13 @@ public:
 
   void preVisit(Crate &node) override {
     _scopes.push_back(node.scope().get());
+    _cur_crate = &node;
   }
   void postVisit(Crate &node) override {
     _scopes.pop_back();
     if(!_scopes.empty())
       throw std::runtime_error("Scope management broke down");
+    _cur_crate = nullptr;
   }
   void preVisit(BlockExpression &node) override {
     _scopes.push_back(node.scope().get());
@@ -230,25 +232,36 @@ public:
   }
   void preVisit(InherentImpl &node) override {
     _scopes.push_back(node.scope().get());
+    _impl_type = node.type()->get_type();
+    _is_in_asso_block = true;
   }
   void postVisit(InherentImpl &node) override {
     _scopes.pop_back();
+    _impl_type = stype::TypePtr();
+    _is_in_asso_block = false;
   }
   void preVisit(TraitImpl &node) override {
     _scopes.push_back(node.scope().get());
+    _is_in_asso_block = true;
   }
   void postVisit(TraitImpl &node) override {
     _scopes.pop_back();
+    _is_in_asso_block = false;
   }
   void preVisit(Trait &node) override {
     _scopes.push_back(node.scope().get());
+    _is_in_asso_block = true;
   }
   void postVisit(Trait &node) override {
     _scopes.pop_back();
+    _is_in_asso_block = false;
   }
 
 protected:
   std::vector<Scope*> _scopes;
+  // "Self" that we are currently working on. valid in impl/trait.
+  // set in PreTypeFiller.
+  stype::TypePtr _impl_type;
 
   SymbolInfo* add_symbol(StringRef ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
@@ -267,8 +280,21 @@ protected:
     }
     return nullptr;
   }
-  Scope* back_scope() { return _scopes.back(); }
-  const Scope* back_scope() const { return _scopes.back(); }
+
+
+  bool is_in_asso_block() const { return _is_in_asso_block; }
+
+  void add_asso_method(stype::TypePtr caller_type, std::shared_ptr<stype::FunctionType> func_type) {
+    _cur_crate->add_asso_method(std::move(caller_type), std::move(func_type));
+  }
+  std::shared_ptr<stype::FunctionType> find_asso_method(stype::TypePtr self_type, StringRef func_ident) {
+    return _cur_crate->find_asso_method(std::move(self_type), func_ident);
+  }
+
+private:
+  Crate *_cur_crate = nullptr;
+  // inherent impl, trait impl, trait
+  bool _is_in_asso_block = false;
 };
 
 /* Collect struct, enum, const item and type alias.
@@ -549,6 +575,13 @@ private:
   stype::TypePool *_type_pool;
   sconst::ConstPool *_const_pool;
   ConstEvaluator _evaluator;
+
+  enum class SelfState {
+    kInvalid,
+    kNormal,
+    kRef,
+    kRefMut,
+  } _self_state = SelfState::kInvalid;
 };
 
 #undef ISM_RS_POST_VISIT_OVERRIDE_METHOD

@@ -1,30 +1,16 @@
 /*
 Test Package: Semantic-1
-Test Target: autoref
+Test Target: expr
 Author: Ruitian Wang
-Time: 2025-09-25
-Verdict: Pass
-Comment: Auto referencing: calling method requiring &self on value
+Time: 2025-08-08
+Verdict: Fail
+Comment: Expression error: while condition missing parentheses
 */
 
-struct Counter {
-    value: i32
-}
-
-impl Counter {
-    fn get_value(&self) -> i32 {
-        return self.value;
-    }
-}
-
-// Test auto referencing when calling methods on values
 fn main() {
-    let counter: Counter = Counter { value: 42 };
-
-    // counter is a value (Counter), but .get_value() needs &self (&Counter)
-    // Compiler should auto convert counter to &counter
-    let result: i32 = counter.get_value();
-
-    printInt(result);
+    let x: i32 = 10;
+    if x > 5 { // Error: if condition missing parentheses
+        printInt(x);
+    }
     exit(0);
 }

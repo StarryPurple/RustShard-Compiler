@@ -433,8 +433,9 @@ PredicateLoopExpression ->
 #     "for" Pattern "in" Expression #except StructExpression#
 #      BlockExpression
 
+# must have parentheses around conditions... by testcase semantic1-expr12. Make them happy.
 IfExpression ->
-    "if" Conditions BlockExpression
+    "if" "(" Conditions ")" BlockExpression
     ("else": (BlockExpression | IfExpression))?
     
 # No LetChain

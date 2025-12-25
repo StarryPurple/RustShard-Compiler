@@ -627,12 +627,11 @@ void PreTypeFiller::postVisit(TypePath &node) {
       return;
     } else if(ident == "Self") {
       // set a temporary SelfType here.
-      auto self_type = back_scope()->self_type();
-      if(!self_type) {
+      if(!_impl_type) {
         _recorder->tagged_report(kErrTypeInvalid, "Self type is invalid: might not be in impl block");
         return;
       }
-      node.set_type(self_type);
+      node.set_type(_impl_type);
       return;
     } else if(ident == "crate") {
       _recorder->tagged_report(kErrTypeNotResolved, "keyword \"crate\" is not supported here");
@@ -739,20 +738,24 @@ void PreTypeFiller::postVisit(TypePath &node) {
 void PreTypeFiller::postVisit(Function &node) {
   ScopedVisitor::postVisit(node); // exit the inner scope first. Add the symbol to the outer scope.
   std::vector<stype::TypePtr> params;
-  stype::TypePtr self_type;
+  stype::TypePtr caller_type;
   if(node.params_opt()) {
     if(auto &sp = node.params_opt()->self_param_opt()) {
-      if(!back_scope()->self_type()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Self type not resolved or using self param outside impl items");
+      if(!is_in_asso_block()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Using self param outside impl items");
         return;
       }
-      self_type = back_scope()->self_type();
+      if(!_impl_type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Self type not resolved");
+        return;
+      }
+      caller_type = _impl_type;
       if(sp->is_mut() && !sp->is_ref()) {
         _recorder->tagged_report(kErrTypeInvalid, "\"mut self\" is not supported");
         return;
       }
       if(sp->is_ref()) {
-        self_type = _type_pool->make_type<stype::RefType>(self_type, sp->is_mut());
+        caller_type = _type_pool->make_type<stype::RefType>(caller_type, sp->is_mut());
       }
     }
     for(auto &param: node.params_opt()->func_params()) {
@@ -780,10 +783,18 @@ void PreTypeFiller::postVisit(Function &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Function result type tag not resolved");
     return;
   }
-  auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), self_type, std::move(params), ret_type);
+  auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), caller_type, std::move(params), ret_type);
   add_symbol(node.ident(), SymbolInfo{
     .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction, .type = func_type
   });
+  if(is_in_asso_block()) {
+    if(!_impl_type) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Self type not resolved");
+      return;
+    }
+    // register this function to the method table
+    add_asso_method(_impl_type, func_type.get<stype::FunctionType>());
+  }
 }
 
 void PreTypeFiller::postVisit(ConstantItem &node) {
@@ -817,7 +828,7 @@ void PreTypeFiller::postVisit(ConstantItem &node) {
 }
 
 void PreTypeFiller::postVisit(SelfParam &node) {
-  auto tp = back_scope()->self_type();
+  auto tp = _impl_type;
   if(!tp) {
     _recorder->tagged_report(kErrTypeInvalid, "SelfParam not inside impl block");
     return;
@@ -831,7 +842,6 @@ void PreTypeFiller::postVisit(SelfParam &node) {
     return;
   }
   if(node.is_ref()) tp = _type_pool->make_type<stype::RefType>(tp, node.is_mut());
-  tp = _type_pool->make_type<stype::SelfType>(tp);
   node.set_type(tp);
 }
 
@@ -844,7 +854,7 @@ void PreTypeFiller::visit(InherentImpl &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "InherentImpl target type not resolved");
     return;
   }
-  back_scope()->set_self_type(tp);
+  _impl_type = tp;
 
   for(const auto &asso_item: node.asso_items())
     asso_item->accept(*this);
@@ -1029,17 +1039,85 @@ void TypeFiller::postVisit(LiteralExpression &node) {
 }
 
 void TypeFiller::postVisit(PathInExpression &node) {
-  if(node.segments().size() != 1) {
-    throw std::runtime_error("PathInExpression with path sep(s) not implemented yet");
+  if(node.segments().size() > 2) {
+    // How did you get here with such a simplified Rust ruleset?
+    throw std::runtime_error("PathInExpression with 2+ path separators not implemented yet");
     return;
+  }
+  if(node.segments().size() == 2) {
+    // Enum variables or static asso items.
+    // I can't do more.
+    auto ident1 = node.segments().front()->ident_seg()->ident();
+    auto ident2 = node.segments().back()->ident_seg()->ident();
+    if(ident1 == "self" || ident1 == "crate" || ident1 == "super") {
+      _recorder->tagged_report(kErrIdentNotResolved, "Not expected keywords " + std::string(ident1)
+        + " before the end of PathInExpression");
+      return;
+    }
+    auto info1 = find_symbol(ident1);
+    // Struct::AssoItem.
+    if((info1 && info1->kind == SymbolKind::kStruct) || ident1 == "Self") {
+      stype::TypePtr stp;
+      if(ident1 == "Self") {
+        if(!is_in_asso_block()) {
+          _recorder->tagged_report(kErrTypeNotResolved, "Invalid use of \"self\" outside an asso block");
+          return;
+        }
+        if(!_impl_type) {
+          _recorder->tagged_report(kErrTypeNotResolved, "Already ailed to resolve \"self\" here");
+          return;
+        }
+        stp = _impl_type;
+      } else {
+        stp = info1->type;
+      }
+      // only support methods
+      auto func = find_asso_method(stp, ident2);
+      if(!func) {
+        _recorder->tagged_report(kErrIdentNotResolved, "Not a recognizable method of " + stp->to_string());
+        return;
+      }
+      node.set_type(stype::TypePtr(func));
+      return;
+    }
+    if(info1 && info1->kind == SymbolKind::kEnum) {
+      throw std::runtime_error("Enumeration not supported yet");
+    }
+    _recorder->tagged_report(kErrIdentNotResolved, "Unrecognized PathInExpression");
   }
   auto ident = node.segments().back()->ident_seg()->ident();
-  if(ident == "Self") {
-    node.set_type(_type_pool->make_type<stype::SelfType>(stype::TypePtr()));
+  if(ident == "self") {
+    if(!is_in_asso_block()) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Invalid use of \"self\" outside an asso block");
+      return;
+    }
+    if(!_impl_type) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Already ailed to resolve \"self\" here");
+      return;
+    }
+    stype::TypePtr tp;
+    switch(_self_state) {
+    case SelfState::kInvalid: {
+      _recorder->tagged_report(kErrIdentNotResolved, "No self param is used here");
+      return;
+    } break;
+    case SelfState::kNormal: {
+      tp = _impl_type;
+    } break;
+    case SelfState::kRef: {
+      tp = _type_pool->make_type<stype::RefType>(_impl_type, false);
+    } break;
+    case SelfState::kRefMut: {
+      tp = _type_pool->make_type<stype::RefType>(_impl_type, true);
+    } break;
+    default: throw std::runtime_error("Unrecognizable SelfState");
+    }
+    node.set_type(tp);
     return;
   }
-  if(ident == "super" || ident == "self" || ident == "crate") {
-    _recorder->tagged_report(kErrIdentNotResolved, "Not expected keywords here in end of PathInExpression");
+  if(ident == "super" || ident == "Self" || ident == "crate") {
+    _recorder->tagged_report(kErrIdentNotResolved, "Not expected keywords " + std::string(ident)
+      + " in the end of PathInExpression");
     return;
   }
   auto info = find_symbol(ident);
@@ -1381,9 +1459,27 @@ void TypeFiller::visit(Function &node) {
 
   // register the parameter names
   if(node.params_opt()) {
-    // ignore self param
-
-    if(node.params_opt()) for(auto &param: node.params_opt()->func_params()) {
+    // self param: decide _self_state
+    if(auto &sp = node.params_opt()->self_param_opt()) {
+      if(sp->type_opt()) { throw std::runtime_error("Unchecked self param type tag"); }
+      if(sp->is_mut()) {
+        if(sp->is_ref()) {
+          _self_state = SelfState::kRefMut;
+        }
+        else {
+          _recorder->tagged_report(kErrTypeNotResolved, "\"mut self\" is not supported");
+          return;
+        }
+      } else {
+        if(sp->is_ref()) {
+          _self_state = SelfState::kRef;
+        } else {
+          _self_state = SelfState::kNormal;
+        }
+      }
+    }
+    // other params: register symbol
+    for(auto &param: node.params_opt()->func_params()) {
       if(param->has_name()) {
         auto ptr = static_cast<FunctionParamPattern*>(param.get());
         bind_pattern(ptr->pattern().get(), ptr->type()->get_type(), false); // to be considered...
@@ -1392,6 +1488,9 @@ void TypeFiller::visit(Function &node) {
   }
 
   if(node.body_opt()) node.body_opt()->accept(*this);
+
+  // reset self state
+  _self_state = SelfState::kInvalid;
 
   // check
   if(node.body_opt()) do {
@@ -1425,18 +1524,29 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in CompoundAssignmentExpression");
     return;
   }
+  // Accepted Compound Assignment: (rt <- rf)
+  // mut P <- P
+  // (auto deref acceptable) &mut P <- P
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
+  if(!prime1) {
+    auto r = type1.get_if<stype::RefType>();
+    if(!r->ref_is_mut()) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not supported in CompoundAssignmentExpression."
+        " type 1:" + type1->to_string() + ", type 2: " + type2->to_string());
+      return;
+    }
+    prime1 = r->inner().get_if<stype::PrimeType>();
+  }
   if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in CompoundAssignmentExpression");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not supported in CompoundAssignmentExpression."
+      " type 1:" + type1->to_string() + ", type 2: " + type2->to_string());
     return;
   }
   switch(node.oper()) {
   case Operator::kShlAssign:
   case Operator::kShrAssign:
-    if(prime1->is_integer() && prime2->is_unsigned()) {
-      node.set_type(type1);
-    } else {
+    if(!(prime1->is_integer() && prime2->is_unsigned())) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator <<= >>=");
       return;
     }
@@ -1447,9 +1557,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   case Operator::kMulAssign:
   case Operator::kDivAssign:
   case Operator::kModAssign:
-    if(type1->is_convertible_from(*type2)) {
-      node.set_type(type1);
-    } else {
+    if(combine_prime(prime1, prime2) != prime1) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator += -= *= /= %=");
       return;
     }
@@ -1458,9 +1566,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   case Operator::kBitwiseAndAssign:
   case Operator::kBitwiseOrAssign:
   case Operator::kBitwiseXorAssign:
-    if(type1->is_convertible_from(*type2) && prime1->is_integer()) {
-      node.set_type(type1);
-    } else {
+    if(!(combine_prime(prime1, prime2) != prime1 && prime1->is_integer())) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator &= |= ^=");
       return;
     }
@@ -1469,6 +1575,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   default:
     throw std::runtime_error("Invalid operator type in compound assignment expression");
   }
+  node.set_type(type1);
 }
 
 void TypeFiller::postVisit(GroupedExpression &node) {
@@ -1680,19 +1787,20 @@ void TypeFiller::postVisit(CallExpression &node) {
   if(!node.params_opt()) {
     // no params.
     if(!func_type->params().empty()) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Function called with param(s), but expected no param");
+      _recorder->tagged_report(kErrTypeNotMatch, "Function has 0 parameters,"
+        " but is called with" + std::to_string(node.params_opt()->expr_list().size()) + " arguments");
       return;
     }
   } else {
-    const auto &exprs = node.params_opt()->expr_list();
+    const auto &argv = node.params_opt()->expr_list();
     const auto &params = func_type->params();
-    if(exprs.size() != params.size()) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Function need " + std::to_string(params.size()) + " parameters,"
-        " but is called with" + std::to_string(exprs.size()) + " parameters");
+    if(argv.size() != params.size()) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Function has " + std::to_string(params.size()) + " parameters,"
+        " but is called with" + std::to_string(argv.size()) + " arguments");
       return;
     }
-    for(int i = 0; i < exprs.size(); ++i) {
-      auto expr_type = exprs[i]->get_type();
+    for(int i = 0; i < argv.size(); ++i) {
+      auto expr_type = argv[i]->get_type();
       if(!expr_type) {
         _recorder->tagged_report(kErrTypeNotResolved, "Function parameter type not resolved");
         return;
@@ -1709,8 +1817,92 @@ void TypeFiller::postVisit(CallExpression &node) {
 }
 
 void TypeFiller::postVisit(MethodCallExpression &node) {
-  throw std::runtime_error("MethodCallExpression not supported");
-  return;
+  auto caller = node.expr()->get_type();
+  if(!caller) {
+    _recorder->tagged_report(kErrTypeNotResolved, "Method caller type not resolved");
+    return;
+  }
+  // allow auto deref
+  // Assume caller = T and find methods of T.
+  auto func_ptr = find_asso_method(caller, node.segment()->ident_seg()->ident());
+  if(!func_ptr) {
+    // Assume caller = &T / &mut T and find methods of T.
+    if(auto r = caller.get_if<stype::RefType>()) {
+      func_ptr = find_asso_method(r->inner(), node.segment()->ident_seg()->ident());
+    } else {
+      _recorder->tagged_report(kErrIdentNotResolved, "Method not found");
+      return;
+    }
+    if(!func_ptr) {
+      _recorder->tagged_report(kErrIdentNotResolved, "Method not found");
+      return;
+    }
+  }
+  // check whether the arguments passed fit the parameters.
+  // allow auto ref
+  // caller = T, caller_req = T / &T
+  // caller = mut T, caller_req = T / &T / &mut T
+  // caller = &T, caller_req = &T
+  // caller = &mut T, caller_req = &T, &mut T
+  int pos = 0;
+  if(auto caller_req = func_ptr->self_type_opt()) {
+    bool is_valid = false;
+    if(caller_req->is_convertible_from(*caller)) {
+      // caller = T / mut T, caller_req = T
+      is_valid = true;
+    } else {
+      auto tc = caller.get_if<stype::RefType>();
+      auto tcr = caller_req.get_if<stype::RefType>();
+      if(tcr && tcr->inner()->is_convertible_from(*caller) && (node.expr()->is_place_mut() || !tcr->ref_is_mut())) {
+        // caller = T, caller_req = &T
+        // caller = mut T, caller_req = &T / &mut T
+        is_valid = true;
+      }
+      // inner type shall be all determined... Right?
+      if(tc && tcr && (tc->ref_is_mut() || !tcr->ref_is_mut()) && (tcr->inner() == tc->inner())) {
+        // caller = &T, caller_req = &T
+        // caller = &mut T, caller_req = &T, &mut T
+        is_valid = true;
+      }
+    }
+    if(!is_valid) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Invalid method caller: cannot match required self type."
+        " Caller type: " + caller->to_string() + ", required self type: " + caller_req->to_string());
+      return;
+    }
+    pos = 1;
+  }
+  if(!node.params_opt()) {
+    if(!func_ptr->params().empty()) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Method call param number mismatch. Method needs "
+        + std::to_string(func_ptr->params().size()) + "params, but given 0 args");
+      return;
+    }
+    // else 0-0 is valid.
+  } else {
+    auto &argv = node.params_opt()->expr_list();
+    auto &params = func_ptr->params();
+    if(argv.size() != params.size()) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Method call param number mismatch. Method needs "
+        + std::to_string(params.size()) + "params, but given " + std::to_string(argv.size()) + " args");
+      return;
+    }
+    for(int i = 0; i < argv.size(); ++i) {
+      auto expr_type = argv[i]->get_type();
+      if(!expr_type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Function parameter type not resolved");
+        return;
+      }
+      if(!params[i]->is_convertible_from(*expr_type)) {
+        _recorder->tagged_report(kErrTypeNotMatch, "Function type \"" + func_ptr->to_string() + "\" expected "
+          + std::to_string(i) + "-th param to be " + params[i]->to_string() + ", but received "
+          + expr_type->to_string());
+        return;
+      }
+    }
+  }
+  // happy now.
+  node.set_type(func_ptr->ret_type());
 }
 
 void TypeFiller::preVisit(FieldExpression &node) {
