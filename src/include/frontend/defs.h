@@ -52,8 +52,10 @@ class TypeInfo {
 public:
   stype::TypePtr get_type() const { return _tp; } // NOLINT
   void set_type(stype::TypePtr tp) {
+    /* might need reset, like kInt -> kI32 or kFloat -> kF32
     if(_tp.operator bool())
       throw std::runtime_error("TypeInfo already set");
+    */
     _tp = std::move(tp);
   }
 private:
@@ -63,7 +65,6 @@ private:
 class Scope {
 public:
   void init_scope() { _symbol_set.clear(); }
-  void load_builtin(stype::TypePool *pool);
 
   SymbolInfo* add_symbol(const StringRef &ident, const SymbolInfo &symbol);
   SymbolInfo* find_symbol(const StringRef &ident);
@@ -118,12 +119,18 @@ class ResolutionTree {
 
 // every crate owns one.
 struct Module {
-  StringRef ident; // module name
+  /*
   std::unordered_map<StringRef, stype::AliasType> aliases;
   std::unordered_map<StringRef, stype::FunctionType> functions;
   std::unordered_map<StringRef, stype::TraitType> traits;
+  */
+  std::unordered_map<
+    stype::TypePtr,
+    std::unordered_map<StringRef, std::shared_ptr<stype::FunctionType>>,
+    stype::TypePtr::Hash,
+    stype::TypePtr::Equal> _methods;
 
-  explicit Module(StringRef _ident): ident(std::move(_ident)) {}
+  Module() = default;
 };
 
 

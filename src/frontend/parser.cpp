@@ -1236,7 +1236,7 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     while(lexeme[l] != '\"') ++l;
     while(lexeme[r] != '\"') --r;
     lexeme = lexeme.substr(l + 1, r - l - 1);
-    return std::make_unique<LiteralExpression>(Prime::kString, lexeme);
+    return std::make_unique<LiteralExpression>(Prime::kStr, lexeme);
   }
   case TokenType::kCharLiteral: {
     tracker.commit();

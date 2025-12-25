@@ -4,6 +4,229 @@
 #include <cmath>
 
 namespace insomnia::rust_shard::ast {
+
+/*************************** TypeDeclarator ***************************************/
+
+void TypeDeclarator::load_builtin(Crate *crate) {
+  using namespace stype;
+
+  // primitive types
+  for(const auto prime: type_primes()) {
+    auto ident = prime_strs(prime);
+    crate->scope()->add_symbol(ident, SymbolInfo{
+      .node = nullptr,
+      .ident = ident,
+      .kind = SymbolKind::kPrimitiveType,
+      .type = _type_pool->make_type<PrimeType>(prime)
+    });
+  }
+
+  // builtin functions
+  std::vector<std::pair<StringRef, TypePtr>> builtin_functions = {{
+      // fn print(s: &str) -> ()
+      "print", _type_pool->make_type<FunctionType>(
+        "print",
+        TypePtr{},
+        std::vector{
+          _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+      },
+      _type_pool->make_unit())
+    }, {
+      // fn println(s: &str) -> ()
+      "println", _type_pool->make_type<FunctionType>(
+        "println",
+        TypePtr{},
+        std::vector{
+          _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+      },
+      _type_pool->make_unit()
+      )
+    }, {
+      // fn printInt(n: i32) -> ()
+      "printInt", _type_pool->make_type<FunctionType>(
+        "printInt",
+        TypePtr{},
+        std::vector{
+          _type_pool->make_type<PrimeType>(TypePrime::kI32),
+      },
+      _type_pool->make_unit()
+      )
+    }, {
+      // fn printlnInt(n: i32) -> ()
+      "printlnInt", _type_pool->make_type<FunctionType>(
+        "printlnInt",
+        TypePtr{},
+        std::vector{
+          _type_pool->make_type<PrimeType>(TypePrime::kI32),
+      },
+      _type_pool->make_unit()
+      )
+    }, {
+      // fn getString() -> String
+      "getString", _type_pool->make_type<FunctionType>(
+        "getString",
+        TypePtr{},
+        std::vector<TypePtr>{},
+          _type_pool->make_type<PrimeType>(TypePrime::kStr)
+      )
+    }, {
+      // fn getInt() -> i32
+      "getInt", _type_pool->make_type<FunctionType>(
+        "getInt",
+        TypePtr{},
+        std::vector<TypePtr>{},
+          _type_pool->make_type<PrimeType>(TypePrime::kI32)
+      )
+    }, {
+      // fn readInt() -> i32
+      "readInt", _type_pool->make_type<FunctionType>(
+        "readInt",
+        TypePtr{},
+        std::vector<TypePtr>{},
+          _type_pool->make_type<PrimeType>(TypePrime::kI32)
+      )
+    }, {
+      // fn exit(code: i32) -> ()
+      "exit", _type_pool->make_type<FunctionType>(
+        "exit",
+        TypePtr{},
+        std::vector{
+          _type_pool->make_type<PrimeType>(TypePrime::kI32),
+      },
+      _type_pool->make_unit()
+      )
+    }, {
+      // fn from(&str) -> String
+      // fn from(&mut str) -> String
+      // (As I didn't implement function signature mechanic, I'll ignore the strictly stricter version)
+      "from", _type_pool->make_type<FunctionType>(
+        "from",
+        TypePtr{},
+        std::vector{
+          _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+      },
+      _type_pool->make_type<PrimeType>(TypePrime::kString)
+      )
+    },
+  };
+  for(const auto &[ident, type]: builtin_functions) {
+    crate->scope()->add_symbol(ident, SymbolInfo{
+      .node = nullptr,
+      .ident = ident,
+      .kind = SymbolKind::kFunction,
+      .type = type
+    });
+  }
+
+  // builtin methods
+  std::vector<std::pair<TypePtr, std::shared_ptr<FunctionType>>> builtin_methods = {
+    {
+      // impl String
+      // fn as_str(&self) -> &str
+      _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
+        "as_str",
+        _type_pool->make_type<PrimeType>(TypePrime::kString),
+        std::vector<TypePtr>{},
+        _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false)
+      )
+    }, {
+      // impl String
+      // fn as_mut_str(&mut self) -> &mut str
+      _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
+        "as_mut_str",
+        _type_pool->make_type<PrimeType>(TypePrime::kString),
+        std::vector<TypePtr>{},
+        _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true)
+      )
+    }, {
+      // impl String
+      // fn append(&mut self, s: &str) -> ()
+      _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
+        "append",
+        _type_pool->make_type<PrimeType>(TypePrime::kString),
+        std::vector{
+          _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false)
+        },
+        _type_pool->make_unit()
+      )
+    }
+  };
+  // impl #primitive types#
+  // fn to_string(&self) -> String
+  for(const auto prime: type_primes()) {
+    builtin_methods.emplace_back(
+      _type_pool->make_type<PrimeType>(prime), _type_pool->make_raw_type<FunctionType>(
+        "to_string",
+        _type_pool->make_type<PrimeType>(prime),
+        std::vector<TypePtr>(),
+        _type_pool->make_type<PrimeType>(TypePrime::kString)
+        )
+      );
+  }
+  // impl String, &str, &mut str
+  // fn len(&self) -> usize / fn length(&self) -> usize
+  builtin_methods.emplace_back(
+    _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
+      "len",
+      _type_pool->make_type<PrimeType>(TypePrime::kString),
+      std::vector<TypePtr>{},
+      _type_pool->make_type<PrimeType>(TypePrime::kUSize)
+      )
+    );
+  builtin_methods.emplace_back(
+    _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+    _type_pool->make_raw_type<FunctionType>(
+      "len",
+      _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+      std::vector<TypePtr>{},
+      _type_pool->make_type<PrimeType>(TypePrime::kUSize)
+      )
+    );
+  builtin_methods.emplace_back(
+    _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true),
+    _type_pool->make_raw_type<FunctionType>(
+      "len",
+      _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true),
+      std::vector<TypePtr>{},
+      _type_pool->make_type<PrimeType>(TypePrime::kUSize)
+      )
+      );
+  builtin_methods.emplace_back(
+    _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
+      "length",
+      _type_pool->make_type<PrimeType>(TypePrime::kString),
+      std::vector<TypePtr>{},
+      _type_pool->make_type<PrimeType>(TypePrime::kUSize)
+      )
+    );
+  builtin_methods.emplace_back(
+    _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+    _type_pool->make_raw_type<FunctionType>(
+      "length",
+      _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+      std::vector<TypePtr>{},
+      _type_pool->make_type<PrimeType>(TypePrime::kUSize)
+      )
+    );
+  builtin_methods.emplace_back(
+    _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true),
+    _type_pool->make_raw_type<FunctionType>(
+      "length",
+      _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true),
+      std::vector<TypePtr>{},
+      _type_pool->make_type<PrimeType>(TypePrime::kUSize)
+      )
+    );
+  // impl<T, N> [T; N]
+  // fn len(&self) -> usize / fn length(&self) -> usize
+  // note: builtin in Crate::find_asso_item (or something alike)
+  // is dynamically added while called.
+
+  for(const auto &[caller_type, func_type]: builtin_methods) {
+    crate->add_asso_method(caller_type, func_type);
+  }
+}
+
 /*************************** ConstEvaluator ***************************************/
 
 void ConstEvaluator::preVisit(AssignmentExpression &node) {
@@ -15,15 +238,25 @@ void ConstEvaluator::preVisit(CompoundAssignmentExpression &node) {
 }
 
 void ConstEvaluator::postVisit(LiteralExpression &node) {
-  using stype::PrimeType;
   auto prime = node.prime();
-  stype::TypePtr type = _type_pool->make_type<PrimeType>(prime);
-  std::visit([&](auto &&arg) {
-    sconst::ConstPrime primitive_val(prime, arg);
-    node.set_cval(
-      _const_pool->make_const<sconst::ConstPrime>(type, primitive_val)
-    );
-  }, node.spec_value());
+  stype::TypePtr type = _type_pool->make_type<stype::PrimeType>(prime);
+  if(prime != stype::TypePrime::kStr) {
+    std::visit([&](auto &&arg) {
+      node.set_cval(
+        _const_pool->make_const<sconst::ConstPrime>(type, prime, arg)
+      );
+    }, node.spec_value());
+  } else {
+    auto ref = _type_pool->make_type<stype::RefType>(type, false);
+    std::visit([&](auto &&arg) {
+      node.set_cval(
+        _const_pool->make_const<sconst::ConstRef>(
+          ref,
+          _const_pool->make_const<sconst::ConstPrime>(type, prime, arg),
+          false)
+      );
+    }, node.spec_value());
+  }
 }
 
 const std::string ConstEvaluator::kErrTag = "ConstEvaluator Failure";
@@ -863,6 +1096,35 @@ void PreTypeFiller::visit(InherentImpl &node) {
 }
 
 
+void PreTypeFiller::postVisit(StructStruct &node) {
+  auto info = find_symbol(node.ident());
+  std::map<StringRef, stype::TypePtr> struct_fields;
+  if(node.fields_opt()) {
+    for(const auto &field: node.fields_opt()->fields()) {
+      auto ident = field->ident();
+      auto ast_type = field->type()->get_type();
+      if(!ast_type) {
+        _recorder->report("Unresolved struct field type");
+        continue; // continue partial compiling
+      }
+      struct_fields.emplace(ident, ast_type);
+    }
+  }
+  info->type.get<stype::StructType>()->set_fields(std::move(struct_fields));
+}
+
+void PreTypeFiller::postVisit(Enumeration &node) {
+  auto info = find_symbol(node.ident());
+  auto raw_enum_type = info->type.get_if<stype::EnumType>();
+  if(node.items_opt()) {
+    for(const auto &item: node.items_opt()->items()) {
+      if(item->discr_opt()) {
+        _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
+      }
+    }
+  }
+}
+
 /********************** TypeFiller *****************************/
 
 const std::string TypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
@@ -941,32 +1203,11 @@ void TypeFiller::postVisit(Function &node) {
 }
 
 void TypeFiller::postVisit(StructStruct &node) {
-  auto info = find_symbol(node.ident());
-  std::map<StringRef, stype::TypePtr> struct_fields;
-  if(node.fields_opt()) {
-    for(const auto &field: node.fields_opt()->fields()) {
-      auto ident = field->ident();
-      auto ast_type = field->type()->get_type();
-      if(!ast_type) {
-        _recorder->report("Unresolved struct field type");
-        continue; // continue partial compiling
-      }
-      struct_fields.emplace(ident, ast_type);
-    }
-  }
-  info->type.get<stype::StructType>()->set_fields(std::move(struct_fields));
+  // no need.
 }
 
 void TypeFiller::postVisit(Enumeration &node) {
-  auto info = find_symbol(node.ident());
-  auto raw_enum_type = info->type.get_if<stype::EnumType>();
-  if(node.items_opt()) {
-    for(const auto &item: node.items_opt()->items()) {
-      if(item->discr_opt()) {
-        _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
-      }
-    }
-  }
+  // no need.
 }
 
 void TypeFiller::postVisit(EnumItem &node) {
@@ -1035,7 +1276,10 @@ void TypeFiller::postVisit(TypePath &node) {
 }
 
 void TypeFiller::postVisit(LiteralExpression &node) {
-  node.set_type(_type_pool->make_type<stype::PrimeType>(node.prime()));
+  auto tp = _type_pool->make_type<stype::PrimeType>(node.prime());
+  if(node.prime() == stype::TypePrime::kStr)
+    tp = _type_pool->make_type<stype::RefType>(tp, false);
+  node.set_type(tp);
 }
 
 void TypeFiller::postVisit(PathInExpression &node) {
@@ -1072,7 +1316,7 @@ void TypeFiller::postVisit(PathInExpression &node) {
         stp = info1->type;
       }
       // only support methods
-      auto func = find_asso_method(stp, ident2);
+      auto func = find_asso_method(stp, ident2, _type_pool);
       if(!func) {
         _recorder->tagged_report(kErrIdentNotResolved, "Not a recognizable method of " + stp->to_string());
         return;
@@ -1822,13 +2066,25 @@ void TypeFiller::postVisit(MethodCallExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Method caller type not resolved");
     return;
   }
+  // if kInt/kFloat: use default type.
+  // I forgot the p != nullptr, but it didn't break out when I made a flaw in FuncType builtin... weird.
+  if(auto p = caller.get_if<stype::PrimeType>(); p && p->is_undetermined()) {
+    if(p->prime() == stype::TypePrime::kInt) {
+      caller = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
+      node.expr()->set_type(caller);
+    }
+    if(p->prime() == stype::TypePrime::kFloat) {
+      caller = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kF32);
+      node.expr()->set_type(caller);
+    }
+  }
   // allow auto deref
   // Assume caller = T and find methods of T.
-  auto func_ptr = find_asso_method(caller, node.segment()->ident_seg()->ident());
+  auto func_ptr = find_asso_method(caller, node.segment()->ident_seg()->ident(), _type_pool);
   if(!func_ptr) {
     // Assume caller = &T / &mut T and find methods of T.
     if(auto r = caller.get_if<stype::RefType>()) {
-      func_ptr = find_asso_method(r->inner(), node.segment()->ident_seg()->ident());
+      func_ptr = find_asso_method(r->inner(), node.segment()->ident_seg()->ident(), _type_pool);
     } else {
       _recorder->tagged_report(kErrIdentNotResolved, "Method not found");
       return;

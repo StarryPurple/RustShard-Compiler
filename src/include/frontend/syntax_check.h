@@ -198,13 +198,13 @@ public:
 
   void preVisit(Crate &node) override {
     _scopes.push_back(node.scope().get());
-    _cur_crate = &node;
+    _crate = &node;
   }
   void postVisit(Crate &node) override {
     _scopes.pop_back();
+    _crate = nullptr;
     if(!_scopes.empty())
       throw std::runtime_error("Scope management broke down");
-    _cur_crate = nullptr;
   }
   void preVisit(BlockExpression &node) override {
     _scopes.push_back(node.scope().get());
@@ -281,20 +281,20 @@ protected:
     return nullptr;
   }
 
-
   bool is_in_asso_block() const { return _is_in_asso_block; }
 
   void add_asso_method(stype::TypePtr caller_type, std::shared_ptr<stype::FunctionType> func_type) {
-    _cur_crate->add_asso_method(std::move(caller_type), std::move(func_type));
+    _crate->add_asso_method(std::move(caller_type), std::move(func_type));
   }
-  std::shared_ptr<stype::FunctionType> find_asso_method(stype::TypePtr self_type, StringRef func_ident) {
-    return _cur_crate->find_asso_method(std::move(self_type), func_ident);
+  std::shared_ptr<stype::FunctionType> find_asso_method(
+    stype::TypePtr caller_type, const StringRef &func_ident, stype::TypePool *pool) {
+    return _crate->find_asso_method(std::move(caller_type), func_ident, pool);
   }
 
 private:
-  Crate *_cur_crate = nullptr;
   // inherent impl, trait impl, trait
   bool _is_in_asso_block = false;
+  Crate *_crate;
 };
 
 /* Collect struct, enum, const item and type alias.
@@ -311,7 +311,7 @@ public:
 
   void preVisit(Crate &node) override {
     ScopedVisitor::preVisit(node);
-    node.scope()->load_builtin(_type_pool);
+    load_builtin(&node);
   }
 
   /* not here.
@@ -391,6 +391,8 @@ public:
 private:
   ErrorRecorder *_recorder;
   stype::TypePool *_type_pool;
+
+  void load_builtin(Crate *crate);
 };
 
 /* Resolve symbol reliance relationship (used in Type Path)
@@ -500,7 +502,6 @@ public:
 
   // for function type... and other type filling.
 
-
   void postVisit(ParenthesizedType &node) override;
   void postVisit(TupleType &node) override;
   void postVisit(ReferenceType &node) override;
@@ -516,6 +517,9 @@ public:
   void postVisit(SelfParam &node) override;
 
   void visit(InherentImpl &node) override;
+
+  void postVisit(StructStruct &node) override;
+  void postVisit(Enumeration &node) override;
 
 private:
   ErrorRecorder *_recorder;
@@ -588,18 +592,45 @@ private:
 
 }
 
+/* Some discarded method record method.
+void add_asso_method(stype::TypePtr caller_type, std::shared_ptr<stype::FunctionType> func_type) {
+    auto ident = make_inherent_method_name(caller_type, func_type);
+    _scopes.front()->add_symbol(ident, SymbolInfo {
+      .ident = ident,
+      .kind = SymbolKind::kFunction,
+      .type = stype::TypePtr(func_type),
+    });
+  }
+  std::shared_ptr<stype::FunctionType> find_asso_method(
+    stype::TypePtr caller_type, StringRef func_ident, stype::TypePool *pool) {
+    auto ident = make_inherent_method_name(caller_type, func_ident);
+    auto info = _scopes.front()->find_symbol(ident);
+    if(info && info->kind == SymbolKind::kFunction && info->type.get_if<stype::FunctionType>()) {
+      return info->type.get<stype::FunctionType>();
+    }
+    // special builtin mechanic: impl<T, N> [T; N]: fn len(&mut) -> usize
+    // lazy generation.
+    if(func_ident == "len" && caller_type.get_if<stype::ArrayType>()) {
+      auto func_type = pool->make_raw_type<stype::FunctionType>(
+        func_ident,
+        caller_type,
+        std::vector<stype::TypePtr>{},
+        pool->make_type<stype::PrimeType>(stype::TypePrime::kUSize)
+        );
+      add_asso_method(caller_type, func_type);
+    }
+
+    return nullptr;
+  }
+
+  static std::string make_inherent_method_name(
+    stype::TypePtr caller_type, std::shared_ptr<stype::FunctionType> func_type) {
+    return caller_type->to_string() + "_" + func_type->ident();
+  }
+  static std::string make_inherent_method_name(
+    stype::TypePtr caller_type, const StringRef &func_ident) {
+    return caller_type->to_string() + "_" + func_ident;
+  }
+*/
 
 #endif // RUST_SHARD_FRONTEND_SYNTAX_CHECK_H
-
-
-
-
-
-
-
-
-
-
-
-
-

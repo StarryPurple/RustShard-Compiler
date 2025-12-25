@@ -60,12 +60,41 @@ public:
       it->second.emplace(func_type->ident(), func_type);
     }
   }
-  std::shared_ptr<stype::FunctionType> find_asso_method(stype::TypePtr caller_type, StringRef func_ident) {
+  std::shared_ptr<stype::FunctionType> find_asso_method(
+    stype::TypePtr caller_type, const StringRef &func_ident, stype::TypePool *pool) {
+
     auto it = _methods.find(caller_type);
-    if(it == _methods.end()) return nullptr;
-    auto it2 = it->second.find(func_ident);
-    if(it2 == it->second.end()) return nullptr;
-    return it2->second;
+    if(it != _methods.end()) {
+      if(auto it2 = it->second.find(func_ident); it2 != it->second.end()) {
+        return it2->second;
+      }
+    }
+
+    // special builtin mechanic:
+    // impl<T, N> [T; N]: fn len(&mut) -> usize
+    // impl<T, N> [T; N]: fn length(&mut) -> usize
+    // lazy generation.
+    if((func_ident == "len" || func_ident == "length") && caller_type.get_if<stype::ArrayType>()) {
+      auto func_ptr = pool->make_raw_type<stype::FunctionType>(
+        func_ident,
+        caller_type,
+        std::vector<stype::TypePtr>{},
+        pool->make_type<stype::PrimeType>(stype::TypePrime::kUSize)
+        );
+
+      if(it == _methods.end()) {
+        _methods.emplace(
+          caller_type,
+          std::unordered_map<StringRef, std::shared_ptr<stype::FunctionType>>{{func_ident, func_ptr}}
+          );
+      } else {
+        it->second.emplace(func_ident, func_ptr);
+      }
+
+      return func_ptr;
+    }
+
+    return nullptr;
   }
 };
 

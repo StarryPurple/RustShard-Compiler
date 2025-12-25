@@ -62,7 +62,7 @@ enum class TypePrime {
   kI8, kI16, kI32, kI64, kISize, // order related with PrimitiveType.
   kU8, kU16, kU32, kU64, kUSize, // order related with PrimitiveType.
   kF32, kF64,
-  kString,
+  kStr, kString,
   kInt, kFloat, // undetermined types: Integer, floating point.
 };
 
@@ -151,7 +151,7 @@ public:
   : ExprType(TypeKind::kPrimitive), _prime(prime) {}
   TypePrime prime() const { return _prime; }
   bool is_number() const {
-    return _prime != TypePrime::kBool && _prime != TypePrime::kChar && _prime != TypePrime::kString;
+    return _prime != TypePrime::kBool && _prime != TypePrime::kChar && _prime != TypePrime::kStr;
   }
   bool is_integer() const {
     return is_signed() || is_unsigned();
