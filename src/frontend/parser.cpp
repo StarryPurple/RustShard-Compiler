@@ -1653,7 +1653,7 @@ std::unique_ptr<IfExpression> Parser::parseIfExpression() {
   MATCH_TOKEN(kIf);
   MATCH_TOKEN(kLParenthesis);
   auto c = parseConditions();
-  MATCH_TOKEN(kLParenthesis);
+  MATCH_TOKEN(kRParenthesis);
   EXPECT_POINTER_NOT_EMPTY(c);
   auto be = parseBlockExpression();
   EXPECT_POINTER_NOT_EMPTY(be);
