@@ -1566,7 +1566,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   case Operator::kBitwiseAndAssign:
   case Operator::kBitwiseOrAssign:
   case Operator::kBitwiseXorAssign:
-    if(!(combine_prime(prime1, prime2) != prime1 && prime1->is_integer())) {
+    if(!(combine_prime(prime1, prime2) == prime1 && prime1->is_integer())) {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator &= |= ^=");
       return;
     }
