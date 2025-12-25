@@ -1425,8 +1425,8 @@ void TypeFiller::postVisit(NegationExpression &node) {
       _recorder->tagged_report(kErrTypeNotMatch, "Negation on non number");
       return;
     }
-    if(prime->is_signed()) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Negation on signed integer");
+    if(prime->is_unsigned()) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Negation on unsigned integer");
       return;
     }
   } break;
@@ -2060,6 +2060,10 @@ void TypeFiller::postVisit(CallExpression &node) {
   node.set_type(func_type->ret_type());
 }
 
+void TypeFiller::preVisit(MethodCallExpression &node) {
+  node.expr()->set_lside();
+}
+
 void TypeFiller::postVisit(MethodCallExpression &node) {
   auto caller = node.expr()->get_type();
   if(!caller) {
@@ -2477,7 +2481,10 @@ void TypeFiller::postVisit(InfiniteLoopExpression &node) {
     node.set_type(_type_pool->make_type<stype::NeverType>());
     return;
   }
-  auto type = node.loop_breaks().front()->get_type();
+  auto type =
+    node.loop_breaks().front()->expr_opt()
+    ? node.loop_breaks().front()->expr_opt()->get_type()
+    : _type_pool->make_unit();
   if(!type) {
     _recorder->tagged_report(kErrTypeNotResolved, "Result type not got in InfiniteLoopExpression");
     return;

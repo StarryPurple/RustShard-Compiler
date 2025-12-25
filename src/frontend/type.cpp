@@ -13,14 +13,14 @@ StringRef prime_strs(TypePrime prime) {
     {TypePrime::kU32, "u32"}, {TypePrime::kU64, "u64"},
     {TypePrime::kISize, "isize"}, {TypePrime::kUSize, "usize"},
     {TypePrime::kF32, "f32"}, {TypePrime::kF64, "f64"},
-    {TypePrime::kString, "str"}, {TypePrime::kInt, "int"},
-    {TypePrime::kFloat, "float"},
+    {TypePrime::kStr, "str"}, {TypePrime::kString, "String"},
+    {TypePrime::kInt, "int"}, {TypePrime::kFloat, "float"},
   };
   return table.at(prime);
 }
 
 const std::vector<TypePrime>& type_primes() {
-  static const std::vector<TypePrime> table = {
+  static const std::vector table = {
     TypePrime::kChar, TypePrime::kBool,
     TypePrime::kI8, TypePrime::kI16,
     TypePrime::kI32, TypePrime::kI64,
@@ -28,7 +28,7 @@ const std::vector<TypePrime>& type_primes() {
     TypePrime::kU32, TypePrime::kU64,
     TypePrime::kISize, TypePrime::kUSize,
     TypePrime::kF32, TypePrime::kF64,
-    TypePrime::kString
+    TypePrime::kStr, TypePrime::kString
   }; // no NatI, NegI, Float
   return table;
 }
@@ -77,26 +77,7 @@ bool PrimeType::convertible_impl(const ExprType &other) const {
 }
 
 std::string PrimeType::to_string() const {
-  switch(_prime) {
-  case TypePrime::kBool: return "bool";
-  case TypePrime::kChar: return "char";
-  case TypePrime::kI8: return "i8";
-  case TypePrime::kI16: return "i16";
-  case TypePrime::kI32: return "i32";
-  case TypePrime::kI64: return "i64";
-  case TypePrime::kU8: return "u8";
-  case TypePrime::kU16: return "u16";
-  case TypePrime::kU32: return "u32";
-  case TypePrime::kU64: return "u64";
-  case TypePrime::kISize: return "isize";
-  case TypePrime::kUSize: return "usize";
-  case TypePrime::kF32: return "f32";
-  case TypePrime::kF64: return "f64";
-  case TypePrime::kString: return "String";
-  case TypePrime::kInt: return "Int";
-  case TypePrime::kFloat: return "Float";
-  }
-  return "unrecognized prime";
+  return prime_strs(_prime);
 }
 
 void ArrayType::combine_hash(std::size_t &seed) const {
@@ -290,6 +271,7 @@ void FunctionType::combine_hash(std::size_t &seed) const {
   static constexpr std::hash<StringRef> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
+  if(_self_type_opt) _self_type_opt->combine_hash(seed);
   for(const auto &type: _params)
     type->combine_hash(seed);
   _ret_type->combine_hash(seed);
@@ -298,6 +280,7 @@ void FunctionType::combine_hash(std::size_t &seed) const {
 bool FunctionType::equals_impl(const ExprType &other) const {
   const auto &other_func = static_cast<const FunctionType&>(other);
   if(_ident != other_func.ident()) return false;
+  if(_self_type_opt != other_func._self_type_opt) return false;
   if(_ret_type != other_func._ret_type) return false;
   const auto &other_params = other_func.params();
   if(_params.size() != other_params.size()) return false;
@@ -315,6 +298,19 @@ bool FunctionType::convertible_impl(const ExprType &other) const {
 
 std::string FunctionType::to_string() const {
   std::string res = "fn(";
+  if(_self_type_opt) {
+    if(auto r = _self_type_opt.get_if<RefType>()) {
+      if(r->ref_is_mut()) {
+        res += "(&mut self) ";
+      } else {
+        res += "(&self) ";
+      }
+    } else {
+      res += "(self) ";
+    }
+    res += _self_type_opt->to_string();
+    res += ", ";
+  }
   for(int i = 0; i < _params.size(); ++i) {
     res += _params[i]->to_string();
     if(i != _params.size() - 1) res += ", ";

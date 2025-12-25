@@ -552,6 +552,7 @@ public:
   void preVisit(CompoundAssignmentExpression &node) override;
   void preVisit(IndexExpression &node) override;
   void preVisit(FieldExpression &node) override;
+  void preVisit(MethodCallExpression &node) override;
 
   // register parameter
   void visit(Function &node) override;
