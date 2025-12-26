@@ -18,7 +18,6 @@ std::string read_file(const std::string &path) {
 }
 
 int main() {
-  // std::string path = "../test/semantic-1/return1/return1.rx";
   std::string path = "../test/sem.rx";
   std::string source_code = read_file(path);
   try {
