@@ -1033,7 +1033,7 @@ std::unique_ptr<Expression> Parser::parsePrefixExpression(TokenType delim) {
   if(ctc == TokenTypeCat::kLiteral || ctt == TokenType::kTrue || ctt == TokenType::kFalse) {
     return parseLiteralExpression();
   }
-  if(ctt == TokenType::kSelfObject) {
+  if(ctt == TokenType::kSelfObject || ctt == TokenType::kSelfType) {
     return parsePathExpression();
   }
   if(ctc == TokenTypeCat::kIdentifier) {

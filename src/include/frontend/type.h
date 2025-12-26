@@ -154,16 +154,16 @@ public:
     return _prime != TypePrime::kBool && _prime != TypePrime::kChar && _prime != TypePrime::kStr;
   }
   bool is_integer() const {
-    return is_signed() || is_unsigned();
+    return is_signed_int() || is_unsigned_int();
   }
   bool is_float() const {
     return _prime == TypePrime::kF32 || _prime == TypePrime::kF64;
   }
-  bool is_signed() const {
+  bool is_signed_int() const {
     return _prime == TypePrime::kI8 || _prime == TypePrime::kI16 || _prime == TypePrime::kI32
       || _prime == TypePrime::kI64 || _prime == TypePrime::kISize;
   }
-  bool is_unsigned() const {
+  bool is_unsigned_int() const {
     return _prime == TypePrime::kU8 || _prime == TypePrime::kU16 || _prime == TypePrime::kU32
       || _prime == TypePrime::kU64 || _prime == TypePrime::kUSize;
   }
@@ -259,20 +259,18 @@ private:
   TypePtr _inner;
 };
 
-class EnumVariantType;
-
 class EnumType : public ExprType {
 public:
-  using variant_map_t = std::unordered_map<StringRef, std::shared_ptr<EnumVariantType>>;
+  using vlist_t = std::unordered_map<StringRef, usize_t>;
 
   explicit EnumType(StringRef ident)
   : ExprType(TypeKind::kEnum), _ident(std::move(ident)) {}
   StringRef ident() const { return _ident; }
-  void set_details(variant_map_t &&variants) {
-    _variants = std::move(variants);
+  void set_vlist(vlist_t &&variants) {
+    _vlist = std::move(variants);
   }
-  const variant_map_t& variants() const {
-    return _variants;
+  const vlist_t& vlist() const {
+    return _vlist;
   }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
@@ -281,7 +279,7 @@ protected:
   bool convertible_impl(const ExprType &other) const override;
 private:
   StringRef _ident;
-  variant_map_t _variants;
+  vlist_t _vlist;
 };
 
 class FunctionType : public ExprType {
@@ -362,32 +360,6 @@ protected:
   bool convertible_impl(const ExprType &other) const override;
 private:
   TypePtr _inner;
-};
-
-class EnumVariantType : public ExprType {
-public:
-  using discriminant_t = std::int64_t; // the actual type is seen in parent_enum->dis_type
-  EnumVariantType(
-    StringRef ident,
-    discriminant_t discriminant,
-    std::vector<TypePtr> &&asso_types,
-    std::shared_ptr<EnumType> parent_enum
-  ): ExprType(TypeKind::kEnumVariant), _ident(std::move(ident)), _discriminant(discriminant),
-  _asso_types(std::move(asso_types)), _parent_enum(std::move(parent_enum)) {}
-  StringRef ident() const { return _ident; }
-  discriminant_t discriminant() const { return _discriminant; }
-  const std::vector<TypePtr>& asso_types() const { return _asso_types; }
-  std::shared_ptr<EnumType> parent_enum() const { return _parent_enum; }
-  void combine_hash(std::size_t &seed) const override;
-  std::string to_string() const override;
-protected:
-  bool equals_impl(const ExprType &other) const override;
-  bool convertible_impl(const ExprType &other) const override;
-private:
-  StringRef _ident;
-  discriminant_t _discriminant;
-  std::vector<TypePtr> _asso_types;
-  std::shared_ptr<EnumType> _parent_enum;
 };
 
 class AliasType : public ExprType {

@@ -362,30 +362,6 @@ std::string RangeType::to_string() const {
   return res;
 }
 
-void EnumVariantType::combine_hash(std::size_t &seed) const {
-  parent_enum()->combine_hash(seed);
-  static constexpr std::hash<StringRef> hasher;
-  combine_hash_impl(seed, static_cast<std::size_t>(_kind));
-  combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
-}
-
-bool EnumVariantType::equals_impl(const ExprType &other) const {
-  const auto other_ev = static_cast<const EnumVariantType&>(other);
-  return *parent_enum() == *other_ev.parent_enum() && _ident == other_ev.ident();
-}
-
-bool EnumVariantType::convertible_impl(const ExprType &other) const {
-  const auto other_ev = static_cast<const EnumVariantType&>(other);
-  return *this == other_ev;
-}
-
-std::string EnumVariantType::to_string() const {
-  std::string res = _parent_enum->to_string();
-  res += "::";
-  res += _ident;
-  return res;
-}
-
 void AliasType::combine_hash(std::size_t &seed) const {
   // do not let this layer affect anything
   _type->combine_hash(seed);

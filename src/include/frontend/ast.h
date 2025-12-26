@@ -17,6 +17,7 @@
 #ifndef RUST_SHARD_FRONTEND_AST_H
 #define RUST_SHARD_FRONTEND_AST_H
 
+#include <limits>
 #include <memory>
 #include <utility>
 #include <variant>
@@ -622,6 +623,91 @@ private:
 public:
   EXPOSE_FIELD_CONST_REFERENCE(prime, _prime)
   EXPOSE_FIELD_CONST_REFERENCE(spec_value, _spec)
+
+  bool set_type(stype::TypePtr type) override {
+    // check whether something wrong happens.
+    // since &str exists, I can't ensure what is passed in is a PrimeType.
+
+    if(auto p = type.get_if<stype::PrimeType>(); p) {
+      if(p->is_signed_int()) {
+        // integer overflow: too large or too small.
+        // shall be stored in std::int64_t or std::uint64_t.
+        if(auto ival_ptr = std::get_if<std::int64_t>(&_spec)) {
+          std::int64_t _min, _max;
+          switch(p->prime()) {
+          case stype::TypePrime::kI8:
+            _min = std::numeric_limits<std::int8_t>::min();
+            _max = std::numeric_limits<std::int8_t>::max(); break;
+          case stype::TypePrime::kI16:
+            _min = std::numeric_limits<std::int16_t>::min();
+            _max = std::numeric_limits<std::int16_t>::max(); break;
+          case stype::TypePrime::kI32:
+            _min = std::numeric_limits<std::int32_t>::min();
+            _max = std::numeric_limits<std::int32_t>::max(); break;
+          case stype::TypePrime::kI64:
+            _min = std::numeric_limits<std::int64_t>::min();
+            _max = std::numeric_limits<std::int64_t>::max(); break;
+          case stype::TypePrime::kISize:
+            _min = std::numeric_limits<std::intptr_t>::min();
+            _max = std::numeric_limits<std::intptr_t>::max(); break;
+          default: throw std::runtime_error("Invalid type prime detected");
+          }
+          if(*ival_ptr < _min || *ival_ptr > _max)
+            return false;
+        } else if(auto uval_ptr = std::get_if<std::uint64_t>(&_spec)) {
+          std::uint64_t _max;
+          switch(p->prime()) {
+          case stype::TypePrime::kI8: _max = std::numeric_limits<std::int8_t>::max(); break;
+          case stype::TypePrime::kI16: _max = std::numeric_limits<std::int16_t>::max(); break;
+          case stype::TypePrime::kI32: _max = std::numeric_limits<std::int32_t>::max(); break;
+          case stype::TypePrime::kI64: _max = std::numeric_limits<std::int64_t>::max(); break;
+          case stype::TypePrime::kISize: _max = std::numeric_limits<std::intptr_t>::max(); break;
+          default: throw std::runtime_error("Invalid type prime detected");
+          }
+          if(*uval_ptr > _max)
+            return false;
+        } else
+          return false;
+      } else if(p->is_unsigned_int()) {
+        // integer overflow: too large or smaller than 0.
+        // shall be stored in std::int64_t or std::uint64_t.
+        if(auto ival_ptr = std::get_if<std::int64_t>(&_spec)) {
+          std::int64_t _min, _max = std::numeric_limits<std::int64_t>::max();
+          switch(p->prime()) {
+          case stype::TypePrime::kU8:
+            _min = std::numeric_limits<std::uint8_t>::min();
+            _max = std::numeric_limits<std::uint8_t>::max(); break;
+          case stype::TypePrime::kU16:
+            _min = std::numeric_limits<std::uint16_t>::min();
+            _max = std::numeric_limits<std::uint16_t>::max(); break;
+          case stype::TypePrime::kU32:
+            _min = std::numeric_limits<std::uint32_t>::min();
+            _max = std::numeric_limits<std::uint32_t>::max(); break;
+          case stype::TypePrime::kU64:
+            _min = std::numeric_limits<std::uint64_t>::min(); break; // _max won't be violated
+          case stype::TypePrime::kUSize:
+            _min = std::numeric_limits<std::uintptr_t>::min(); break; // _max won't be violated
+          default: throw std::runtime_error("Invalid type prime detected");
+          }
+          if(*ival_ptr < _min || *ival_ptr > _max)
+            return false;
+        } else if(auto uval_ptr = std::get_if<std::uint64_t>(&_spec)) {
+          std::uint64_t _max;
+          switch(p->prime()) {
+          case stype::TypePrime::kU8: _max = std::numeric_limits<std::uint8_t>::max(); break;
+          case stype::TypePrime::kU16: _max = std::numeric_limits<std::uint16_t>::max(); break;
+          case stype::TypePrime::kU32: _max = std::numeric_limits<std::uint32_t>::max(); break;
+          case stype::TypePrime::kU64: _max = std::numeric_limits<std::uint64_t>::max(); break;
+          case stype::TypePrime::kUSize: _max = std::numeric_limits<std::uintptr_t>::max(); break;
+          default: throw std::runtime_error("Invalid type prime detected");
+          }
+          if(*uval_ptr > _max)
+            return false;
+        } else return false;
+      } // no other circumstances required.
+    }
+    return TypeInfo::set_type(type);
+  }
 };
 
 class PathExpression : public ExpressionWithoutBlock {

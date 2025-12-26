@@ -51,12 +51,13 @@ struct SymbolInfo {
 class TypeInfo {
 public:
   stype::TypePtr get_type() const { return _tp; } // NOLINT
-  void set_type(stype::TypePtr tp) {
+  virtual bool set_type(stype::TypePtr tp) {
     /* might need reset, like kInt -> kI32 or kFloat -> kF32
     if(_tp.operator bool())
       throw std::runtime_error("TypeInfo already set");
     */
     _tp = std::move(tp);
+    return true;
   }
 private:
   stype::TypePtr _tp;

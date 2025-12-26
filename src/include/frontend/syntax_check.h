@@ -343,29 +343,23 @@ public:
       _recorder->report("Symbol not found for Enumeration");
       return;
     }
-    info->type = _type_pool->make_type<stype::EnumType>(node.ident());
-    node.set_type(info->type);
-    auto enum_ptr = info->type.get<stype::EnumType>();
-
+    auto etp = _type_pool->make_raw_type<stype::EnumType>(node.ident());
     // types of enum items
-    stype::EnumType::variant_map_t enum_variants;
+    stype::EnumType::vlist_t vlist;
     if(node.items_opt()) {
-      stype::EnumVariantType::discriminant_t dis = 0;
-      for(const auto &item: node.items_opt()->items()) {
+      stype::usize_t disc = 0;
+      for(auto &item: node.items_opt()->items()) {
         if(item->discr_opt()) {
-          _recorder->report("EnumItemDiscrimination not implemented. Ignoring it");
+          _recorder->report("Enum discriminant not supported");
         }
-        auto enum_variant_type = _type_pool->make_type<stype::EnumVariantType>(
-          item->ident(), dis, std::vector<stype::TypePtr>(), enum_ptr
-        );
-        item->set_type(enum_variant_type); // each enum item _singleton_ has its distinct type
-        enum_variants.emplace(
-          item->ident(), enum_variant_type.get<stype::EnumVariantType>()
-        );
-        ++dis;
+        vlist.emplace(item->ident(), disc);
+        disc++;
       }
     }
-    enum_ptr->set_details(std::move(enum_variants));
+    etp->set_vlist(std::move(vlist));
+
+    info->type = stype::TypePtr(etp);
+    node.set_type(stype::TypePtr(etp));
   }
 
   void preVisit(TypeAlias &node) override {

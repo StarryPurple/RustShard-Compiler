@@ -481,15 +481,18 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
   }
   auto inner1 = node.expr1()->cval();
   auto inner2 = node.expr2()->cval();
-  auto prime1 = inner1->get_if<sconst::ConstPrime>();
-  auto prime2 = inner2->get_if<sconst::ConstPrime>();
-  if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTag, "Inner type not primitive in comparison expression");
-    return;
-  }
-  if(inner1->type() != inner2->type()) {
+  if(!inner1->type()->is_convertible_from(*inner2->type()) && !inner2->type()->is_convertible_from(*inner1->type())) {
     _recorder->tagged_report(kErrTag, "Mismatched types in comparison expression");
     return;
+  }
+  if(node.oper() == Operator::kGt || node.oper() == Operator::kLt
+    || node.oper() == Operator::kGe || node.oper() == Operator::kGt) {
+    auto prime1 = inner1->get_if<sconst::ConstPrime>();
+    auto prime2 = inner2->get_if<sconst::ConstPrime>();
+    if(!prime1 || !prime2) {
+      _recorder->tagged_report(kErrTag, "Inner type not primitive in comparison expression");
+      return;
+    }
   }
 
   std::visit([&]<typename T01, typename T02>(T01 &&arg1, T02 &&arg2) {
@@ -523,7 +526,7 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
         throw std::runtime_error("Unsupported primitive type in comparison expression");
       }
   }
-}, prime1->value, prime2->value);
+}, inner1->const_val(), inner2->const_val());
 }
 
 void ConstEvaluator::visit(LazyBooleanExpression &node) {
@@ -848,10 +851,10 @@ void PreTypeFiller::postVisit(TypePath &node) {
   if(node.is_absolute()) {
     // ... I don't know.
   }
-  for(auto it = node.segments().begin(); it != node.segments().end(); ++it) {
+  for(int i = 0; i < node.segments().size(); ++i) {
     // PathIdentSegment ->
     // IDENTIFIER | "super" | "self" | "Self" | "crate"
-    auto ident = (*it)->ident_segment()->ident();
+    auto ident = node.segments()[i]->ident_segment()->ident();
     if(ident == "super") {
       _recorder->tagged_report(kErrTypeNotResolved, "keyword \"super\" is not supported here");
       return;
@@ -876,56 +879,25 @@ void PreTypeFiller::postVisit(TypePath &node) {
       return;
     }
     switch(info->kind) {
-    case SymbolKind::kConstant: {
-      if(!info->type) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Constant type not determined");
-        return;
-      }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Constant as a type path interval");
-        return;
-      }
-      node.set_type(info->type);
-    } break;
     case SymbolKind::kEnum: {
       // check whether the next one is a valid field.
       if(!info->type) {
         _recorder->tagged_report(kErrTypeNotResolved, "Enum type not determined");
         return;
       }
-      ++it;
-      if(it == node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Enum variant error, expected an enum item");
+      if(i != node.segments().size() - 1) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Enum type as a type path interval");
         return;
       }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Enum variant as a type path interval");
-        return;
-      }
-      auto item_ident = (*it)->ident_segment()->ident();
-      auto enum_type = info->type.get_if<stype::EnumType>();
-      if(!enum_type) {
-        throw std::runtime_error("Fatal error: enum type mismatch undetected");
-      }
-      if(auto vit = enum_type->variants().find(item_ident); vit == enum_type->variants().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Not a valid enum variant");
-        return;
-      } else if(!vit->second) {
-        throw std::runtime_error("Fatal error: enum variant type not set");
-      } else {
-        node.set_type(stype::TypePtr(vit->second));
-      }
+      node.set_type(info->type);
     } break;
     case SymbolKind::kStruct: {
       if(!info->type) {
         _recorder->tagged_report(kErrTypeNotResolved, "Struct type not determined");
         return;
       }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
-        _recorder->tagged_report(kErrTypeNotResolved, "Struct as a type path interval");
+      if(i != node.segments().size() - 1) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Struct type as a type path interval");
         return;
       }
       node.set_type(info->type);
@@ -935,8 +907,7 @@ void PreTypeFiller::postVisit(TypePath &node) {
         _recorder->tagged_report(kErrTypeNotResolved, "PrimitiveType type not determined");
         return;
       }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
+      if(i != node.segments().size() - 1) {
         _recorder->tagged_report(kErrTypeNotResolved, "PrimitiveType as a type path interval");
         return;
       }
@@ -947,20 +918,23 @@ void PreTypeFiller::postVisit(TypePath &node) {
         _recorder->tagged_report(kErrTypeNotResolved, "TypeAlias type not determined");
         return;
       }
-      auto ait = it; ++ait;
-      if(ait != node.segments().end()) {
+      if(i != node.segments().size() - 1) {
         _recorder->tagged_report(kErrTypeNotResolved, "TypeAlias as a type path interval");
         return;
       }
       node.set_type(info->type);
     } break;
-    case SymbolKind::kFunction:
-    case SymbolKind::kTrait:
-    case SymbolKind::kVariable: {
-      // ???
-      throw std::runtime_error("TypePath for function/trait/variable not implemented yet");
+    case SymbolKind::kTrait: {
+      _recorder->tagged_report(kErrTypeInvalid, "TypePath for trait not implemented yet");
       return;
     } break;
+    case SymbolKind::kFunction:
+    case SymbolKind::kVariable:
+    case SymbolKind::kConstant: {
+      _recorder->tagged_report(kErrTypeInvalid, "Function/Constant/Variable Identifier as type path");
+      return;
+    } break;
+    default: throw std::runtime_error("TypePath info kind invalid");
     }
   }
   if(!node.get_type()) {
@@ -1211,8 +1185,8 @@ void TypeFiller::postVisit(Enumeration &node) {
 }
 
 void TypeFiller::postVisit(EnumItem &node) {
-  throw std::runtime_error("EnumItem not implemented");
-  return;
+  // no need... for now.
+  node.set_type(_type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32));
 }
 
 void TypeFiller::postVisit(Trait &node) {
@@ -1323,59 +1297,70 @@ void TypeFiller::postVisit(PathInExpression &node) {
       }
       node.set_type(stype::TypePtr(func));
       return;
-    }
-    if(info1 && info1->kind == SymbolKind::kEnum) {
-      throw std::runtime_error("Enumeration not supported yet");
-    }
-    _recorder->tagged_report(kErrIdentNotResolved, "Unrecognized PathInExpression");
-  }
-  auto ident = node.segments().back()->ident_seg()->ident();
-  if(ident == "self") {
-    if(!is_in_asso_block()) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Invalid use of \"self\" outside an asso block");
+    } else if(info1 && info1->kind == SymbolKind::kEnum) {
+      auto enum_ptr = info1->type.get<stype::EnumType>();
+      if(enum_ptr->vlist().contains(ident2)) {
+        // found. type is still the enum type
+        node.set_type(info1->type);
+        return;
+      } else {
+        _recorder->tagged_report(kErrIdentNotResolved, "Enum variant name " + std::string(ident2)
+          + " not found in enum type " + enum_ptr->to_string());
+        return;
+      }
+    } else {
+      _recorder->tagged_report(kErrIdentNotResolved, "Unrecognized PathInExpression");
       return;
     }
-    if(!_impl_type) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Already ailed to resolve \"self\" here");
-      return;
-    }
-    stype::TypePtr tp;
-    switch(_self_state) {
-    case SelfState::kInvalid: {
-      _recorder->tagged_report(kErrIdentNotResolved, "No self param is used here");
-      return;
-    } break;
-    case SelfState::kNormal: {
-      tp = _impl_type;
-    } break;
-    case SelfState::kRef: {
-      tp = _type_pool->make_type<stype::RefType>(_impl_type, false);
-    } break;
-    case SelfState::kRefMut: {
-      tp = _type_pool->make_type<stype::RefType>(_impl_type, true);
-    } break;
-    default: throw std::runtime_error("Unrecognizable SelfState");
-    }
-    node.set_type(tp);
-    return;
-  }
-  if(ident == "super" || ident == "Self" || ident == "crate") {
-    _recorder->tagged_report(kErrIdentNotResolved, "Not expected keywords " + std::string(ident)
-      + " in the end of PathInExpression");
-    return;
-  }
-  auto info = find_symbol(ident);
-  if(!info) {
-    _recorder->tagged_report(kErrIdentNotResolved, "Identifier not found as the end of PathInExpression");
-    return;
-  }
-  if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable || info->kind == SymbolKind::kFunction
-    || info->kind == SymbolKind::kStruct) {
-    if(info->kind == SymbolKind::kVariable && info->is_place_mut) node.set_place_mut();
-    node.set_type(info->type);
   } else {
-    _recorder->tagged_report(kErrIdentNotResolved, "Invalid type associated with the identifier");
-    return;
+    auto ident = node.segments().back()->ident_seg()->ident();
+    if(ident == "self") {
+      if(!is_in_asso_block()) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Invalid use of \"self\" outside an asso block");
+        return;
+      }
+      if(!_impl_type) {
+        _recorder->tagged_report(kErrTypeNotResolved, "Already ailed to resolve \"self\" here");
+        return;
+      }
+      stype::TypePtr tp;
+      switch(_self_state) {
+      case SelfState::kInvalid: {
+        _recorder->tagged_report(kErrIdentNotResolved, "No self param is used here");
+        return;
+      } break;
+      case SelfState::kNormal: {
+        tp = _impl_type;
+      } break;
+      case SelfState::kRef: {
+        tp = _type_pool->make_type<stype::RefType>(_impl_type, false);
+      } break;
+      case SelfState::kRefMut: {
+        tp = _type_pool->make_type<stype::RefType>(_impl_type, true);
+      } break;
+      default: throw std::runtime_error("Unrecognizable SelfState");
+      }
+      node.set_type(tp);
+      return;
+    }
+    if(ident == "super" || ident == "Self" || ident == "crate") {
+      _recorder->tagged_report(kErrIdentNotResolved, "Not expected keywords " + std::string(ident)
+        + " in the end of PathInExpression");
+      return;
+    }
+    auto info = find_symbol(ident);
+    if(!info) {
+      _recorder->tagged_report(kErrIdentNotResolved, "Identifier not found as the end of PathInExpression");
+      return;
+    }
+    if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable || info->kind == SymbolKind::kFunction
+      || info->kind == SymbolKind::kStruct) {
+      if(info->kind == SymbolKind::kVariable && info->is_place_mut) node.set_place_mut();
+      node.set_type(info->type);
+      } else {
+        _recorder->tagged_report(kErrIdentNotResolved, "Invalid type associated with the identifier");
+        return;
+      }
   }
 }
 
@@ -1425,7 +1410,7 @@ void TypeFiller::postVisit(NegationExpression &node) {
       _recorder->tagged_report(kErrTypeNotMatch, "Negation on non number");
       return;
     }
-    if(prime->is_unsigned()) {
+    if(prime->is_unsigned_int()) {
       _recorder->tagged_report(kErrTypeNotMatch, "Negation on unsigned integer");
       return;
     }
@@ -1548,27 +1533,35 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ComparisonExpression");
     return;
   }
-  auto prime1 = type1.get_if<stype::PrimeType>();
-  auto prime2 = type2.get_if<stype::PrimeType>();
-  if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in ComparisonExpression");
-    return;
-  }
   switch(node.oper()) {
-  case Operator::kEq:
-  case Operator::kNe:
   case Operator::kGt:
   case Operator::kLt:
   case Operator::kGe:
-  case Operator::kLe:
+  case Operator::kLe: {
+    auto prime1 = type1.get_if<stype::PrimeType>();
+    auto prime2 = type2.get_if<stype::PrimeType>();
+    if(!prime1 || !prime2) {
+      _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in ComparisonExpression");
+      return;
+    }
     if(combine_prime(prime1, prime2)) {
       node.set_type(_type_pool->make_type<stype::PrimeType>(stype::TypePrime::kBool));
     } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator < > <= >= == !=."
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator < > <= >=."
         " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
       return;
     }
-    break;
+  } break;
+  case Operator::kEq:
+  case Operator::kNe: {
+    if(type1->is_convertible_from(*type2) || type2->is_convertible_from(*type1)) {
+      node.set_type(_type_pool->make_type<stype::PrimeType>(stype::TypePrime::kBool));
+    } else {
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator == !=."
+        " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
+      return;
+    }
+  } break;
   default:
     throw std::runtime_error("Invalid operator type in comparison expression");
   }
@@ -2077,6 +2070,13 @@ void TypeFiller::postVisit(CallExpression &node) {
           + expr_type->to_string());
         return;
       }
+      if(auto p = expr_type.get_if<stype::PrimeType>(); p && p->is_undetermined()) {
+        auto succeed = argv[i]->set_type(params[i]);
+        if(!succeed) {
+          _recorder->tagged_report(kErrConstevalFailed, "Function param conversion faces problems like overflow");
+          return;
+        }
+      }
     }
   }
   node.set_type(func_type->ret_type());
@@ -2180,6 +2180,13 @@ void TypeFiller::postVisit(MethodCallExpression &node) {
           + std::to_string(i) + "-th param to be " + params[i]->to_string() + ", but received "
           + expr_type->to_string());
         return;
+      }
+      if(auto p = expr_type.get_if<stype::PrimeType>(); p && p->is_undetermined()) {
+        auto succeed = argv[i]->set_type(params[i]);
+        if(!succeed) {
+          _recorder->tagged_report(kErrConstevalFailed, "Function param conversion faces problems like overflow");
+          return;
+        }
       }
     }
   }
@@ -2653,7 +2660,8 @@ void TypeFiller::postVisit(LetStatement &node) {
       _recorder->tagged_report(kErrIdentNotResolved, "Type tag not resolved");
       return;
     }
-    bool allow_convert = type_tag->is_convertible_from(*type);
+    // heh. return13: allow never type.
+    bool allow_convert = type_tag->is_coercible_from(*type);
     if(auto r = type.get_if<stype::RefType>();
       node.expr_opt()->allow_auto_deref() && r && type_tag->is_convertible_from(*r->inner())) {
       allow_convert = true;
