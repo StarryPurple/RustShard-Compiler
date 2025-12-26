@@ -1469,13 +1469,24 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
-    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in ArithmeticOrLogicalExpression");
+    _recorder->tagged_report(kErrTypeNotResolved, "Type not primitive in ArithmeticOrLogicalExpression."
+      " type 1: " + type1->to_string() + " , type 2: " + type2->to_string());
     return;
   }
   switch(node.oper()) {
   case Operator::kShl:
   case Operator::kShr:
-    if(prime1->is_signed() && prime2->is_unsigned()) {
+    if(prime1->prime() == stype::TypePrime::kInt) {
+      // default
+      type1 = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
+      prime1 = type1.get<stype::PrimeType>();
+    }
+    if(prime2->prime() == stype::TypePrime::kInt) {
+      // default
+      type2 = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
+      prime2 = type1.get<stype::PrimeType>();
+    }
+    if(prime1->is_integer() && prime2->is_integer()) {
       node.set_type(type1);
     } else {
       _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator << >>."
@@ -1628,7 +1639,7 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
   case TypePrime::kUSize:
   case TypePrime::kF32:
   case TypePrime::kF64:
-    if(from_prime->is_integer() || from_prime->is_float() ||
+    if(from_prime->is_undetermined() || from_prime->is_integer() || from_prime->is_float() ||
       from_prime->prime() == TypePrime::kChar || from_prime->prime() == TypePrime::kBool) {
       node.set_type(to_type);
     } else {
@@ -1790,8 +1801,19 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   switch(node.oper()) {
   case Operator::kShlAssign:
   case Operator::kShrAssign:
-    if(!(prime1->is_integer() && prime2->is_unsigned())) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator <<= >>=");
+    if(prime1->prime() == stype::TypePrime::kInt) {
+      // default
+      type1 = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
+      prime1 = type1.get<stype::PrimeType>();
+    }
+    if(prime2->prime() == stype::TypePrime::kInt) {
+      // default
+      type2 = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
+      prime2 = type1.get<stype::PrimeType>();
+    }
+    if(!(prime1->is_integer() && prime2->is_integer())) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator <<= >>=. type 1: " + type1->to_string()
+        + ", type 2: " + type2->to_string());
       return;
     }
     break;
@@ -2586,6 +2608,11 @@ void TypeFiller::postVisit(IfExpression &node) {
       if(t2->is_coercible_from(*type)) type = t2;
       if(!arg->always_returns()) always_returns = false;
     } else {
+      stype::TypePtr t2 = _type_pool->make_unit();
+      if(!type->is_coercible_from(*t2) && !t2->is_coercible_from(*type)) {
+        success = false;
+      }
+      if(t2->is_coercible_from(*type)) type = t2;
       always_returns = false; // no else/elif, impossible to be always returning
     }
   }, node.else_spec());

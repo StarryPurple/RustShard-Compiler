@@ -1270,7 +1270,8 @@ std::unique_ptr<PathExpression> Parser::parsePathExpression() {
 
 std::unique_ptr<PathInExpression> Parser::parsePathInExpression() {
   Backtracker tracker(*_ast_ctx);
-  if(CHECK_TOKEN(kPathSep)) _ast_ctx->consume();
+  if(CHECK_TOKEN(kPathSep))
+    _ast_ctx->consume();
   std::vector<std::unique_ptr<PathExprSegment>> pess;
   auto pes1 = parsePathExprSegment();
   EXPECT_POINTER_NOT_EMPTY(pes1);
