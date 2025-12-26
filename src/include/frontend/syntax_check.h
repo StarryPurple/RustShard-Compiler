@@ -515,6 +515,9 @@ public:
   void postVisit(StructStruct &node) override;
   void postVisit(Enumeration &node) override;
 
+  // check: one and only one fn main() -> xxx shall exist.
+  void postVisit(Crate &node) override;
+
 private:
   ErrorRecorder *_recorder;
   stype::TypePool *_type_pool;
@@ -541,7 +544,12 @@ public:
 
   RUST_SHARD_AST_TYPED_VISITABLE_NODES_LIST(ISM_RS_POST_VISIT_OVERRIDE_METHOD);
 
+  // exit termination
+
+  void visit(Statements &node) override;
+
   // assignment: bind lvalue property
+
   void preVisit(AssignmentExpression &node) override;
   void preVisit(CompoundAssignmentExpression &node) override;
   void preVisit(IndexExpression &node) override;
@@ -549,10 +557,13 @@ public:
   void preVisit(MethodCallExpression &node) override;
 
   // register parameter
+
   void visit(Function &node) override;
 
   // set the types
+
   void postVisit(LetStatement &node) override;
+
 
   // helpers
   // If type not match, binding will fail
@@ -575,12 +586,16 @@ private:
   sconst::ConstPool *_const_pool;
   ConstEvaluator _evaluator;
 
+  // whether the asso function has self param and what's its state
   enum class SelfState {
-    kInvalid,
-    kNormal,
-    kRef,
-    kRefMut,
+    kInvalid, // fn has no self param
+    kNormal, // fn f(self, ...)
+    kRef, // fn f(&self, ...)
+    kRefMut, // fn f(&mut self, ...)
   } _self_state = SelfState::kInvalid;
+
+  bool _is_in_main = false;
+  bool _might_have_exited = false;
 };
 
 #undef ISM_RS_POST_VISIT_OVERRIDE_METHOD

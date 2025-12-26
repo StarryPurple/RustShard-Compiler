@@ -1099,6 +1099,23 @@ void PreTypeFiller::postVisit(Enumeration &node) {
   }
 }
 
+void PreTypeFiller::postVisit(Crate &node) {
+  auto info = find_symbol("main");
+  if(!info || info->kind != SymbolKind::kFunction) {
+    _recorder->report("Main function does not exist");
+    ScopedVisitor::postVisit(node); // exit scope
+    return;
+  }
+  auto func = info->type.get<stype::FunctionType>();
+  if(func->self_type_opt() || !func->params().empty()) {
+    _recorder->report("Main function shall not have parameters");
+    ScopedVisitor::postVisit(node);
+    return;
+  }
+  ScopedVisitor::postVisit(node); // exit scope
+}
+
+
 /********************** TypeFiller *****************************/
 
 const std::string TypeFiller::kErrTypeNotResolved = "Error: Type not resolved";
@@ -1136,6 +1153,7 @@ void TypeFiller::postVisit(Function &node) {
   } else {
     _recorder->tagged_report(kErrTypeNotResolved, "Function failed to deduct its return type");
   }
+
   // update: already registered in PreTypeFiller
   /*
   // after checking, register this function type to the symbol table.
@@ -1652,6 +1670,26 @@ void TypeFiller::postVisit(TypeCastExpression &node) {
   }
 }
 
+void TypeFiller::visit(Statements &node) {
+  RecursiveVisitor::preVisit(node);
+  for(const auto &stmt: node.stmts()) {
+    if(_is_in_main && _might_have_exited) {
+      _recorder->report("Warning: Possible statements after exit()");
+      return;
+    }
+    stmt->accept(*this);
+  }
+  if(node.expr_opt()) {
+    if(_is_in_main && _might_have_exited) {
+      _recorder->report("Warning: Possible statements after exit()");
+      return;
+    }
+    node.expr_opt()->accept(*this);
+  }
+  RecursiveVisitor::postVisit(node);
+}
+
+
 void TypeFiller::preVisit(AssignmentExpression &node) {
   node.expr1()->set_lside();
 }
@@ -1735,7 +1773,11 @@ void TypeFiller::visit(Function &node) {
     }
   }
 
+  if(node.ident() == "main" && !node.params_opt()) { _is_in_main = true; _might_have_exited = false; }
+
   if(node.body_opt()) node.body_opt()->accept(*this);
+
+  if(node.ident() == "main" && !node.params_opt()) { _is_in_main = false; _might_have_exited = false; }
 
   // reset self state
   _self_state = SelfState::kInvalid;
@@ -2042,6 +2084,14 @@ void TypeFiller::postVisit(CallExpression &node) {
   if(!func_type) {
     _recorder->tagged_report(kErrTypeNotResolved, "Function call type not resolved");
     return;
+  }
+  if(func_type->ident() == "exit") {
+    if (!_is_in_main) {
+      // builtin check: exit function must be in main function.
+      _recorder->report("Warning: exit() function called out of main function");
+      return;
+    }
+    _might_have_exited = true;
   }
   if(!node.params_opt()) {
     // no params.
