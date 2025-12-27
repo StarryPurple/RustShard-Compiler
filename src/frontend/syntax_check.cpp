@@ -2771,13 +2771,16 @@ void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type
   } else if(pattern->is_mut()) {
     is_place_mut = true;
   }
-  auto info = add_symbol(pattern->ident(), SymbolInfo{
+  auto info_ptr = find_symbol(pattern->ident());
+  SymbolInfo info{
     .node = pattern, .ident = pattern->ident(), .kind = SymbolKind::kVariable,
     .type = type, .is_place_mut = is_place_mut
-  });
-  if(!info) {
-    _recorder->report("Variable identifier already defined");
-    return;
+  };
+  if(info_ptr) {
+    // allow variable shadowing.
+    *info_ptr = info;
+  } else {
+    add_symbol(pattern->ident(), info);
   }
 }
 

@@ -758,7 +758,7 @@ enum class Precedence {
   kAdditive,       // +, -
   kMultiplicative, // *, /, %
   kTypeCast,       // as
-  kPrefix,         // -, !, *(deref), &, &&
+  kPrefix,         // -(neg), !, *(deref), &, &&
   kCallAndMember,  // (), [], ., ::
   kHighest,        // defence
 };
