@@ -573,6 +573,7 @@ class Expression : public BasicNode, public TypeInfo {
 public:
   Expression() = default;
   virtual bool has_block() const = 0;
+  virtual bool is_predict_without_value() const { return false; }
   bool has_constant() const { return static_cast<bool>(_cval); }
   bool is_lside() const { return _is_lside; }
   void set_lside() { _is_lside = true; }
@@ -1372,6 +1373,7 @@ public:
 class LoopExpression : public ExpressionWithBlock {
 public:
   LoopExpression() = default;
+  bool is_predict_without_value() const override { return true; }
 private:
   std::vector<BreakExpression*> _loop_breaks;
 public:
@@ -1384,6 +1386,7 @@ public:
   explicit InfiniteLoopExpression(
     std::unique_ptr<BlockExpression> &&block_expr
   ): _block_expr(std::move(block_expr)) {}
+  bool is_predict_without_value() const override { return true; }
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<BlockExpression> _block_expr;
@@ -1425,6 +1428,12 @@ public:
     std::unique_ptr<IfExpression> &&if_expr
   ): _cond(std::move(cond)), _block_expr(std::move(block_expr)),
   _else_spec(std::move(if_expr)) {}
+  bool is_predict_without_value() const override {
+    if(std::get_if<std::unique_ptr<BlockExpression>>(&_else_spec)) return true;
+    if(auto elif = std::get_if<std::unique_ptr<IfExpression>>(&_else_spec))
+      return (*elif)->is_predict_without_value();
+    return true;
+  }
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   std::unique_ptr<Conditions> _cond;

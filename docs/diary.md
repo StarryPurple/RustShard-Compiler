@@ -13,3 +13,5 @@ misc57: Overflow in LiteralExpression. The fault is not in line 91, but in line 
 return5/return6/return7: more main/exit behaviors (I'd like to take them as warnings...).
 
 comprehensive (2,19,34,37,...): Allow a strong variable shadowing.
+
+comprehensive 29: !i32 is allowed.

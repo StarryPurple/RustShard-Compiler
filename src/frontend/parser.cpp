@@ -918,6 +918,13 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence, TokenTy
     infix_precedence[_ast_ctx->current().type] > precedence) {
     auto type = _ast_ctx->current().type;
     int new_pred = infix_precedence[type];
+    if((type == TokenType::kAnd || type == TokenType::kMinus || type == TokenType::kStar
+      || type == TokenType::kLParenthesis)
+      && lft->is_predict_without_value()) {
+      // terminate. The '&'/'-'/'*'/‘(' shall be the start of a prefix expression.
+      // &: ref. '-': neg. '*': deref. '(': call.
+      break;
+    }
     switch(type) {
       // prefix: field, func call, index field...?
     case TokenType::kDot: {
@@ -958,6 +965,7 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence, TokenTy
       EXPECT_POINTER_NOT_EMPTY(lft);
     } break;
       // infix
+
     case TokenType::kPlus: case TokenType::kMinus: case TokenType::kStar:
     case TokenType::kSlash: case TokenType::kPercent:
     case TokenType::kAnd: case TokenType::kOr: case TokenType::kCaret:

@@ -1434,8 +1434,8 @@ void TypeFiller::postVisit(NegationExpression &node) {
     }
   } break;
   case Operator::kLogicalNot: {
-    if(prime->prime() != stype::TypePrime::kBool) {
-      _recorder->tagged_report(kErrTypeNotMatch, "Logical not on non boolean");
+    if(prime->prime() != stype::TypePrime::kBool && !prime->is_integer() && prime->prime() != stype::TypePrime::kInt) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Logical not on boolean or integer");
       return;
     }
   } break;
