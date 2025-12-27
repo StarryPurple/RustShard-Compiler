@@ -2777,9 +2777,17 @@ void TypeFiller::bind_identifier(IdentifierPattern *pattern, stype::TypePtr type
     .type = type, .is_place_mut = is_place_mut
   };
   if(info_ptr) {
-    // allow variable shadowing.
-    *info_ptr = info;
+    // variable symbol occurred.
+    info_ptr = _scopes.back()->find_symbol(pattern->ident());
+    if(info_ptr) {
+      // shadow the same symbol in the same scope.
+      *info_ptr = info;
+    } else {
+      // override the symbol in upper scope.
+      add_symbol(pattern->ident(), info);
+    }
   } else {
+    // new symbol. add to current scope.
     add_symbol(pattern->ident(), info);
   }
 }
