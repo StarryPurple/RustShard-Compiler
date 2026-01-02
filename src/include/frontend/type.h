@@ -53,7 +53,7 @@ public:
 };
 
 struct TypePath {
-  std::vector<StringRef> segments;
+  std::vector<StringT> segments;
   bool is_absolute;
 };
 
@@ -66,7 +66,7 @@ enum class TypePrime {
   kInt, kFloat, // undetermined types: Integer, floating point.
 };
 
-StringRef prime_strs(TypePrime prime);
+StringT prime_strs(TypePrime prime);
 const std::vector<TypePrime>& type_primes();
 
 enum class TypeKind {
@@ -116,6 +116,7 @@ public:
   }
 
   virtual std::string to_string() const = 0;
+  virtual std::string IR_string() const { throw std::runtime_error("Unimplemented IR string"); }
 
   // whether this_tp <- from_tp is allowed.
   // 1. tt = ft
@@ -172,6 +173,7 @@ public:
   }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
+  std::string IR_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -187,6 +189,7 @@ public:
   usize_t length() const { return _length; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
+  std::string IR_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -203,6 +206,7 @@ public:
   bool ref_is_mut() const { return _ref_is_mut; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
+  std::string IR_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -213,22 +217,31 @@ private:
 
 class StructType : public ExprType {
 public:
-  explicit StructType(StringRef ident)
+  explicit StructType(StringT ident)
   : ExprType(TypeKind::kStruct),
   _ident(std::move(ident)) {}
-  void set_fields(std::map<StringRef, TypePtr> &&fields) {
-    _fields = std::move(fields);
+  void set_fields(std::vector<std::pair<StringT, TypePtr>> &&ordered_fields) {
+    _ordered_fields = std::move(ordered_fields);
+    for(int i = 0; i < _ordered_fields.size(); ++i) {
+      _field_orders.emplace(_ordered_fields[i].first, std::pair(i, _ordered_fields[i].second));
+      _fields.emplace(_ordered_fields[i].first, _ordered_fields[i].second);
+    }
   }
-  StringRef ident() const { return _ident; }
-  const std::map<StringRef, TypePtr>& fields() const { return _fields; }
+  StringT ident() const { return _ident; }
+  const auto& fields() const { return _fields; }
+  const auto& ordered_fields() const { return _ordered_fields; }
+  const auto& field_orders() const { return _field_orders; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
+  std::string IR_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
 private:
-  StringRef _ident;
-  std::map<StringRef, TypePtr> _fields;
+  StringT _ident;
+  std::map<StringT, TypePtr> _fields;
+  std::vector<std::pair<StringT, TypePtr>> _ordered_fields;
+  std::unordered_map<StringT, std::pair<int, TypePtr>> _field_orders;
 };
 
 class TupleType : public ExprType {
@@ -238,6 +251,7 @@ public:
   const std::vector<TypePtr>& members() const { return _members; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
+  std::string IR_string() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -261,11 +275,11 @@ private:
 
 class EnumType : public ExprType {
 public:
-  using vlist_t = std::unordered_map<StringRef, usize_t>;
+  using vlist_t = std::unordered_map<StringT, usize_t>;
 
-  explicit EnumType(StringRef ident)
+  explicit EnumType(StringT ident)
   : ExprType(TypeKind::kEnum), _ident(std::move(ident)) {}
-  StringRef ident() const { return _ident; }
+  StringT ident() const { return _ident; }
   void set_vlist(vlist_t &&variants) {
     _vlist = std::move(variants);
   }
@@ -278,20 +292,20 @@ protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
 private:
-  StringRef _ident;
+  StringT _ident;
   vlist_t _vlist;
 };
 
 class FunctionType : public ExprType {
 public:
   FunctionType(
-    StringRef ident,
+    StringT ident,
     TypePtr self_type_opt,
     std::vector<TypePtr> &&params,
     TypePtr ret_type
   ): ExprType(TypeKind::kFunction), _ident(std::move(ident)),
   _params(std::move(params)), _ret_type(std::move(ret_type)), _self_type_opt(std::move(self_type_opt)) {}
-  StringRef ident() const { return _ident; }
+  StringT ident() const { return _ident; }
   const std::vector<TypePtr>& params() const { return _params; }
   TypePtr ret_type() const { return _ret_type; }
   TypePtr self_type_opt() const { return _self_type_opt; }
@@ -301,7 +315,7 @@ protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
 private:
-  StringRef _ident;
+  StringT _ident;
   std::vector<TypePtr> _params;
   TypePtr _ret_type;
   TypePtr _self_type_opt;
@@ -309,33 +323,33 @@ private:
 
 class TraitType : public ExprType {
 public:
-  using asso_func_map_t = std::unordered_map<StringRef, TypePtr>;
-  using asso_type_map_t = std::unordered_map<StringRef, TypePtr>;
-  using asso_const_map_t = std::unordered_map<StringRef, TypePtr>;
+  using asso_func_map_t = std::unordered_map<StringT, TypePtr>;
+  using asso_type_map_t = std::unordered_map<StringT, TypePtr>;
+  using asso_const_map_t = std::unordered_map<StringT, TypePtr>;
 
-  explicit TraitType(StringRef ident)
+  explicit TraitType(StringT ident)
   : ExprType(TypeKind::kTrait), _ident(std::move(ident)) {}
-  void add_asso_func(const StringRef &ident, const TypePtr &asso_func) {
+  void add_asso_func(const StringT &ident, const TypePtr &asso_func) {
     auto f = asso_func.get_if<FunctionType>();
     if(!f) {
       throw std::runtime_error("TraitType: Not a trait function");
     }
     _asso_funcs.emplace(ident, std::move(f));
   }
-  void add_asso_const(const StringRef &ident, const TypePtr &asso_const) {
+  void add_asso_const(const StringT &ident, const TypePtr &asso_const) {
     _asso_consts.emplace(ident, asso_const);
   }
-  void add_asso_type(const StringRef &ident, const TypePtr &asso_type) {
+  void add_asso_type(const StringT &ident, const TypePtr &asso_type) {
     _asso_types.emplace(ident, asso_type);
   }
-  StringRef ident() const { return _ident; }
-  const std::unordered_map<StringRef, TypePtr>& asso_funcs() const {
+  StringT ident() const { return _ident; }
+  const std::unordered_map<StringT, TypePtr>& asso_funcs() const {
     return _asso_funcs;
   }
-  const std::unordered_map<StringRef, TypePtr>& asso_types() const {
+  const std::unordered_map<StringT, TypePtr>& asso_types() const {
     return _asso_types;
   }
-  const std::unordered_map<StringRef, TypePtr>& asso_consts() const {
+  const std::unordered_map<StringT, TypePtr>& asso_consts() const {
     return _asso_consts;
   }
   void combine_hash(std::size_t &seed) const override;
@@ -344,8 +358,8 @@ protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
 private:
-  StringRef _ident;
-  std::unordered_map<StringRef, TypePtr> _asso_funcs, _asso_types, _asso_consts;
+  StringT _ident;
+  std::unordered_map<StringT, TypePtr> _asso_funcs, _asso_types, _asso_consts;
 };
 
 class RangeType : public ExprType {
@@ -365,10 +379,10 @@ private:
 class AliasType : public ExprType {
 public:
   explicit AliasType(
-    StringRef ident
+    StringT ident
   ): ExprType(TypeKind::kAlias), _ident(std::move(ident)) {}
   void set_type(TypePtr type) { _type = std::move(type); }
-  StringRef ident() const { return _ident; }
+  StringT ident() const { return _ident; }
   TypePtr type() const { return _type; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
@@ -376,7 +390,7 @@ protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
 private:
-  StringRef _ident;
+  StringT _ident;
   TypePtr _type;
 };
 

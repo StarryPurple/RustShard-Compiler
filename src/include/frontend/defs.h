@@ -27,9 +27,19 @@ class RecursiveVisitor;
 
 class BasicNode {
 public:
+  BasicNode(): _id(_next_node_id++) {}
   virtual ~BasicNode() = default;
   virtual void accept(BasicVisitor &visitor) = 0;
+  int id() const { return _id; }
+private:
+  const int _id;
+
+public:
+  static void reset_id_counter() { _next_node_id = 0; }
+private:
+  static int _next_node_id;
 };
+int BasicNode::_next_node_id = 0;
 
 class ASTTree {
 public:
@@ -41,7 +51,7 @@ private:
 
 struct SymbolInfo {
   const BasicNode* node;
-  StringRef ident;
+  StringT ident;
   SymbolKind kind;
   stype::TypePtr type;
   bool is_place_mut; // variable
@@ -65,15 +75,17 @@ private:
 
 class Scope {
 public:
-  void init_scope() { _symbol_set.clear(); }
+  Scope(int id): _id(id) {}
+  int id() const { return _id; }
 
-  SymbolInfo* add_symbol(const StringRef &ident, const SymbolInfo &symbol);
-  SymbolInfo* find_symbol(const StringRef &ident);
-  const SymbolInfo* find_symbol(const StringRef &ident) const;
-  bool set_type(const StringRef &ident, stype::TypePtr type);
+  SymbolInfo* add_symbol(const StringT &ident, const SymbolInfo &symbol);
+  SymbolInfo* find_symbol(const StringT &ident);
+  const SymbolInfo* find_symbol(const StringT &ident) const;
+  bool set_type(const StringT &ident, stype::TypePtr type);
 
 private:
-  std::unordered_map<StringRef, SymbolInfo> _symbol_set;
+  std::unordered_map<StringT, SymbolInfo> _symbol_set;
+  int _id;
 };
 
 class ScopeInfo {
@@ -127,7 +139,7 @@ struct Module {
   */
   std::unordered_map<
     stype::TypePtr,
-    std::unordered_map<StringRef, std::shared_ptr<stype::FunctionType>>,
+    std::unordered_map<StringT, std::shared_ptr<stype::FunctionType>>,
     stype::TypePtr::Hash,
     stype::TypePtr::Equal> _methods;
 

@@ -559,7 +559,7 @@ std::unique_ptr<EnumItemDiscriminant> Parser::parseEnumItemDiscriminant() {
 std::unique_ptr<ConstantItem> Parser::parseConstantItem() {
   Backtracker tracker(*_ast_ctx);
   MATCH_TOKEN(kConst);
-  StringRef ident;
+  StringT ident;
   if(CHECK_TOKEN(kIdentifier) || CHECK_TOKEN(kUnderscore)) {
     ident = _ast_ctx->current().lexeme;
     _ast_ctx->consume();
@@ -734,7 +734,7 @@ std::unique_ptr<TypePathSegment> Parser::parseTypePathSegment() {
 
 std::unique_ptr<PathIdentSegment> Parser::parsePathIdentSegment() {
   Backtracker tracker(*_ast_ctx);
-  StringRef ident;
+  StringT ident;
   if(CHECK_TOKEN(kIdentifier) || CHECK_TOKEN(kSuper) || CHECK_TOKEN(kSelfObject) ||
     CHECK_TOKEN(kSelfType) || CHECK_TOKEN(kCrate)) {
     ident = _ast_ctx->current().lexeme;
@@ -895,21 +895,23 @@ Operator token_to_operator(TokenType type) {
   return Operator::kInvalid;
 }
 
-std::string remove_underscore(StringRef str) {
+std::string remove_underscore(StringT str) {
   static std::string res; res.clear();
   for(const char c: str) if(c != '_') res += c;
   return res;
 }
 
-std::uint64_t resolve_integer(StringRef lexeme) {
+std::uint64_t resolve_integer(StringT lexeme) {
   std::size_t first_alpha = lexeme.find_first_of("iu");
   std::string value_str = remove_underscore(lexeme.substr(0, first_alpha));
   return std::stoull(value_str);
 }
 
-bool ident_not_reserved(StringRef ident) {
+bool ident_not_reserved(StringT ident) {
   return ident != "super" && ident != "self" && ident != "Self" && ident != "crate" && ident != "$crate";
 }
+
+// a + b * c > d * e
 
 std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence, TokenType delim) {
   auto lft = parsePrefixExpression(delim);
@@ -1179,8 +1181,8 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     auto lexeme = current_token.lexeme;
     std::size_t first_alpha = lexeme.find_first_of("iu");
     std::string value_str = remove_underscore(lexeme.substr(0, first_alpha));
-    StringRef suffix_str;
-    if(first_alpha != StringRef::npos)
+    StringT suffix_str;
+    if(first_alpha != StringT::npos)
       suffix_str = lexeme.substr(first_alpha);
     if(suffix_str.starts_with('i')) {
       std::int64_t value = std::stoll(value_str);
@@ -1217,8 +1219,8 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     auto lexeme = current_token.lexeme;
     std::size_t first_alpha = lexeme.find_first_of("iu");
     std::string value_str = remove_underscore(lexeme.substr(0, first_alpha));
-    StringRef suffix_str;
-    if(first_alpha != StringRef::npos)
+    StringT suffix_str;
+    if(first_alpha != StringT::npos)
       suffix_str = lexeme.substr(first_alpha);
     if(suffix_str.starts_with('f')) {
       if(suffix_str == "i32") {

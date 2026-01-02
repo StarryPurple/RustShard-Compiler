@@ -4,8 +4,8 @@
 
 namespace insomnia::rust_shard::stype {
 
-StringRef prime_strs(TypePrime prime) {
-  static const std::unordered_map<TypePrime, StringRef> table = {
+StringT prime_strs(TypePrime prime) {
+  static const std::unordered_map<TypePrime, StringT> table = {
     {TypePrime::kChar, "char"}, {TypePrime::kBool, "bool"},
     {TypePrime::kI8, "i8"}, {TypePrime::kI16, "i16"},
     {TypePrime::kI32, "i32"}, {TypePrime::kI64, "i64"},
@@ -80,6 +80,18 @@ std::string PrimeType::to_string() const {
   return prime_strs(_prime);
 }
 
+std::string PrimeType::IR_string() const {
+  static const std::unordered_map<TypePrime, StringT> table = {
+    {TypePrime::kChar, "i32"}, {TypePrime::kBool, "i8"},
+    {TypePrime::kI8, "i8"}, {TypePrime::kI16, "i16"},
+    {TypePrime::kI32, "i32"}, {TypePrime::kI64, "i64"},
+    {TypePrime::kU8, "u8"}, {TypePrime::kU16, "u16"},
+    {TypePrime::kU32, "u32"}, {TypePrime::kU64, "u64"},
+    {TypePrime::kISize, "i32"}, {TypePrime::kUSize, "u32"},
+  };
+  return table.at(_prime);
+}
+
 void ArrayType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _inner->combine_hash(seed);
@@ -105,6 +117,10 @@ std::string ArrayType::to_string() const {
   res += std::to_string(_length);
   res += "]";
   return res;
+}
+
+std::string ArrayType::IR_string() const {
+  return "[" + std::to_string(_length) + " x " + _inner->IR_string() + "]";
 }
 
 void RefType::combine_hash(std::size_t &seed) const {
@@ -134,8 +150,12 @@ std::string RefType::to_string() const {
   return res;
 }
 
+std::string RefType::IR_string() const {
+  return _inner->IR_string() + "*";
+}
+
 void StructType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<StringRef> hasher;
+  static constexpr std::hash<StringT> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   // not rely on fields
@@ -170,6 +190,10 @@ bool StructType::convertible_impl(const ExprType &other) const {
 
 std::string StructType::to_string() const {
   return _ident;
+}
+
+std::string StructType::IR_string() const {
+  return "%" + _ident;
 }
 
 void TupleType::combine_hash(std::size_t &seed) const {
@@ -210,6 +234,17 @@ std::string TupleType::to_string() const {
   return res;
 }
 
+std::string TupleType::IR_string() const {
+  std::string res = "(";
+  for(int i = 0; i < _members.size(); ++i) {
+    res += _members[i]->IR_string();
+    if(i != _members.size() - 1) res += ", ";
+  }
+  if(_members.size() == 1) res += ",";
+  res += ")";
+  return res;
+}
+
 void SliceType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   _inner->combine_hash(seed);
@@ -231,7 +266,7 @@ std::string SliceType::to_string() const {
 }
 
 void EnumType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<StringRef> hasher;
+  static constexpr std::hash<StringT> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   // not rely on fields
@@ -268,7 +303,7 @@ std::string EnumType::to_string() const {
 }
 
 void FunctionType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<StringRef> hasher;
+  static constexpr std::hash<StringT> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
   if(_self_type_opt) _self_type_opt->combine_hash(seed);
@@ -321,7 +356,7 @@ std::string FunctionType::to_string() const {
 }
 
 void TraitType::combine_hash(std::size_t &seed) const {
-  static constexpr std::hash<StringRef> hasher;
+  static constexpr std::hash<StringT> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(hasher(_ident)));
 }

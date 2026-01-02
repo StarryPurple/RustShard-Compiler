@@ -8,7 +8,7 @@ namespace insomnia::rust_shard {
 #define UNIMPLEMENTED(message) \
   throw std::runtime_error(message);
 
-using StringRef = std::string;
+using StringT = std::string;
 
 }
 

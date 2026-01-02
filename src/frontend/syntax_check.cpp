@@ -22,7 +22,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
   }
 
   // builtin functions
-  std::vector<std::pair<StringRef, TypePtr>> builtin_functions = {{
+  std::vector<std::pair<StringT, TypePtr>> builtin_functions = {{
       // fn print(s: &str) -> ()
       "print", _type_pool->make_type<FunctionType>(
         "print",
@@ -1072,7 +1072,7 @@ void PreTypeFiller::visit(InherentImpl &node) {
 
 void PreTypeFiller::postVisit(StructStruct &node) {
   auto info = find_symbol(node.ident());
-  std::map<StringRef, stype::TypePtr> struct_fields;
+  std::vector<std::pair<StringT, stype::TypePtr>> struct_fields;
   if(node.fields_opt()) {
     for(const auto &field: node.fields_opt()->fields()) {
       auto ident = field->ident();
@@ -1081,7 +1081,7 @@ void PreTypeFiller::postVisit(StructStruct &node) {
         _recorder->report("Unresolved struct field type");
         continue; // continue partial compiling
       }
-      struct_fields.emplace(ident, ast_type);
+      struct_fields.emplace_back(ident, ast_type);
     }
   }
   info->type.get<stype::StructType>()->set_fields(std::move(struct_fields));
@@ -2038,7 +2038,7 @@ void TypeFiller::postVisit(StructExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Struct constructor name not a recognized struct");
     return;
   }
-  std::unordered_map<StringRef, stype::TypePtr> counter;
+  std::unordered_map<StringT, stype::TypePtr> counter;
   for(auto &[ident, t]: stp->fields()) {
     counter.emplace(ident, t);
   }

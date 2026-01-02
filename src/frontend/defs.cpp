@@ -12,7 +12,7 @@ void ASTTree::traverse(RecursiveVisitor &r_visitor) {
   r_visitor.traverse(*_crate);
 }
 
-SymbolInfo* Scope::add_symbol(const StringRef &ident, const SymbolInfo &symbol) {
+SymbolInfo* Scope::add_symbol(const StringT &ident, const SymbolInfo &symbol) {
   if(_symbol_set.contains(ident)) {
     throw std::runtime_error("Symbol \"" + std::string(ident) + "\" already added");
     return nullptr;
@@ -21,19 +21,19 @@ SymbolInfo* Scope::add_symbol(const StringRef &ident, const SymbolInfo &symbol) 
   return find_symbol(ident);
 }
 
-SymbolInfo* Scope::find_symbol(const StringRef &ident) {
+SymbolInfo* Scope::find_symbol(const StringT &ident) {
   auto it = _symbol_set.find(ident);
   if(it == _symbol_set.end()) return nullptr;
   return &it->second;
 }
 
-const SymbolInfo* Scope::find_symbol(const StringRef &ident) const {
+const SymbolInfo* Scope::find_symbol(const StringT &ident) const {
   auto it = _symbol_set.find(ident);
   if(it == _symbol_set.end()) return nullptr;
   return &it->second;
 }
 
-bool Scope::set_type(const StringRef &ident, stype::TypePtr type) {
+bool Scope::set_type(const StringT &ident, stype::TypePtr type) {
   auto it = _symbol_set.find(ident);
   if(it == _symbol_set.end()) return false;
   it->second.type = std::move(type);

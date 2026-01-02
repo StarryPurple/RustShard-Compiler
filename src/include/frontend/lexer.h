@@ -64,10 +64,10 @@ std::string token_type_to_string(TokenType type);
 
 struct Token {
   TokenType type = TokenType::kInvalid;
-  StringRef lexeme;
+  StringT lexeme;
   std::size_t row = -1, col = -1;
   Token() = default;
-  Token(TokenType _token_type, StringRef _lexeme, std::size_t _row, std::size_t _col)
+  Token(TokenType _token_type, StringT _lexeme, std::size_t _row, std::size_t _col)
     : type(_token_type), lexeme(_lexeme), row(_row), col(_col) {}
 
   friend std::ostream& operator<<(std::ostream &os, const Token &token) {
@@ -79,7 +79,7 @@ struct Token {
 };
 
 class Lexer {
-  StringRef _src_code;
+  StringT _src_code;
   std::vector<Token> _tokens;
   std::size_t _pos = 0; // points to first unhandled character
   std::size_t _row = 1, _col = 1; // exact position of _pos
@@ -117,9 +117,9 @@ class Lexer {
 
 public:
   Lexer() = default;
-  explicit Lexer(StringRef code) { tokenize(code); }
+  explicit Lexer(StringT code) { tokenize(code); }
   // return false if tokenization fails (lexical/syntax error)
-  void tokenize(StringRef code);
+  void tokenize(StringT code);
 
   explicit operator bool() const { return _error_code == Error::kSuccess; }
   [[nodiscard]] bool is_good() const { return _error_code == Error::kSuccess; }

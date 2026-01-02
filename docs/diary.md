@@ -15,3 +15,7 @@ return5/return6/return7: more main/exit behaviors (I'd like to take them as warn
 comprehensive (2,19,34,37,...): Allow a strong variable shadowing.
 
 comprehensive 29: !i32 is allowed.
+
+
+
+comprehensive 46: ItemStatement allows functions defined inside functions.

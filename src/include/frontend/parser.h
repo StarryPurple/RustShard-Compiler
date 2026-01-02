@@ -3,7 +3,6 @@
 
 #include "ast.h"
 #include "lexer.h"
-#include "recursive_visitor.h"
 
 #define PARSE_FUNCTION_GEN_METHOD(Node) \
   std::unique_ptr<Node> parse##Node();

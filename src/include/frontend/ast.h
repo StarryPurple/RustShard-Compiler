@@ -43,7 +43,7 @@ private:
   // method table. self type -> {Function}
   std::unordered_map<
     stype::TypePtr,
-    std::unordered_map<StringRef, std::shared_ptr<stype::FunctionType>>,
+    std::unordered_map<StringT, std::shared_ptr<stype::FunctionType>>,
     stype::TypePtr::Hash,
     stype::TypePtr::Equal> _methods;
 public:
@@ -54,7 +54,7 @@ public:
   void set_name(std::string ident) { _ident = std::move(ident); }
   void add_asso_method(stype::TypePtr caller_type, std::shared_ptr<stype::FunctionType> func_type) {
     if(auto it = _methods.find(caller_type); it == _methods.end()) {
-      std::unordered_map<StringRef, std::shared_ptr<stype::FunctionType>> inner;
+      std::unordered_map<StringT, std::shared_ptr<stype::FunctionType>> inner;
       inner.emplace(func_type->ident(), func_type);
       _methods.emplace(caller_type, std::move(inner));
     } else {
@@ -62,7 +62,7 @@ public:
     }
   }
   std::shared_ptr<stype::FunctionType> find_asso_method(
-    stype::TypePtr caller_type, const StringRef &func_ident, stype::TypePool *pool) {
+    stype::TypePtr caller_type, const StringT &func_ident, stype::TypePool *pool) {
 
     auto it = _methods.find(caller_type);
     if(it != _methods.end()) {
@@ -86,7 +86,7 @@ public:
       if(it == _methods.end()) {
         _methods.emplace(
           caller_type,
-          std::unordered_map<StringRef, std::shared_ptr<stype::FunctionType>>{{func_ident, func_ptr}}
+          std::unordered_map<StringT, std::shared_ptr<stype::FunctionType>>{{func_ident, func_ptr}}
           );
       } else {
         it->second.emplace(func_ident, func_ptr);
@@ -120,7 +120,7 @@ class Function : public VisItem, public ResolutionInfo {
 public:
   Function(
     bool is_const,
-    StringRef ident,
+    StringT ident,
     std::unique_ptr<FunctionParameters> &&params_opt,
     std::unique_ptr<Type> &&res_type_opt,
     std::unique_ptr<FunctionBodyExpr> &&body_opt
@@ -129,7 +129,7 @@ public:
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   bool _is_const;
-  StringRef _ident;
+  StringT _ident;
   std::unique_ptr<FunctionParameters> _params_opt;
   std::unique_ptr<Type> _res_type_opt;
   std::unique_ptr<FunctionBodyExpr> _body_opt;
@@ -302,12 +302,12 @@ private:
 class StructStruct : public Struct {
 public:
   StructStruct(
-    StringRef struct_name,
+    StringT struct_name,
     std::unique_ptr<StructFields> &&fields_opt
   ): _struct_name(struct_name), _fields_opt(std::move(fields_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _struct_name;
+  StringT _struct_name;
   std::unique_ptr<StructFields> _fields_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _struct_name)
@@ -329,12 +329,12 @@ public:
 class StructField : public BasicNode {
 public:
   StructField(
-    StringRef struct_name,
+    StringT struct_name,
     std::unique_ptr<Type> &&type
   ): _struct_name(struct_name), _type(std::move(type)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _struct_name;
+  StringT _struct_name;
   std::unique_ptr<Type> _type;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _struct_name)
@@ -344,12 +344,12 @@ public:
 class Enumeration : public VisItem, public TypeInfo {
 public:
   Enumeration(
-    StringRef enum_name,
+    StringT enum_name,
     std::unique_ptr<EnumItems> &&items_opt
   ): _enum_name(enum_name), _items_opt(std::move(items_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _enum_name;
+  StringT _enum_name;
   std::unique_ptr<EnumItems> _items_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _enum_name)
@@ -371,12 +371,12 @@ public:
 class EnumItem : public BasicNode, public TypeInfo {
 public:
   EnumItem(
-    StringRef item_name,
+    StringT item_name,
     std::unique_ptr<EnumItemDiscriminant> &&discr_opt
   ): _item_name(item_name), _discr_opt(std::move(discr_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _item_name;
+  StringT _item_name;
   std::unique_ptr<EnumItemDiscriminant> _discr_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _item_name)
@@ -398,13 +398,13 @@ public:
 class ConstantItem : public VisItem, public TypeInfo {
 public:
   ConstantItem(
-    StringRef item_name,
+    StringT item_name,
     std::unique_ptr<Type> &&type,
     std::unique_ptr<Expression> &&const_expr_opt
   ): _item_name(item_name), _type(std::move(type)), _const_expr_opt(std::move(const_expr_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _item_name; // might be an underscore.
+  StringT _item_name; // might be an underscore.
   std::unique_ptr<Type> _type;
   std::unique_ptr<Expression> _const_expr_opt;
 public:
@@ -416,12 +416,12 @@ public:
 class Trait : public VisItem, public TypeInfo, public ScopeInfo {
 public:
   Trait(
-    StringRef trait_name,
+    StringT trait_name,
     std::vector<std::unique_ptr<AssociatedItem>> &&asso_items
   ): _trait_name(trait_name), _asso_items(std::move(asso_items)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _trait_name;
+  StringT _trait_name;
   std::vector<std::unique_ptr<AssociatedItem>> _asso_items;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _trait_name)
@@ -474,12 +474,12 @@ public:
 class TypeAlias : public VisItem, public TypeInfo {
 public:
   TypeAlias(
-    StringRef alias_name,
+    StringT alias_name,
     std::unique_ptr<Type> &&type_opt
   ): _alias_name(alias_name), _type_opt(std::move(type_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _alias_name;
+  StringT _alias_name;
   std::unique_ptr<Type> _type_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _alias_name)
@@ -557,11 +557,11 @@ public:
 class PathIdentSegment : public BasicNode {
 public:
   explicit PathIdentSegment(
-    StringRef ident
+    StringT ident
   ): _ident(ident) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _ident; // might be super/self/Self/crate/$crate
+  StringT _ident; // might be super/self/Self/crate/$crate
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
 };
@@ -622,7 +622,7 @@ private:
   stype::TypePrime _prime;
   type_utils::primitive_variant _spec;
 public:
-  EXPOSE_FIELD_CONST_REFERENCE(prime, _prime)
+  EXPOSE_FIELD_CONST_REFERENCE(prime, _prime) // StringLiteral: TypePrime::kStr.
   EXPOSE_FIELD_CONST_REFERENCE(spec_value, _spec)
 
   bool set_type(stype::TypePtr type) override {
@@ -1049,13 +1049,13 @@ private:
 class NamedStructExprField : public StructExprField {
 public:
   NamedStructExprField(
-    StringRef ident,
+    StringT ident,
     std::unique_ptr<Expression> &&expr
   ): _ident(ident), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
   bool is_named() const override { return true; }
 private:
-  StringRef _ident;
+  StringT _ident;
   std::unique_ptr<Expression> _expr;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
@@ -1128,13 +1128,13 @@ class FieldExpression : public ExpressionWithoutBlock {
 public:
   FieldExpression(
     std::unique_ptr<Expression> &&expr,
-    StringRef ident
+    StringT ident
   ): _expr(std::move(expr)), _ident(ident) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
   bool allow_auto_deref() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
-  StringRef _ident;
+  StringT _ident;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)
@@ -1561,7 +1561,7 @@ public:
   IdentifierPattern(
     bool is_ref,
     bool is_mut,
-    StringRef ident,
+    StringT ident,
     std::unique_ptr<PatternNoTopAlt> &&pattern_opt
   ): _is_ref(is_ref), _is_mut(is_mut), _ident(ident),
   _pattern_opt(std::move(pattern_opt)) {}
@@ -1569,7 +1569,7 @@ public:
 private:
   bool _is_ref;
   bool _is_mut;
-  StringRef _ident;
+  StringT _ident;
   std::unique_ptr<PatternNoTopAlt> _pattern_opt;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(is_ref, _is_ref)
@@ -1643,12 +1643,12 @@ public:
 class StructPatternField : public BasicNode {
 public:
   StructPatternField(
-    StringRef ident,
+    StringT ident,
     std::unique_ptr<Pattern> &&pattern
   ): _ident(ident), _pattern(std::move(pattern)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
-  StringRef _ident;
+  StringT _ident;
   std::unique_ptr<Pattern> _pattern;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(ident, _ident)

@@ -5,8 +5,8 @@
 #include <utility>
 
 #include "recursive_visitor.h"
+#include "ast.h"
 #include "type.h"
-#include "parser.h"
 
 namespace insomnia::rust_shard::ast {
 
@@ -23,14 +23,14 @@ public:
   // Crate, BlockExpression, MatchArms, Function, Impl, Trait
 
   void preVisit(Crate &node) override {
-    _scopes.push_back(std::make_unique<Scope>());
+    _scopes.push_back(make_scope());
   }
   void postVisit(Crate &node) override {
     node.set_scope(std::move(_scopes.back()));
     _scopes.pop_back();
   }
   void preVisit(BlockExpression &node) override {
-    _scopes.push_back(std::make_unique<Scope>());
+    _scopes.push_back(make_scope());
   }
   void postVisit(BlockExpression &node) override {
     node.set_scope(std::move(_scopes.back()));
@@ -39,7 +39,7 @@ public:
   void visit(MatchArms &node) override {
     // no preVisit
     for(const auto &[arm, expr]: node.arms()) {
-      _scopes.push_back(std::make_unique<Scope>());
+      _scopes.push_back(make_scope());
       arm->accept(*this);
       expr->accept(*this);
       arm->set_scope(std::move(_scopes.back()));
@@ -55,7 +55,7 @@ public:
     if(!info)
       _recorder->report("Function symbol already defined: " + std::string(node.ident()));
     */
-    _scopes.push_back(std::make_unique<Scope>());
+    _scopes.push_back(make_scope());
   }
   void postVisit(Function &node) override {
     if(node.body_opt())
@@ -63,14 +63,14 @@ public:
     _scopes.pop_back();
   }
   void preVisit(InherentImpl &node) override {
-    _scopes.push_back(std::make_unique<Scope>());
+    _scopes.push_back(make_scope());
   }
   void postVisit(InherentImpl &node) override {
     node.set_scope(std::move(_scopes.back()));
     _scopes.pop_back();
   }
   void preVisit(TraitImpl &node) override {
-    _scopes.push_back(std::make_unique<Scope>());
+    _scopes.push_back(make_scope());
   }
   void postVisit(TraitImpl &node) override {
     node.set_scope(std::move(_scopes.back()));
@@ -82,7 +82,7 @@ public:
     });
     if(!info)
       _recorder->report("Trait symbol already defined: " + std::string(node.ident()));
-    _scopes.push_back(std::make_unique<Scope>());
+    _scopes.push_back(make_scope());
   }
   void postVisit(Trait &node) override {
     node.set_scope(std::move(_scopes.back()));
@@ -178,12 +178,16 @@ public:
 
 private:
   ErrorRecorder *_recorder;
+  int _scope_id_counter = 0;
   std::vector<std::unique_ptr<Scope>> _scopes; // store the constructing scopes
   std::vector<LoopExpression*> _loop_context;
   std::vector<FunctionBodyExpr*> _func_context;
 
-  SymbolInfo* add_symbol(StringRef ident, const SymbolInfo &symbol) {
+  SymbolInfo* add_symbol(StringT ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
+  }
+  std::unique_ptr<Scope> make_scope() {
+    return std::make_unique<Scope>(_scope_id_counter++);
   }
 };
 
@@ -263,17 +267,17 @@ protected:
   // set in PreTypeFiller.
   stype::TypePtr _impl_type;
 
-  SymbolInfo* add_symbol(StringRef ident, const SymbolInfo &symbol) {
+  SymbolInfo* add_symbol(StringT ident, const SymbolInfo &symbol) {
     return _scopes.back()->add_symbol(ident, symbol);
   }
-  SymbolInfo* find_symbol(StringRef ident) {
+  SymbolInfo* find_symbol(StringT ident) {
     for(auto rit = _scopes.rbegin(); rit != _scopes.rend(); ++rit) {
       auto res = (*rit)->find_symbol(ident);
       if(res) return res;
     }
     return nullptr;
   }
-  const SymbolInfo* find_symbol(StringRef ident) const {
+  const SymbolInfo* find_symbol(StringT ident) const {
     for(auto rit = _scopes.rbegin(); rit != _scopes.rend(); ++rit) {
       auto res = (*rit)->find_symbol(ident);
       if(res) return res;
@@ -287,9 +291,11 @@ protected:
     _crate->add_asso_method(std::move(caller_type), std::move(func_type));
   }
   std::shared_ptr<stype::FunctionType> find_asso_method(
-    stype::TypePtr caller_type, const StringRef &func_ident, stype::TypePool *pool) {
+    stype::TypePtr caller_type, const StringT &func_ident, stype::TypePool *pool) {
     return _crate->find_asso_method(std::move(caller_type), func_ident, pool);
   }
+
+  int scope_id() const { return _scopes.back()->id(); }
 
 private:
   // inherent impl, trait impl, trait
@@ -579,7 +585,6 @@ public:
   void bind_slice(SlicePattern *pattern, stype::TypePtr type, bool need_spec);
   void bind_path(PathPattern *pattern, stype::TypePtr type, bool need_spec);
 
-
 private:
   ErrorRecorder *_recorder;
   stype::TypePool *_type_pool;
@@ -601,46 +606,5 @@ private:
 #undef ISM_RS_POST_VISIT_OVERRIDE_METHOD
 
 }
-
-/* Some discarded method record method.
-void add_asso_method(stype::TypePtr caller_type, std::shared_ptr<stype::FunctionType> func_type) {
-    auto ident = make_inherent_method_name(caller_type, func_type);
-    _scopes.front()->add_symbol(ident, SymbolInfo {
-      .ident = ident,
-      .kind = SymbolKind::kFunction,
-      .type = stype::TypePtr(func_type),
-    });
-  }
-  std::shared_ptr<stype::FunctionType> find_asso_method(
-    stype::TypePtr caller_type, StringRef func_ident, stype::TypePool *pool) {
-    auto ident = make_inherent_method_name(caller_type, func_ident);
-    auto info = _scopes.front()->find_symbol(ident);
-    if(info && info->kind == SymbolKind::kFunction && info->type.get_if<stype::FunctionType>()) {
-      return info->type.get<stype::FunctionType>();
-    }
-    // special builtin mechanic: impl<T, N> [T; N]: fn len(&mut) -> usize
-    // lazy generation.
-    if(func_ident == "len" && caller_type.get_if<stype::ArrayType>()) {
-      auto func_type = pool->make_raw_type<stype::FunctionType>(
-        func_ident,
-        caller_type,
-        std::vector<stype::TypePtr>{},
-        pool->make_type<stype::PrimeType>(stype::TypePrime::kUSize)
-        );
-      add_asso_method(caller_type, func_type);
-    }
-
-    return nullptr;
-  }
-
-  static std::string make_inherent_method_name(
-    stype::TypePtr caller_type, std::shared_ptr<stype::FunctionType> func_type) {
-    return caller_type->to_string() + "_" + func_type->ident();
-  }
-  static std::string make_inherent_method_name(
-    stype::TypePtr caller_type, const StringRef &func_ident) {
-    return caller_type->to_string() + "_" + func_ident;
-  }
-*/
 
 #endif // RUST_SHARD_FRONTEND_SYNTAX_CHECK_H

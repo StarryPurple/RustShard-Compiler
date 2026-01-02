@@ -11,6 +11,7 @@ add_library(frontend_lib STATIC
     src/frontend/syntax_check.cpp
     src/frontend/defs.cpp
     src/frontend/constant.cpp
+    src/frontend/IR_generator.cpp
 )
 
 target_include_directories(frontend_lib PUBLIC
