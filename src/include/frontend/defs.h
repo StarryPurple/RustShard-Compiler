@@ -39,7 +39,7 @@ public:
 private:
   static int _next_node_id;
 };
-int BasicNode::_next_node_id = 0;
+inline int BasicNode::_next_node_id = 0;
 
 class ASTTree {
 public:

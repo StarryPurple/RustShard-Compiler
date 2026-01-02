@@ -97,6 +97,19 @@ struct IRGenerator::IRPack {
   }
 };
 
+struct IRGenerator::FunctionContext {
+  int _next_reg_id = 0;
+  std::vector<BasicBlockPack> basic_block_packs;
+  std::vector<std::unique_ptr<Instruction>> instructions;
+  // result of node with this node id is in which register
+  std::unordered_map<int, int> node_reg_map;
+  // which register records the address of variable in memory
+  std::unordered_map<StringT, int> variable_addr_reg_map;
+  FunctionPack function_pack;
+
+  int alloca_reg_id() { return _next_reg_id++; }
+};
+
 IRGenerator::IRGenerator(stype::TypePool *type_pool)
 : _type_pool(type_pool), _ir_pack(std::make_unique<IRPack>()) {}
 
@@ -116,53 +129,113 @@ std::string IRGenerator::use_string_literal(StringT literal) {
 }
 
 void IRGenerator::preVisit(ast::Function &node) {
-  // clear everything lower than function pack (maybe unnecessary)
-  _basic_blocks.clear();
-  _instructions.clear();
+  // a new context
+  _contexts.emplace_back();
+
   // basic block entrance:
-  _basic_blocks.push_back(BasicBlockPack{
-    .label = "_entry",
+  _contexts.back().basic_block_packs.push_back(BasicBlockPack{
+    .label = "entry",
   });
 
   auto info = find_symbol(node.ident());
   auto func_tp = info->type.get<stype::FunctionType>();
   std::vector<std::pair<StringT, IRType>> params;
+  // llvm requires register names in pure number style to appear in order.
+  // so...
+  _contexts.back()._next_reg_id += (func_tp->self_type_opt() ? 1 : 0) + func_tp->params().size();
+  int next_param_reg_id = 0;
   if(func_tp->self_type_opt()) {
-    throw std::runtime_error("Unimplemented method IR");
+    int reg_id0 = next_param_reg_id++;
+    StringT reg_name0 = std::to_string(reg_id0); // x0
+
+    // self is passed by Self(self) or Self*(&self, &mut self)
+    auto ty = IRType(func_tp->self_type_opt());
+
+    // pass as the first parameter
+    // Ty* %x0 (self)
+    // %x1 = alloca Ty
+    // store Ty %x0, Ty* %x1
+    // var_ptr-reg-map["self"] = x1
+
+    int reg_id1 = _contexts.back().alloca_reg_id();
+
+    AllocaInst lineA;
+    lineA.dst_name = std::to_string(reg_id1); // x1
+    lineA.type = ty;
+    _contexts.back().instructions.emplace_back(std::make_unique<AllocaInst>(lineA));
+
+    StoreInst lineB;
+    lineB.is_instant = false;
+    lineB.value_type = ty;
+    lineB.ptr_type = ty.get_ref(_type_pool);
+    lineB.value_name = reg_name0;
+    lineB.ptr_name = lineA.dst_name;
+    _contexts.back().instructions.emplace_back(std::make_unique<StoreInst>(lineB));
+
+    _contexts.back().variable_addr_reg_map.emplace("self", reg_id1);
+
+    // Ty %x0 (self)
+    params.emplace_back(reg_name0, ty);
   }
   for(int i = 0; i < func_tp->params().size(); ++i) {
+    // Ty %x0 (name)
+    int reg_id0 = next_param_reg_id++;
     auto param = node.params_opt()->func_params()[i].get();
-    int reg_id = _next_reg_id++;
+    StringT reg_name0 = std::to_string(reg_id0); // x0
     if(auto p = dynamic_cast<ast::FunctionParamPattern*>(param)) {
       auto pat = dynamic_cast<ast::IdentifierPattern*>(p->pattern().get());
       if(!pat) {
         throw std::runtime_error("Func param too complicated");
       }
-      // Ty %x0 (name)
       // allocate in memory.
       // %x1 = alloca Ty
       // store Ty %x0, Ty* %x1
       // var_ptr-reg-map[name] = x1
+
+      auto ty = IRType(func_tp->params()[i]);
+      int reg_id1 = _contexts.back().alloca_reg_id();
+
       AllocaInst lineA;
-      lineA.reg = std::to_string(_next_reg_id++);
-      lineA.type = IRType(func_tp->params()[i]);
-      _instructions.emplace_back(std::make_unique<AllocaInst>(lineA));
-      _variable_addr_reg_map.emplace(pat->ident(), reg_id);
+      lineA.dst_name = std::to_string(reg_id1); // x1
+      lineA.type = ty;
+      _contexts.back().instructions.emplace_back(std::make_unique<AllocaInst>(lineA));
+
+      StoreInst lineB;
+      lineB.is_instant = false;
+      lineB.value_type = ty;
+      lineB.ptr_type = ty.get_ref(_type_pool);
+      lineB.value_name = reg_name0;
+      lineB.ptr_name = lineA.dst_name;
+      _contexts.back().instructions.emplace_back(std::make_unique<StoreInst>(lineB));
+
+      _contexts.back().variable_addr_reg_map.emplace(pat->ident(), reg_id1);
     }
-    params.emplace_back(std::to_string(reg_id), func_tp->params()[i]);
+    // Ty %x0 (name)
+    params.emplace_back(reg_name0, func_tp->params()[i]);
   }
-  _function_packs.emplace_back(FunctionPack{
+  _contexts.back().function_pack = FunctionPack{
     .ident = node.ident(),
     .ret_type = IRType(func_tp->ret_type()),
     .params = params
-  });
+  };
   ScopedVisitor::preVisit(node);
 }
 
 void IRGenerator::postVisit(ast::Function &node) {
   ScopedVisitor::postVisit(node);
-  _ir_pack->function_packs.push_back(std::move(_function_packs.back()));
-  _function_packs.pop_back();
+  // ends. if nothing is explicitly returned, write a "ret void"
+  if(node.body_opt()) {
+    if(!node.body_opt()->stmts_opt() || !node.body_opt()->stmts_opt()->expr_opt()) {
+      ReturnInst lineA;
+      lineA.ret_type = IRType(_type_pool->make_unit()); // redundant.
+      lineA.ret_val = "";
+      _contexts.back().instructions.emplace_back(std::make_unique<ReturnInst>(lineA));
+    }
+  }
+  _contexts.back().basic_block_packs.back().instructions = std::move(_contexts.back().instructions);
+  _contexts.back().function_pack.basic_block_packs = std::move(_contexts.back().basic_block_packs);
+  _ir_pack->function_packs.push_back(std::move(_contexts.back().function_pack));
+  _contexts.pop_back();
 }
 
 void IRGenerator::preVisit(ast::StructStruct &node) {
@@ -185,9 +258,6 @@ void IRGenerator::preVisit(ast::LiteralExpression &node) {
 
 void IRGenerator::postVisit(ast::CallExpression &node) {
   auto func_tp = node.expr()->get_type().get<stype::FunctionType>();
-  _instructions.push_back(std::make_unique<CallInst>(CallInst{
-    .dst_name =
-  }));
 }
 
 

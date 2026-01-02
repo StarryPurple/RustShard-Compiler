@@ -8,8 +8,8 @@ public:
   IRType() = default;
   explicit IRType(stype::TypePtr type): _type(std::move(type)) {}
   stype::TypePtr type() const { return _type; }
-  void add_ptr(stype::TypePool *pool) {
-    _type = pool->make_type<stype::RefType>(_type, true);
+  IRType get_ref(stype::TypePool *pool) {
+    return IRType(pool->make_type<stype::RefType>(_type, true));
   }
   std::string to_str() const {
     if(auto t = _type.get_if<stype::TupleType>(); t && t->members().empty()) {
@@ -32,11 +32,11 @@ struct Instruction {
 // %x = alloca Ty
 // LetExpression
 struct AllocaInst: Instruction {
-  StringT reg;
+  StringT dst_name;
   IRType type;
 
   std::string to_str() const override {
-    return "%" + reg + " = alloca " + type.to_str();
+    return "%" + dst_name + " = alloca " + type.to_str();
   }
 };
 
@@ -103,6 +103,7 @@ struct CallInst: Instruction {
 
 // ret Ty %0 / ret void
 // ReturnExpression, FuncBody (return at end)
+// set ret_val = "" for return void
 struct ReturnInst: Instruction {
   IRType ret_type;
   StringT ret_val; // "" for return void

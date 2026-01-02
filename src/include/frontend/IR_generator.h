@@ -10,13 +10,6 @@ namespace insomnia::rust_shard::ir {
 
 // uses some stype TypePtr. Please ensure that the type pool is still valid.
 class IRGenerator: public ast::ScopedVisitor {
-  static constexpr std::string kAnonyIdent = "_";
-  struct TypeDeclarationPack;
-  struct StaticPack;
-  struct BasicBlockPack;
-  struct FunctionPack;
-  struct IRPack;
-
 public:
   IRGenerator(stype::TypePool *type_pool);
   ~IRGenerator();
@@ -31,31 +24,33 @@ public:
   void preVisit(ast::LiteralExpression &node) override;
 
   void postVisit(ast::CallExpression &node) override;
-  void postVisit(ast::AssignmentExpression &node) override;
+
   /*
+  void postVisit(ast::AssignmentExpression &node) override;
+
   void postVisit(ast::MethodCallExpression &node) override;
 
   void postVisit(ast::LetStatement &node) override;
   */
 
 private:
-  std::string use_string_literal(StringT literal);
-  void reset_reg_id() { _next_reg_id = 0; }
+  static constexpr std::string kAnonyIdent = "_";
+  struct TypeDeclarationPack;
+  struct StaticPack;
+  struct BasicBlockPack;
+  struct FunctionPack;
+  struct IRPack;
 
-  int _next_reg_id = 0;
+  std::string use_string_literal(StringT literal);
+
   stype::TypePool *_type_pool;
   std::unique_ptr<IRPack> _ir_pack;
   std::unordered_map<StringT, std::string> _string_literal_pool; // StringLiteral -> allocated global variable name
   std::unordered_map<StringT, int> _variable_counter;
 
-  std::vector<FunctionPack> _function_packs;
-  std::vector<BasicBlockPack> _basic_blocks;
-  std::vector<std::unique_ptr<Instruction>> _instructions;
+  struct FunctionContext;
+  std::vector<FunctionContext> _contexts;
 
-  // result of node with this node id is in which register
-  std::unordered_map<int, int> _node_reg_map;
-  // which register records the address of variable in memory
-  std::unordered_map<StringT, int> _variable_addr_reg_map;
 };
 
 } // namespace insomnia::rust
