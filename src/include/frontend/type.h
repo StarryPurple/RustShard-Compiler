@@ -118,6 +118,9 @@ public:
   virtual std::string to_string() const = 0;
   virtual std::string IR_string() const { throw std::runtime_error("Unimplemented IR string"); }
 
+  // Is it really needed?
+  virtual std::size_t size() const { throw std::runtime_error("Unimplemented type size"); }
+
   // whether this_tp <- from_tp is allowed.
   // 1. tt = ft
   // 2. i32... <- NatI, u32... <- NatI, i32... <- NegI, f32... <- Float
@@ -136,6 +139,8 @@ public:
     if(lhs->kind() != rhs->kind()) return false;
     return lhs->convertible_impl(*rhs);
   }
+
+  virtual bool is_undetermined() const { return false; }
 protected:
   TypeKind _kind;
 
@@ -168,12 +173,13 @@ public:
     return _prime == TypePrime::kU8 || _prime == TypePrime::kU16 || _prime == TypePrime::kU32
       || _prime == TypePrime::kU64 || _prime == TypePrime::kUSize;
   }
-  bool is_undetermined() const {
+  bool is_undetermined() const override {
     return _prime == TypePrime::kInt || _prime == TypePrime::kFloat;
   }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
+  std::size_t size() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -190,6 +196,7 @@ public:
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
+  std::size_t size() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -207,6 +214,7 @@ public:
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
+  std::size_t size() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -234,6 +242,7 @@ public:
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
+  std::size_t size() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -252,6 +261,7 @@ public:
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
+  std::size_t size() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;

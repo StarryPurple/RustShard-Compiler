@@ -82,12 +82,25 @@ std::string PrimeType::to_string() const {
 
 std::string PrimeType::IR_string() const {
   static const std::unordered_map<TypePrime, StringT> table = {
-    {TypePrime::kChar, "i32"}, {TypePrime::kBool, "i8"},
+    {TypePrime::kChar, "i8"}, {TypePrime::kBool, "i1"},
     {TypePrime::kI8, "i8"}, {TypePrime::kI16, "i16"},
     {TypePrime::kI32, "i32"}, {TypePrime::kI64, "i64"},
-    {TypePrime::kU8, "u8"}, {TypePrime::kU16, "u16"},
-    {TypePrime::kU32, "u32"}, {TypePrime::kU64, "u64"},
-    {TypePrime::kISize, "i32"}, {TypePrime::kUSize, "u32"},
+    {TypePrime::kU8, "i8"}, {TypePrime::kU16, "i16"},
+    {TypePrime::kU32, "i32"}, {TypePrime::kU64, "i64"},
+    {TypePrime::kISize, "i32"}, {TypePrime::kUSize, "i32"},
+    {TypePrime::kStr, "i8"}, {TypePrime::kInt, "i32"}
+  };
+  return table.at(_prime);
+}
+
+std::size_t PrimeType::size() const {
+  static const std::unordered_map<TypePrime, std::size_t> table = {
+    {TypePrime::kChar, 1}, {TypePrime::kBool, 1},
+    {TypePrime::kI8, 1}, {TypePrime::kI16, 2},
+    {TypePrime::kI32, 4}, {TypePrime::kI64, 8},
+    {TypePrime::kU8, 1}, {TypePrime::kU16, 2},
+    {TypePrime::kU32, 4}, {TypePrime::kU64, 8},
+    {TypePrime::kISize, 4}, {TypePrime::kUSize, 4},
   };
   return table.at(_prime);
 }
@@ -123,6 +136,10 @@ std::string ArrayType::IR_string() const {
   return "[" + std::to_string(_length) + " x " + _inner->IR_string() + "]";
 }
 
+std::size_t ArrayType::size() const {
+  return _length * _inner->size();
+}
+
 void RefType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
   combine_hash_impl(seed, static_cast<std::size_t>(_ref_is_mut));
@@ -152,6 +169,10 @@ std::string RefType::to_string() const {
 
 std::string RefType::IR_string() const {
   return _inner->IR_string() + "*";
+}
+
+std::size_t RefType::size() const {
+  return 4;
 }
 
 void StructType::combine_hash(std::size_t &seed) const {
@@ -194,6 +215,13 @@ std::string StructType::to_string() const {
 
 std::string StructType::IR_string() const {
   return "%" + _ident;
+}
+
+std::size_t StructType::size() const {
+  std::size_t res = 0;
+  for(auto &[ident, tp]: _ordered_fields)
+    res += tp->size();
+  return res;
 }
 
 void TupleType::combine_hash(std::size_t &seed) const {
@@ -242,6 +270,13 @@ std::string TupleType::IR_string() const {
   }
   if(_members.size() == 1) res += ",";
   res += ")";
+  return res;
+}
+
+std::size_t TupleType::size() const {
+  std::size_t res = 0;
+  for(auto &tp: _members)
+    res += tp->size();
   return res;
 }
 

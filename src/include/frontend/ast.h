@@ -706,6 +706,8 @@ public:
             return false;
         } else return false;
       } // no other circumstances required.
+      // success. remember to change _prime field.
+      _prime = p->prime();
     }
     return TypeInfo::set_type(type);
   }

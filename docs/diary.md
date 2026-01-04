@@ -19,3 +19,11 @@ comprehensive 29: !i32 is allowed.
 
 
 comprehensive 46: ItemStatement allows functions defined inside functions.
+
+CompoundAssignment shall return ().
+
+LLVM integer types all start with 'i', no unsigned.
+
+logicalAnd/logicalOr won't appear in ArithmeticOrLogicalExpression...
+
+You don't need to recursively infilct is_lside property... only one layer is sufficient.

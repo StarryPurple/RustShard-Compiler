@@ -460,13 +460,7 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
           break;
         }
       } else if constexpr(std::is_same_v<T, bool>) {
-        if(oper == Operator::kLogicalAnd) {
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, stype::TypePrime::kBool, arg1 && arg2));
-        } else if(oper == Operator::kLogicalOr) {
-          node.set_cval(_const_pool->make_const<sconst::ConstPrime>(tp12, stype::TypePrime::kBool, arg1 || arg2));
-        } else {
-          _recorder->tagged_report(kErrTag, "Invalid operator for arithmetic/logical expression (boolean logical)");
-        }
+        _recorder->tagged_report(kErrTag, "Invalid operator (or operand type) for arithmetic/logical expression (boolean logical)");
       } else {
         throw std::runtime_error("Unsupported primitive type in arithmetic/logical expression");
       }
@@ -1523,18 +1517,6 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
       return;
     }
     break;
-
-  case Operator::kLogicalAnd:
-  case Operator::kLogicalOr:
-    if(prime1->prime() == stype::TypePrime::kBool && prime2->prime() == stype::TypePrime::kBool) {
-      node.set_type(type2);
-    } else {
-      _recorder->tagged_report(kErrTypeNotMatch, "Type invalid in operator && ||."
-        " type 1: " + type1->to_string() + ", type 2: " + type2->to_string());
-      return;
-    }
-    break;
-
   default:
     throw std::runtime_error("Invalid operator type in arithmetic/logical expression");
   }
@@ -1876,7 +1858,7 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   default:
     throw std::runtime_error("Invalid operator type in compound assignment expression");
   }
-  node.set_type(type1);
+  node.set_type(_type_pool->make_unit());
 }
 
 void TypeFiller::postVisit(GroupedExpression &node) {

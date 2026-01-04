@@ -11,12 +11,16 @@ public:
   IRType get_ref(stype::TypePool *pool) {
     return IRType(pool->make_type<stype::RefType>(_type, true));
   }
+  bool is_void(stype::TypePool *pool) const {
+    return _type == pool->make_never() || _type == pool->make_unit();
+  }
   std::string to_str() const {
     if(auto t = _type.get_if<stype::TupleType>(); t && t->members().empty()) {
       return "void";
     }
     return _type->IR_string();
   }
+  explicit operator bool() const { return static_cast<bool>(_type); }
 private:
   stype::TypePtr _type;
 };
@@ -44,16 +48,16 @@ struct AllocaInst: Instruction {
 // Assignment, CompoundAssignment
 struct StoreInst: Instruction {
   bool is_instant = false;
-  StringT value_name, ptr_name;
+  StringT value_or_name, ptr_name;
   IRType value_type, ptr_type;
 
   std::string to_str() const {
-    return "store " + value_type.to_str() + " " + (is_instant ? "" : "%") + value_name + ", "
+    return "store " + value_type.to_str() + " " + (is_instant ? "" : "%") + value_or_name + ", "
     + ptr_type.to_str() + " %" + ptr_name;
   }
 };
 
-// %1 = load Ty, ptr %x
+// %dst = load Ty, Ty* %ptr
 // PathExpr, IndexExpr?
 struct LoadInst: Instruction {
   StringT dst_name, ptr_name;
@@ -69,29 +73,31 @@ struct LoadInst: Instruction {
 //
 // op shall be in:
 // add, sub, mul, sdiv, udiv, srem, urem, shl, ashr, lshr, and, or, xor
-// (is_cmp=true) eq, ne, ugt, uge, ult, ule, sgt, sge, slt, sle
+// (icmp) eq, ne, ugt, uge, ult, ule, sgt, sge, slt, sle
 struct BinaryOpInst: Instruction {
-  bool is_cmp;
+  bool is_l_instant, is_r_instant;
   StringT dst, lhs, rhs, op;
   IRType type;
   std::string to_str() const override {
-    return "%" + dst + " = " + (is_cmp ? "icmp " : "") + op + " " + type.to_str() + " %" + lhs + ", %" + rhs;
+    return "%" + dst + " = " + op + " " + type.to_str()
+    + (is_l_instant ? " " : " %") + lhs + ", " + (is_r_instant ? "" : "%") + rhs;
   }
 };
 
-// call ret_t @func(Ty %1, ...)
+// (%0 = ) call ret_t @func(Ty %1, ...)
 // CallExpr, MethodCall
+// set dst_name = "" if ret_type is void
 struct CallInst: Instruction {
   StringT dst_name; // "" if ret_type is void
   IRType ret_type;
   StringT func_name;
-  std::vector<std::pair<IRType, StringT>> args;
+  std::vector<std::pair<IRType, StringT>> args; // type and reg name
 
   std::string to_str() const override {
     std::string res;
     if(ret_type.to_str() != "void")
       res += "%" + dst_name + " = ";
-    res += "call " + ret_type.to_str() + " " + func_name + "(";
+    res += "call " + ret_type.to_str() + " @" + func_name + "(";
     for(int i = 0; i < args.size(); ++i) {
       if(i > 0) res += ", ";
       res += args[i].first.to_str() + " %" + args[i].second;
@@ -114,27 +120,29 @@ struct ReturnInst: Instruction {
   }
 };
 
-// %p = getelementptr Ty, Ty* %ptr, [i32 idx]+
+// (T*) %dst = getelementptr [N x T], [N x T]* %ptr, i32 0, index_t idx
+// (T*) %dst = getelementptr S, S* %ptr, i32 0, index_t idx
 // Array, Index, Field
 struct GEPInst: Instruction {
   StringT dst_name, ptr_name;
   IRType base_type, ptr_type;
-  std::vector<std::tuple<IRType, bool, std::string>> indices; // type + is_instant + ident
+  IRType index_type;
+  bool is_idx_instant;
+  std::string index_name_or_value;
 
   std::string to_str() const override {
-    std::string res = "%" + dst_name + " = getelementptr " + base_type.to_str() + ptr_type.to_str() + " %" + ptr_name;
-    for(auto &[tp, is_instant, val_name]: indices) {
-      res += ", " + tp.to_str() + (is_instant ? "" : "%") + val_name;
-    }
-    return res;
+    return "%" + dst_name + " = getelementptr " + base_type.to_str() + ", "
+      + ptr_type.to_str() + " %" + ptr_name + ", i32 0, " + index_type.to_str() + " "
+      + (is_idx_instant ? "" : "%") + index_name_or_value;
   }
 };
 
-// %c = bitcast Ty1* %p to Ty2*
+// %c = bitcast(or something else) Ty1* %p to Ty2*
 // TypeCast
 struct CastInst: Instruction {
   StringT src_name, dst_name;
   IRType src_type, dst_type;
+  bool must_be_bitcast = false, is_static_src = false;
 
   static int bit_width(stype::TypePrime prime) {
     switch(prime) {
@@ -147,6 +155,7 @@ struct CastInst: Instruction {
     }
   }
   std::string cast_op() const {
+    if(must_be_bitcast) return "bitcast";
     auto src = src_type.type().get_if<stype::PrimeType>(), dst = dst_type.type().get_if<stype::PrimeType>();
     if(!src || !dst) {
       throw std::runtime_error("Cast between types that is not prime");
@@ -159,7 +168,8 @@ struct CastInst: Instruction {
   }
   std::string to_str() const override {
     return "%" + dst_name + " = " + cast_op() + " "
-    + src_type.to_str() + " %" + src_name + " to " + dst_type.to_str();
+    + src_type.to_str() + (is_static_src ? " @" : " %") + src_name
+    + " to " + dst_type.to_str();
   }
 };
 
@@ -188,6 +198,48 @@ struct CondBranchInst: Instruction {
 struct UnreachableInst: Instruction {
   std::string to_str() const override {
     return "unreachable";
+  }
+};
+
+// %0 = insertvalue %Struct/Array undef, Ty val/%reg, 0
+// ...
+// %n = insertvalue %Struct/Array %n-1, Ty val/%reg, n
+// Attention: All these n instructions are all packed in one InsertValueInst.
+struct InsertValueInst: Instruction {
+  struct Info {
+    IRType field_ty;
+    bool is_instant;
+    std::string value_or_name;
+  };
+
+  IRType type; // %Struct/Array
+  std::vector<std::string> interval_regs; // "0", ... "n"
+  std::vector<Info> infos;
+
+  std::string to_str() const override {
+    std::string res;
+    for(int i = 0; i < infos.size(); ++i) {
+      if(i > 0) res += "\n  ";
+      res += "%" + interval_regs[i] + " = insertvalue " + type.to_str() + " ";
+      res += (i > 0 ? ("%" + interval_regs[i - 1]) : "undef");
+      res += ", " + infos[i].field_ty.to_str() + " " + (infos[i].is_instant ? "" : "%") + infos[i].value_or_name;
+      res += ", " + std::to_string(i);
+    }
+    return res;
+  }
+};
+
+// %dst = phi Ty [%res1, %label1], [%res2, %label2]
+struct PhiInst: Instruction {
+  bool is_res1_instant, is_res2_instant;
+  std::string dst_name, res1_name_or_value, res2_name_or_value;
+  IRType dst_type;
+  std::string label1, label2;
+
+  std::string to_str() const override {
+    return "%" + dst_name + " = phi " + dst_type.to_str() + " [" + (is_res1_instant ? "" : "%")
+    + res1_name_or_value + ", %" + label1 + "], ["
+    + (is_res2_instant ? "" : "%") + res2_name_or_value + ", %" + label2 + "]";
   }
 };
 

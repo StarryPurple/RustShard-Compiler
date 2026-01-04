@@ -65,6 +65,7 @@ struct ConstPrime : public ConstBase {
   template <class T> requires type_utils::is_primitive<T>
   ConstPrime(stype::TypePrime _prime, T &&spec): prime(_prime), value(std::forward<T>(spec)) {}
   bool operator==(const ConstPrime&) const = default;
+  // extract iXX and uXX as usize. can be used in multiple places.
   std::optional<stype::usize_t> get_usize() const { // NOLINT
     return std::visit([&]<typename T0>(T0 &&arg) {
       using T = std::decay_t<T0>;

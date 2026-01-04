@@ -515,7 +515,9 @@ void RecursiveVisitor::visit(PredicateLoopExpression &node) {
 void RecursiveVisitor::visit(IfExpression &node) {
   preVisit(node);
   node.cond()->accept(*this);
-  if(node.block_expr()) node.block_expr()->accept(*this);
+  // ...
+  // if(node.block_expr()) node.block_expr()->accept(*this);
+  node.block_expr()->accept(*this);
   std::visit([&]<class T0>(const T0& arg) {
     using T = std::decay_t<T0>; // ...
     if constexpr(std::is_same_v<T, std::monostate>) {
