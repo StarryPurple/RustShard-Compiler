@@ -175,11 +175,18 @@ void IRGenerator::preVisit(ast::Function &node) {
   auto info = find_symbol(node.ident());
   auto func_tp = info->type.get<stype::FunctionType>();
   std::vector<std::pair<StringT, IRType>> params;
+  // global function name is its original name.
+  // method func name shall be mangled by its associated type's type hash.
+  std::string inner_func_ident = func_tp->ident();
   // llvm requires register names in pure number style to appear in order.
   // so...
-  _contexts.back()._next_reg_id += (func_tp->self_type_opt() ? 1 : 0) + func_tp->params().size();
+  _contexts.back()._next_reg_id += (func_tp->self_type_opt() ? 1 : 0) + static_cast<int>(func_tp->params().size());
   int next_param_reg_id = 0;
   if(func_tp->self_type_opt()) {
+    // method func name is mangled by its associated type's type hash.
+    // if it's a static one (no self opt),
+    inner_func_ident = std::to_string(func_tp->hash()) + inner_func_ident;
+
     int reg_id0 = next_param_reg_id++;
     StringT reg_name0 = std::to_string(reg_id0); // x0
 
@@ -252,7 +259,7 @@ void IRGenerator::preVisit(ast::Function &node) {
     params.emplace_back(reg_name0, func_tp->params()[i]);
   }
   _contexts.back().function_pack = FunctionPack{
-    .ident = node.ident(),
+    .ident = inner_func_ident,
     .ret_type = IRType(func_tp->ret_type()),
     .params = params
   };
@@ -483,10 +490,11 @@ void IRGenerator::postVisit(ast::LiteralExpression &node) {
 }
 
 void IRGenerator::postVisit(ast::CallExpression &node) {
-  auto func_tp = node.expr()->get_type().get<stype::FunctionType>();
   // %x0 = call ret_t @func(Ty %1, ...)
   // call void @func(Ty %1, ...)
   // no sret
+
+  auto func_tp = node.expr()->get_type().get<stype::FunctionType>();
 
   CallInst lineC;
   lineC.func_name = func_tp->ident();
@@ -505,6 +513,32 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
   }
   _contexts.back().push_instruction(std::move(lineC));
 }
+
+void IRGenerator::postVisit(ast::MethodCallExpression &node) {
+  // just like call expression, but might pass caller itself.
+  // func_name is mangled by its associated type's type hash.
+
+  auto caller = node.expr()->get_type();
+  auto &func_name = node.segment()->ident_seg()->ident();
+  auto func_ptr = find_asso_method(caller, func_name, _type_pool);
+  if(!func_ptr) {
+    // Assume caller = &T / &mut T and find methods of T.
+    if(auto r = caller.get_if<stype::RefType>()) {
+      func_ptr = find_asso_method(r->inner(), func_name, _type_pool);
+    } else {
+      throw std::runtime_error("Caller type mismatch or too complicated");
+    }
+  }
+  // caller might be
+
+  if(auto caller_req = func_ptr->self_type_opt()) {
+
+  }
+
+  CallInst lineC;
+
+}
+
 
 void IRGenerator::postVisit(ast::LetStatement &node) {
   // binding... whatever.
@@ -544,14 +578,16 @@ void IRGenerator::postVisit(ast::AssignmentExpression &node) {
   // Just use one store.
   int lhs_id = _contexts.back().node_reg_map.at(node.expr1()->id());
   int rhs_id = _contexts.back().node_reg_map.at(node.expr2()->id());
+  auto ty = IRType(node.expr2()->get_type());
 
   // store Ty %rhs, Ty* %lhs
   StoreInst lineS;
   lineS.is_instant = false;
   lineS.value_or_name = std::to_string(rhs_id);
   lineS.ptr_name = std::to_string(lhs_id);
-  lineS.value_type = IRType(node.expr2()->get_type());
-  lineS.ptr_type = IRType(node.expr1()->get_type());
+  lineS.value_type = ty;
+  // might be mut Ty <- Ty, so expr1()->get_type() might be Ty, not Ty*
+  lineS.ptr_type = ty.get_ref(_type_pool);
   _contexts.back().push_instruction(std::move(lineS));
 
   // still stands for the rhs_id register.
@@ -658,6 +694,10 @@ void IRGenerator::postVisit(ast::IndexExpression &node) {
 
   int ptr_id = -1; // ArrTy*
   auto arr_ty = IRType(node.expr_obj()->get_type());
+  if(dynamic_cast<ast::PathInExpression*>(node.expr_obj().get()) && node.expr_obj()->is_lside()) {
+    // I know I modified it... sigh.
+    arr_ty = arr_ty.get_ref(_type_pool);
+  }
   if(!arr_ty.type().get_if<stype::RefType>()) {
     // if given [T; N], then it must be on rside. put it in memory.
     ptr_id = _contexts.back().new_reg_id();
@@ -732,15 +772,20 @@ void IRGenerator::postVisit(ast::TypeCastExpression &node) {
   auto ty2 = IRType(node.type_no_bounds()->get_type());
   auto src_id = _contexts.back().node_reg_map.at(node.expr()->id());
 
-  int dst_id = _contexts.back().new_reg_id();
-  CastInst lineC;
-  lineC.must_be_bitcast = false;
-  lineC.is_static_src = false;
-  lineC.dst_name = std::to_string(dst_id);
-  lineC.dst_type = ty2;
-  lineC.src_name = std::to_string(src_id);
-  lineC.src_type = ty1;
-  _contexts.back().push_instruction(std::move(lineC));
+  // if the two types are the same in LLVM (like, i32 and usize are both "i32")
+  // skip this cast instruction.
+  int dst_id = src_id;
+  if(ty1.to_str() != ty2.to_str()) { // use LLVM str to compare...
+    dst_id = _contexts.back().new_reg_id();
+    CastInst lineC;
+    lineC.must_be_bitcast = false;
+    lineC.is_static_src = false;
+    lineC.dst_name = std::to_string(dst_id);
+    lineC.dst_type = ty2;
+    lineC.src_name = std::to_string(src_id);
+    lineC.src_type = ty1;
+    _contexts.back().push_instruction(std::move(lineC));
+  }
 
   _contexts.back().node_reg_map.emplace(node.id(), dst_id);
 }
@@ -972,25 +1017,29 @@ void IRGenerator::postVisit(ast::CompoundAssignmentExpression &node) {
 }
 void IRGenerator::postVisit(ast::FieldExpression &node) {
   auto obj_id = _contexts.back().node_reg_map.at(node.expr()->id());
-  auto node_tp = node.expr()->get_type();
+  auto ftp = IRType(node.expr()->get_type());
+  if(node.expr()->is_lside()) {
+    // I know I modified it... sigh.
+    ftp = ftp.get_ref(_type_pool);
+  }
   // auto deref
-  while(node_tp.get_if<stype::RefType>()) {
-    node_tp = node_tp.get<stype::RefType>()->inner();
+  while(ftp.type().get_if<stype::RefType>()) {
+    ftp = IRType(ftp.type().get<stype::RefType>()->inner());
     int deref_id = _contexts.back().new_reg_id();
     LoadInst lineL;
-    lineL.load_type = IRType(node_tp);
-    lineL.ptr_type = IRType(node_tp).get_ref(_type_pool);
+    lineL.load_type = ftp;
+    lineL.ptr_type = ftp.get_ref(_type_pool);
     lineL.ptr_name = std::to_string(obj_id);
     lineL.dst_name = std::to_string(deref_id);
     _contexts.back().push_instruction(std::move(lineL));
     obj_id = deref_id;
   }
-  auto struct_ptr = node_tp.get_if<stype::StructType>();
+  auto struct_ptr = ftp.type().get_if<stype::StructType>();
   if(!struct_ptr) {
     throw std::runtime_error("Field expression on non-struct type not detected");
   }
   auto [diff_idx, field_ty] = struct_ptr->field_orders().at(node.ident());
-  auto ty = IRType(node_tp);
+  auto ty = IRType(ftp);
   auto ty_ref = ty.get_ref(_type_pool);
 
   int ptr_id = _contexts.back().new_reg_id();
@@ -1122,8 +1171,10 @@ void IRGenerator::postVisit(ast::BlockExpression &node) {
   ScopedVisitor::postVisit(node);
   if(node.stmts_opt() && node.stmts_opt()->expr_opt()) {
     auto node_id = node.stmts_opt()->expr_opt()->id();
-    auto reg_id = _contexts.back().node_reg_map.at(node_id);
-    _contexts.back().node_reg_map.emplace(node.id(), reg_id);
+    if(auto it = _contexts.back().node_reg_map.find(node_id);
+      it != _contexts.back().node_reg_map.end()) { // might be an if expr...
+      _contexts.back().node_reg_map.emplace(node.id(), it->second);
+    }
   }
   // if it has no value, do not register anything into node-reg-map.
 }
@@ -1468,12 +1519,12 @@ void IRGenerator::visit(ast::LazyBooleanExpression &node) {
     lineP.is_res1_instant = false;
     lineP.res1_name_or_value = std::to_string(rhs_id);
     lineP.is_res2_instant = true;
-    lineP.res2_name_or_value = "i1 0";
+    lineP.res2_name_or_value = "0";
   } break;
   case ast::Operator::kLogicalOr: {
     // %res = phi i1 [1, %laz.then], [%rhs, %laz.else]
     lineP.is_res1_instant = true;
-    lineP.res1_name_or_value = "i1 1";
+    lineP.res1_name_or_value = "1";
     lineP.is_res2_instant = false;
     lineP.res2_name_or_value = std::to_string(rhs_id);
   } break;
@@ -1485,7 +1536,6 @@ void IRGenerator::visit(ast::LazyBooleanExpression &node) {
   // record res
   _contexts.back().node_reg_map.emplace(node.id(), res_id);
 }
-
 
 }
 

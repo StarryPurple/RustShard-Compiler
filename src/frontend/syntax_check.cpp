@@ -27,6 +27,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       "print", _type_pool->make_type<FunctionType>(
         "print",
         TypePtr{},
+        TypePtr{},
         std::vector{
           _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
       },
@@ -35,6 +36,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       // fn println(s: &str) -> ()
       "println", _type_pool->make_type<FunctionType>(
         "println",
+        TypePtr{},
         TypePtr{},
         std::vector{
           _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
@@ -46,6 +48,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       "printInt", _type_pool->make_type<FunctionType>(
         "printInt",
         TypePtr{},
+        TypePtr{},
         std::vector{
           _type_pool->make_type<PrimeType>(TypePrime::kI32),
       },
@@ -55,6 +58,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       // fn printlnInt(n: i32) -> ()
       "printlnInt", _type_pool->make_type<FunctionType>(
         "printlnInt",
+        TypePtr{},
         TypePtr{},
         std::vector{
           _type_pool->make_type<PrimeType>(TypePrime::kI32),
@@ -66,6 +70,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       "getString", _type_pool->make_type<FunctionType>(
         "getString",
         TypePtr{},
+        TypePtr{},
         std::vector<TypePtr>{},
           _type_pool->make_type<PrimeType>(TypePrime::kStr)
       )
@@ -73,6 +78,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       // fn getInt() -> i32
       "getInt", _type_pool->make_type<FunctionType>(
         "getInt",
+        TypePtr{},
         TypePtr{},
         std::vector<TypePtr>{},
           _type_pool->make_type<PrimeType>(TypePrime::kI32)
@@ -82,6 +88,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       "readInt", _type_pool->make_type<FunctionType>(
         "readInt",
         TypePtr{},
+        TypePtr{},
         std::vector<TypePtr>{},
           _type_pool->make_type<PrimeType>(TypePrime::kI32)
       )
@@ -89,6 +96,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       // fn exit(code: i32) -> ()
       "exit", _type_pool->make_type<FunctionType>(
         "exit",
+        TypePtr{},
         TypePtr{},
         std::vector{
           _type_pool->make_type<PrimeType>(TypePrime::kI32),
@@ -101,6 +109,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       // (As I didn't implement function signature mechanic, I'll ignore the strictly stricter version)
       "from", _type_pool->make_type<FunctionType>(
         "from",
+        TypePtr{},
         TypePtr{},
         std::vector{
           _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
@@ -126,6 +135,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
         "as_str",
         _type_pool->make_type<PrimeType>(TypePrime::kString),
+        _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kString), false),
         std::vector<TypePtr>{},
         _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false)
       )
@@ -135,6 +145,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
         "as_mut_str",
         _type_pool->make_type<PrimeType>(TypePrime::kString),
+        _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kString), true),
         std::vector<TypePtr>{},
         _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true)
       )
@@ -144,6 +155,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
         "append",
         _type_pool->make_type<PrimeType>(TypePrime::kString),
+        _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kString), true),
         std::vector{
           _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false)
         },
@@ -158,6 +170,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
       _type_pool->make_type<PrimeType>(prime), _type_pool->make_raw_type<FunctionType>(
         "to_string",
         _type_pool->make_type<PrimeType>(prime),
+        _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(prime), false),
         std::vector<TypePtr>(),
         _type_pool->make_type<PrimeType>(TypePrime::kString)
         )
@@ -169,6 +182,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
     _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
       "len",
       _type_pool->make_type<PrimeType>(TypePrime::kString),
+      _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kString), false),
       std::vector<TypePtr>{},
       _type_pool->make_type<PrimeType>(TypePrime::kUSize)
       )
@@ -178,6 +192,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
     _type_pool->make_raw_type<FunctionType>(
       "len",
       _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+      _type_pool->make_type<RefType>(_type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false), false),
       std::vector<TypePtr>{},
       _type_pool->make_type<PrimeType>(TypePrime::kUSize)
       )
@@ -187,6 +202,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
     _type_pool->make_raw_type<FunctionType>(
       "len",
       _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true),
+      _type_pool->make_type<RefType>(_type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true), false),
       std::vector<TypePtr>{},
       _type_pool->make_type<PrimeType>(TypePrime::kUSize)
       )
@@ -195,6 +211,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
     _type_pool->make_type<PrimeType>(TypePrime::kString), _type_pool->make_raw_type<FunctionType>(
       "length",
       _type_pool->make_type<PrimeType>(TypePrime::kString),
+      _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kString), false),
       std::vector<TypePtr>{},
       _type_pool->make_type<PrimeType>(TypePrime::kUSize)
       )
@@ -204,6 +221,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
     _type_pool->make_raw_type<FunctionType>(
       "length",
       _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false),
+      _type_pool->make_type<RefType>(_type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), false), false),
       std::vector<TypePtr>{},
       _type_pool->make_type<PrimeType>(TypePrime::kUSize)
       )
@@ -213,6 +231,7 @@ void TypeDeclarator::load_builtin(Crate *crate) {
     _type_pool->make_raw_type<FunctionType>(
       "length",
       _type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true),
+      _type_pool->make_type<RefType>(_type_pool->make_type<RefType>(_type_pool->make_type<PrimeType>(TypePrime::kStr), true), false),
       std::vector<TypePtr>{},
       _type_pool->make_type<PrimeType>(TypePrime::kUSize)
       )
@@ -984,7 +1003,7 @@ void PreTypeFiller::postVisit(Function &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Function result type tag not resolved");
     return;
   }
-  auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), caller_type, std::move(params), ret_type);
+  auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), _impl_type, caller_type, std::move(params), ret_type);
   add_symbol(node.ident(), SymbolInfo{
     .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction, .type = func_type
   });

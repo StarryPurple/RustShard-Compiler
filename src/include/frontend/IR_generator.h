@@ -34,6 +34,8 @@ public:
   void postVisit(ast::LiteralExpression &node) override;
 
   void postVisit(ast::CallExpression &node) override;
+  void postVisit(ast::MethodCallExpression &node) override;
+
 
   void postVisit(ast::LetStatement &node) override;
 
@@ -68,10 +70,6 @@ public:
 
   void visit(ast::LazyBooleanExpression &node) override;
 
-  /*
-  void postVisit(ast::MethodCallExpression &node) override;
-  */
-
 private:
   struct TypeDeclarationPack;
   struct StaticPack;
@@ -81,7 +79,7 @@ private:
 
   std::string use_string_literal(StringT literal);
 
-  bool _is_in_const;
+  bool _is_in_const = false;
 
   stype::TypePool *_type_pool;
   std::unique_ptr<IRPack> _ir_pack;

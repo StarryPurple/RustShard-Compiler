@@ -62,9 +62,9 @@ public:
     }
   }
   std::shared_ptr<stype::FunctionType> find_asso_method(
-    stype::TypePtr caller_type, const StringT &func_ident, stype::TypePool *pool) {
+    stype::TypePtr impl_type, const StringT &func_ident, stype::TypePool *pool) {
 
-    auto it = _methods.find(caller_type);
+    auto it = _methods.find(impl_type);
     if(it != _methods.end()) {
       if(auto it2 = it->second.find(func_ident); it2 != it->second.end()) {
         return it2->second;
@@ -75,17 +75,18 @@ public:
     // impl<T, N> [T; N]: fn len(&mut) -> usize
     // impl<T, N> [T; N]: fn length(&mut) -> usize
     // lazy generation.
-    if((func_ident == "len" || func_ident == "length") && caller_type.get_if<stype::ArrayType>()) {
+    if((func_ident == "len" || func_ident == "length") && impl_type.get_if<stype::ArrayType>()) {
       auto func_ptr = pool->make_raw_type<stype::FunctionType>(
         func_ident,
-        caller_type,
+        impl_type,
+        pool->make_type<stype::RefType>(impl_type, false),
         std::vector<stype::TypePtr>{},
         pool->make_type<stype::PrimeType>(stype::TypePrime::kUSize)
         );
 
       if(it == _methods.end()) {
         _methods.emplace(
-          caller_type,
+          impl_type,
           std::unordered_map<StringT, std::shared_ptr<stype::FunctionType>>{{func_ident, func_ptr}}
           );
       } else {

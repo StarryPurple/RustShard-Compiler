@@ -291,8 +291,8 @@ protected:
     _crate->add_asso_method(std::move(caller_type), std::move(func_type));
   }
   std::shared_ptr<stype::FunctionType> find_asso_method(
-    stype::TypePtr caller_type, const StringT &func_ident, stype::TypePool *pool) {
-    return _crate->find_asso_method(std::move(caller_type), func_ident, pool);
+    stype::TypePtr impl_type, const StringT &func_ident, stype::TypePool *pool) {
+    return _crate->find_asso_method(std::move(impl_type), func_ident, pool);
   }
 
   int scope_id() const { return _scopes.back()->id(); }
