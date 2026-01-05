@@ -22,7 +22,7 @@ struct ConstSlice;
 class ConstValue;
 
 // contains std::monostate
-using const_val_list = type_utils::type_list<
+using const_val_list = utils::type_list<
   std::monostate,
   ConstPrime,
   ConstRef,
@@ -60,9 +60,9 @@ protected:
 };
 struct ConstPrime : public ConstBase {
   stype::TypePrime prime;
-  type_utils::primitive_variant value;
+  utils::primitive_variant value;
 
-  template <class T> requires type_utils::is_primitive<T>
+  template <class T> requires utils::is_primitive<T>
   ConstPrime(stype::TypePrime _prime, T &&spec): prime(_prime), value(std::forward<T>(spec)) {}
   bool operator==(const ConstPrime&) const = default;
   // extract iXX and uXX as usize. can be used in multiple places.

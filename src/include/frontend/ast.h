@@ -580,6 +580,7 @@ public:
   void set_lside() { _is_lside = true; }
   bool is_place_mut() const { return _is_place_mut; }
   void set_place_mut() { _is_place_mut = true; }
+  // return early. Reach the end of the expression is not an always_return expression.
   bool always_returns() const { return _always_returns; }
   void set_always_returns() { _always_returns = true; }
   virtual bool allow_auto_deref() const { return false; }
@@ -615,13 +616,13 @@ private:
 class LiteralExpression : public ExpressionWithoutBlock {
 public:
   // must be assigned at construction
-  template <class Spec> requires type_utils::is_primitive<Spec>
+  template <class Spec> requires utils::is_primitive<Spec>
   explicit LiteralExpression(stype::TypePrime prime, Spec &&spec)
   : _prime(prime), _spec(std::forward<Spec>(spec)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
 private:
   stype::TypePrime _prime;
-  type_utils::primitive_variant _spec;
+  utils::primitive_variant _spec;
 public:
   EXPOSE_FIELD_CONST_REFERENCE(prime, _prime) // StringLiteral: TypePrime::kStr.
   EXPOSE_FIELD_CONST_REFERENCE(spec_value, _spec)

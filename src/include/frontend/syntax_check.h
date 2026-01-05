@@ -265,6 +265,7 @@ protected:
   std::vector<Scope*> _scopes;
   // "Self" that we are currently working on. valid in impl/trait.
   // set in PreTypeFiller.
+  // IRGenerator: empty?
   stype::TypePtr _impl_type;
 
   SymbolInfo* add_symbol(StringT ident, const SymbolInfo &symbol) {

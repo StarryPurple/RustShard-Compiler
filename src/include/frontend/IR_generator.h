@@ -70,6 +70,17 @@ public:
 
   void visit(ast::LazyBooleanExpression &node) override;
 
+
+  // no need to look at type declarations.
+  // use intended blank implementation.
+
+  void visit(ast::ParenthesizedType &node) override {}
+  void visit(ast::TupleType &node) override {}
+  void visit(ast::ReferenceType &node) override {}
+  void visit(ast::ArrayType &node) override {}
+  void visit(ast::SliceType &node) override {}
+  void visit(ast::TypePath &node) override {}
+
 private:
   struct TypeDeclarationPack;
   struct StaticPack;
@@ -87,6 +98,11 @@ private:
 
   struct FunctionContext;
   std::vector<FunctionContext> _contexts;
+
+  static std::string mangle_method(stype::TypePtr impl_type, const std::string &func_name) {
+    // doesn't allow to start as number.
+    return "_" + utils::to_base62(impl_type->hash()) + "_" + func_name;
+  }
 
 };
 

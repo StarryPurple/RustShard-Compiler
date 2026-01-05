@@ -338,13 +338,13 @@ void ConstEvaluator::postVisit(NegationExpression &node) {
   }
   std::visit([&]<typename T0>(T0 &&arg){
     using T = std::decay_t<T0>;
-    if constexpr(type_utils::is_one_of<T, std::int64_t, float, double>) {
+    if constexpr(utils::is_one_of<T, std::int64_t, float, double>) {
       if(node.oper() != Operator::kSub) {
         _recorder->tagged_report(kErrTag, "Invalid operator kSub in negation expression");
         return;
       }
       auto prime = inner->type().get<stype::PrimeType>()->prime();
-      if constexpr(type_utils::is_one_of<T, std::int64_t>) {
+      if constexpr(utils::is_one_of<T, std::int64_t>) {
         using stype::TypePrime;
         if(
           (prime == TypePrime::kI8 && arg == std::numeric_limits<std::int8_t>::min()) ||
@@ -397,8 +397,8 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
 
   if(oper == Operator::kShl || oper == Operator::kShr) {
     std::visit([&]<typename T1, typename T2>(T1 &&arg1, T2 &&arg2) {
-      if constexpr(type_utils::is_one_of<T1, std::int64_t, std::uint64_t>) {
-        if constexpr(type_utils::is_one_of<T2, std::uint64_t>) {
+      if constexpr(utils::is_one_of<T1, std::int64_t, std::uint64_t>) {
+        if constexpr(utils::is_one_of<T2, std::uint64_t>) {
           if(oper == Operator::kShl) {
             node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
               inner1->type(), arg1 << arg2));
@@ -432,7 +432,7 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
       throw std::runtime_error("Type mismatch not checked, inner design has flaws.");
     } else {
       using T = T1;
-      if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
+      if constexpr(utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
         if((oper == Operator::kDiv || oper == Operator::kMod) && arg2 == 0) {
           _recorder->tagged_report(kErrTag, "Division by zero");
           return;
@@ -517,7 +517,7 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
       using T = T01;
       bool result = false;
       auto oper = node.oper();
-      if constexpr(type_utils::is_one_of<T, char, std::int64_t, std::uint64_t, float, double, bool>) {
+      if constexpr(utils::is_one_of<T, char, std::int64_t, std::uint64_t, float, double, bool>) {
         switch(oper) {
         case Operator::kEq: result = (arg1 == arg2); break;
         case Operator::kNe: result = (arg1 != arg2); break;
@@ -623,7 +623,7 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     auto target_prime = target_type->prime();
     switch(target_prime) {
     case TypePrime::kBool:
-      if constexpr(type_utils::is_one_of<T, bool>) {
+      if constexpr(utils::is_one_of<T, bool>) {
         node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
           _type_pool->make_type<stype::PrimeType>(TypePrime::kBool),
           TypePrime::kBool,
@@ -637,7 +637,7 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     case TypePrime::kI32:
     case TypePrime::kI64:
     case TypePrime::kISize: {
-      if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double, char>) {
+      if constexpr(utils::is_one_of<T, std::int64_t, std::uint64_t, float, double, char>) {
         std::int64_t val = 0;
         switch(target_prime) {
         case TypePrime::kI8: val = static_cast<std::int8_t>(arg); break;
@@ -662,7 +662,7 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
     case TypePrime::kU32:
     case TypePrime::kU64:
     case TypePrime::kUSize: {
-      if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double, char>) {
+      if constexpr(utils::is_one_of<T, std::int64_t, std::uint64_t, float, double, char>) {
         std::uint64_t val = 0;
         switch(target_prime) {
         case TypePrime::kU8: val = static_cast<std::uint8_t>(arg); break;
@@ -684,7 +684,7 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
 
 
     case TypePrime::kF32: {
-      if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
+      if constexpr(utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
         node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
           _type_pool->make_type<stype::PrimeType>(target_prime),
           target_prime,
@@ -695,7 +695,7 @@ void ConstEvaluator::postVisit(TypeCastExpression &node) {
       }
     } break;
     case TypePrime::kF64: {
-      if constexpr(type_utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
+      if constexpr(utils::is_one_of<T, std::int64_t, std::uint64_t, float, double>) {
         node.set_cval(_const_pool->make_const<sconst::ConstPrime>(
           _type_pool->make_type<stype::PrimeType>(target_prime),
           target_prime,

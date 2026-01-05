@@ -109,14 +109,14 @@ struct CallInst: Instruction {
 
 // ret Ty %0 / ret void
 // ReturnExpression, FuncBody (return at end)
-// set ret_val = "" for return void
+// set ret_reg = "" for return void. Better to simultaneously write ret_type = unit.
 struct ReturnInst: Instruction {
   IRType ret_type;
-  StringT ret_val; // "" for return void
+  StringT ret_reg; // "" for return void
 
   std::string to_str() const override {
-    if(ret_type.to_str() == "void") return "ret void";
-    return "ret " + ret_type.to_str() + " %" + ret_val;
+    if(ret_reg == "") return "ret void";
+    return "ret " + ret_type.to_str() + " %" + ret_reg;
   }
 };
 

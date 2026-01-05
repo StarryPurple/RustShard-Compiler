@@ -3,8 +3,9 @@
 
 #include <type_traits>
 #include <variant>
+#include <algorithm>
 
-namespace insomnia::rust_shard::type_utils {
+namespace insomnia::rust_shard::utils {
 
 template <typename T, typename... Ts>
 concept is_one_of = (std::is_same_v<T, Ts> || ...);
@@ -48,6 +49,19 @@ using primitive_variant = primitives::as_variant;
 
 template <typename T>
 concept is_primitive = primitives::contains<std::decay_t<T>>;
+
+inline std::string to_base62(uint64_t num) {
+  static auto BASE62_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  if (num == 0) return "0";
+  std::string result;
+  result.reserve(12);
+  while (num > 0) {
+    result += BASE62_CHARS[num % 62];
+    num /= 62;
+  }
+  std::ranges::reverse(result);
+  return result;
+}
 
 }
 

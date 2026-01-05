@@ -175,17 +175,24 @@ void IRGenerator::preVisit(ast::Function &node) {
   auto info = find_symbol(node.ident());
   auto func_tp = info->type.get<stype::FunctionType>();
   std::vector<std::pair<StringT, IRType>> params;
+
+  /* fail?
+  if(func_tp->impl_type_opt() != _impl_type) {
+    throw std::runtime_error("Unexpected impl type");
+  }
+  */
+
   // global function name is its original name.
   // method func name shall be mangled by its associated type's type hash.
   std::string inner_func_ident = func_tp->ident();
+  if(func_tp->impl_type_opt()) {
+    inner_func_ident = mangle_method(func_tp->impl_type_opt(), inner_func_ident);
+  }
   // llvm requires register names in pure number style to appear in order.
   // so...
   _contexts.back()._next_reg_id += (func_tp->self_type_opt() ? 1 : 0) + static_cast<int>(func_tp->params().size());
   int next_param_reg_id = 0;
   if(func_tp->self_type_opt()) {
-    // method func name is mangled by its associated type's type hash.
-    // if it's a static one (no self opt),
-    inner_func_ident = std::to_string(func_tp->hash()) + inner_func_ident;
 
     int reg_id0 = next_param_reg_id++;
     StringT reg_name0 = std::to_string(reg_id0); // x0
@@ -268,14 +275,25 @@ void IRGenerator::preVisit(ast::Function &node) {
 
 void IRGenerator::postVisit(ast::Function &node) {
   ScopedVisitor::postVisit(node);
-  // ends. if nothing is explicitly returned, write a "ret void"
-  if(node.body_opt()) {
-    if(!node.body_opt()->always_returns()) { // check _context.back().is_unreachable?
-      ReturnInst lineR;
+  if(!node.body_opt()) {
+    throw std::runtime_error("Function with no func body not supported");
+  }
+  if(!node.body_opt()->always_returns()) {
+    // reaches the end of the function. Return something.
+    ReturnInst lineR;
+    if(!node.body_opt()->stmts_opt() || !node.body_opt()->stmts_opt()->expr_opt() ||
+      !_contexts.back().node_reg_map.contains(node.body_opt()->stmts_opt()->expr_opt()->id())) { // so amusing a line
+      // if nothing is explicitly returned, write a "ret void".
+      // check _context.back().is_unreachable?
       lineR.ret_type = IRType(_type_pool->make_unit()); // redundant.
-      lineR.ret_val = "";
-      _contexts.back().push_instruction(std::move(lineR));
+      lineR.ret_reg = "";
+    } else {
+      // return what's left.
+      int reg_id = _contexts.back().node_reg_map.at(node.body_opt()->stmts_opt()->expr_opt()->id());
+      lineR.ret_type = _contexts.back().function_pack.ret_type;
+      lineR.ret_reg = std::to_string(reg_id);
     }
+    _contexts.back().push_instruction(std::move(lineR));
   }
   _contexts.back().basic_block_packs.back().instructions = std::move(_contexts.back().instructions);
   _contexts.back().function_pack.basic_block_packs = std::move(_contexts.back().basic_block_packs);
@@ -520,22 +538,80 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
 
   auto caller = node.expr()->get_type();
   auto &func_name = node.segment()->ident_seg()->ident();
-  auto func_ptr = find_asso_method(caller, func_name, _type_pool);
-  if(!func_ptr) {
+  auto func_tp = find_asso_method(caller, func_name, _type_pool);
+  bool is_caller_ref = false;
+  auto ty = IRType(caller);
+  if(!func_tp) {
+    is_caller_ref = true;
     // Assume caller = &T / &mut T and find methods of T.
     if(auto r = caller.get_if<stype::RefType>()) {
-      func_ptr = find_asso_method(r->inner(), func_name, _type_pool);
+      ty = IRType(r->inner());
+      func_tp = find_asso_method(r->inner(), func_name, _type_pool);
     } else {
       throw std::runtime_error("Caller type mismatch or too complicated");
     }
   }
-  // caller might be
 
-  if(auto caller_req = func_ptr->self_type_opt()) {
-
+  /* fail?
+  if(func_tp->impl_type_opt() != _impl_type) {
+    throw std::runtime_error("Unexpected impl type");
   }
+  */
+
 
   CallInst lineC;
+  // method mangling
+  lineC.func_name = mangle_method(func_tp->impl_type_opt(), func_tp->ident());
+  lineC.ret_type = IRType(func_tp->ret_type());
+  if(func_tp->ret_type() != _type_pool->make_unit()) {
+    auto res_id = _contexts.back().new_reg_id();
+    lineC.dst_name = std::to_string(res_id);
+    _contexts.back().node_reg_map.emplace(node.id(), res_id);
+  }
+
+  // pass self.
+  if(func_tp->self_type_opt()) {
+    auto caller_id = _contexts.back().node_reg_map.at(node.expr()->id());
+    auto self_tp = func_tp->self_type_opt();
+    // caller can be T (is_caller_ref = false) or T* (is_caller_ref = true).
+    // caller requires T, &T or &mut T.
+    // if requirement matches, just pass.
+    // if it needs load/store, just do that.
+    bool is_self_ref = static_cast<bool>(self_tp.get_if<stype::RefType>());
+    if(!is_caller_ref && is_self_ref) {
+      // caller T, caller req T*
+      // store caller to memory.
+      int ptr_id = _contexts.back().new_reg_id();
+      StoreInst lineS;
+      lineS.is_instant = false;
+      lineS.value_or_name = std::to_string(caller_id);
+      lineS.ptr_name = std::to_string(ptr_id);
+      lineS.value_type = ty;
+      lineS.ptr_type = ty.get_ref(_type_pool);
+      _contexts.back().push_instruction(std::move(lineS));
+      caller_id = ptr_id;
+    } else if(is_caller_ref && !is_self_ref) {
+      // caller T*, caller req T.
+      // load caller from memory.
+      int obj_id = _contexts.back().new_reg_id();
+      LoadInst lineL;
+      lineL.ptr_name = std::to_string(caller_id);
+      lineL.dst_name = std::to_string(obj_id);
+      lineL.ptr_type = ty.get_ref(_type_pool);
+      lineL.load_type = ty;
+      _contexts.back().push_instruction(std::move(lineL));
+      caller_id = obj_id;
+    }
+    lineC.args.emplace_back(IRType(self_tp), std::to_string(caller_id));
+  }
+
+  if(node.params_opt()) for(int i = 0; i < node.params_opt()->expr_list().size(); ++i) {
+    auto &expr = node.params_opt()->expr_list()[i];
+    auto node_id = expr->id();
+    int reg_id = _contexts.back().node_reg_map.at(node_id);
+    lineC.args.emplace_back(func_tp->params()[i], std::to_string(reg_id));
+  }
+  _contexts.back().push_instruction(std::move(lineC));
 
 }
 
@@ -621,18 +697,22 @@ void IRGenerator::postVisit(ast::BorrowExpression &node) {
 
 void IRGenerator::postVisit(ast::DereferenceExpression &node) {
   // *ptr: deprive one layer of pointer.
+  // if rside:
   // %lhs = load Ty, Ty* %rhs
   // record lhs
+  // if lside:
+  // just record rhs
   int rhs_id = _contexts.back().node_reg_map.at(node.expr()->id());
-  int lhs_id = _contexts.back().new_reg_id();
-
-  LoadInst lineL;
-  lineL.dst_name = std::to_string(lhs_id);
-  lineL.ptr_name = std::to_string(rhs_id);
-  lineL.load_type = IRType(node.get_type());
-  lineL.ptr_type = IRType(node.expr()->get_type());
-  _contexts.back().push_instruction(std::move(lineL));
-
+  int lhs_id = rhs_id;
+  if(!node.is_lside()) {
+    lhs_id = _contexts.back().new_reg_id();
+    LoadInst lineL;
+    lineL.dst_name = std::to_string(lhs_id);
+    lineL.ptr_name = std::to_string(rhs_id);
+    lineL.load_type = IRType(node.get_type());
+    lineL.ptr_type = IRType(node.expr()->get_type());
+    _contexts.back().push_instruction(std::move(lineL));
+  }
   _contexts.back().node_reg_map.emplace(node.id(), lhs_id);
 }
 
@@ -644,26 +724,35 @@ void IRGenerator::postVisit(ast::PathInExpression &node) {
     throw std::runtime_error("PathInExpression too complicated");
   }
   auto ident = node.segments().back()->ident_seg()->ident();
-  auto info = find_symbol(ident);
-  if(info->kind == ast::SymbolKind::kConstant) {
-    // value must be inlined. we only support integers here.
-    auto value = *info->cval->get_if<sconst::ConstPrime>()->get_usize();
-    // record a register that contains this value.
-    // %res = add Ty 0, value
-    int res_id = _contexts.back().new_reg_id();
-    BinaryOpInst lineB;
-    lineB.is_l_instant = true;
-    lineB.is_r_instant = true;
-    lineB.lhs = "0";
-    lineB.rhs = std::to_string(value);
-    lineB.type = IRType(info->cval->type());
-    lineB.dst = std::to_string(res_id);
-    lineB.op = "add";
-    _contexts.back().push_instruction(std::move(lineB));
-    _contexts.back().node_reg_map.emplace(node.id(), res_id);
-    return;
+
+  if(ident == "self") {
+    // "self" shall be already registered into node_reg_map. just find it like normal variables.
+    // nothing extra to do here.
+  } else {
+    auto info = find_symbol(ident);
+    if(!info) {
+      throw std::runtime_error("Info of variable not found: " + ident);
+    }
+    if(info->kind == ast::SymbolKind::kConstant) {
+      // value must be inlined. we only support integers here.
+      auto value = *info->cval->get_if<sconst::ConstPrime>()->get_usize();
+      // record a register that contains this value.
+      // %res = add Ty 0, value
+      int res_id = _contexts.back().new_reg_id();
+      BinaryOpInst lineB;
+      lineB.is_l_instant = true;
+      lineB.is_r_instant = true;
+      lineB.lhs = "0";
+      lineB.rhs = std::to_string(value);
+      lineB.type = IRType(info->cval->type());
+      lineB.dst = std::to_string(res_id);
+      lineB.op = "add";
+      _contexts.back().push_instruction(std::move(lineB));
+      _contexts.back().node_reg_map.emplace(node.id(), res_id);
+      return;
+    }
+    if(info->kind != ast::SymbolKind::kVariable) return;
   }
-  if(info->kind != ast::SymbolKind::kVariable) return;
 
   auto [val_ptr_id, ty] = _contexts.back().variable_addr_reg_map.at(ident);
 
@@ -923,7 +1012,7 @@ void IRGenerator::postVisit(ast::ComparisonExpression &node) {
     lineB.op = is_unsigned ? "icmp ugt" : "icmp sgt";
   } break;
   default:
-    throw std::runtime_error("Invalid operator type in arithmetic/logical expression");
+    throw std::runtime_error("Invalid operator type in comparison expression");
   }
   _contexts.back().push_instruction(std::move(lineB));
 
@@ -958,48 +1047,47 @@ void IRGenerator::postVisit(ast::CompoundAssignmentExpression &node) {
   lineB.type = ty;
   lineB.dst = std::to_string(res_id);
 
-  if(!node.expr1()->get_type().get_if<stype::PrimeType>()
-    || !node.expr2()->get_type().get_if<stype::PrimeType>()) {
+  auto ty1 = node.expr1()->get_type().get_if<stype::RefType>();
+  auto prime1 = ty1 ? ty1->inner().get_if<stype::PrimeType>() : node.expr1()->get_type().get_if<stype::PrimeType>();
+  auto prime2 = node.expr2()->get_type().get_if<stype::PrimeType>();
+
+  if(!prime1 || !prime2) {
     throw std::runtime_error("Operands too complicated in Arithmetic/Logical Expression");
-    }
-  bool is_unsigned = node.expr1()->get_type().get<stype::PrimeType>()->is_unsigned_int();
+  }
+  bool is_unsigned = prime1->is_unsigned_int();
   switch(node.oper()) {
-  case ast::Operator::kShl: {
+  case ast::Operator::kShlAssign: {
     lineB.op = "shl";
   } break;
-  case ast::Operator::kShr: {
+  case ast::Operator::kShrAssign: {
     lineB.op = is_unsigned ? "lshr" : "ashr";
   } break;
-  case ast::Operator::kAdd: {
+  case ast::Operator::kAddAssign: {
     lineB.op = "add";
   } break;
-  case ast::Operator::kSub: {
+  case ast::Operator::kSubAssign: {
     lineB.op = "sub";
   } break;
-  case ast::Operator::kMul: {
+  case ast::Operator::kMulAssign: {
     lineB.op = "mul";
   } break;
-  case ast::Operator::kDiv: {
+  case ast::Operator::kDivAssign: {
     lineB.op = is_unsigned ? "udiv" : "sdiv";
   } break;
-  case ast::Operator::kMod: {
+  case ast::Operator::kModAssign: {
     lineB.op = is_unsigned ? "urem" : "srem";
   } break;
-  case ast::Operator::kBitwiseAnd: {
+  case ast::Operator::kBitwiseAndAssign: {
     lineB.op = "and";
   } break;
-  case ast::Operator::kBitwiseOr: {
+  case ast::Operator::kBitwiseOrAssign: {
     lineB.op = "or";
   } break;
-  case ast::Operator::kBitwiseXor: {
+  case ast::Operator::kBitwiseXorAssign: {
     lineB.op = "xor";
   } break;
-  case ast::Operator::kLogicalAnd:
-  case ast::Operator::kLogicalOr: {
-    throw std::runtime_error("Logical And/Or unimplemented");
-  } break;
   default:
-    throw std::runtime_error("Invalid operator type in arithmetic/logical expression");
+    throw std::runtime_error("Invalid operator type in compound assignment expression");
   }
   _contexts.back().push_instruction(std::move(lineB));
 
@@ -1018,7 +1106,7 @@ void IRGenerator::postVisit(ast::CompoundAssignmentExpression &node) {
 void IRGenerator::postVisit(ast::FieldExpression &node) {
   auto obj_id = _contexts.back().node_reg_map.at(node.expr()->id());
   auto ftp = IRType(node.expr()->get_type());
-  if(node.expr()->is_lside()) {
+  if(dynamic_cast<ast::PathInExpression*>(node.expr().get()) && node.expr()->is_lside()) {
     // I know I modified it... sigh.
     ftp = ftp.get_ref(_type_pool);
   }
@@ -1261,7 +1349,7 @@ void IRGenerator::visit(ast::IfExpression &node) {
     // nothing to record.
     return;
   }
-  int exit_id = _contexts.back().new_block_id();
+  int exit_id = _contexts.back().new_reg_id();
   if(then_id != -1 && else_id != -1) {
     PhiInst lineP;
     lineP.dst_name = std::to_string(exit_id);
@@ -1426,10 +1514,11 @@ void IRGenerator::postVisit(ast::ReturnExpression &node) {
   // no need to record any register.
   ReturnInst lineR;
   if(!node.expr_opt()) {
-    lineR.ret_val = "";
+    lineR.ret_type = IRType(_type_pool->make_unit());
+    lineR.ret_reg = "";
   } else {
     lineR.ret_type = IRType(node.expr_opt()->get_type());
-    lineR.ret_val = std::to_string(_contexts.back().node_reg_map.at(node.expr_opt()->id()));
+    lineR.ret_reg = std::to_string(_contexts.back().node_reg_map.at(node.expr_opt()->id()));
   }
   _contexts.back().push_instruction(std::move(lineR));
   _contexts.back().is_unreachable = true;
