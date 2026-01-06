@@ -387,6 +387,7 @@ public:
     }
     info->type = _type_pool->make_type<stype::TraitType>(node.ident());
     node.set_type(info->type);
+    ScopedVisitor::preVisit(node);
   }
 
 private:
@@ -398,7 +399,7 @@ private:
 
 /* Resolve symbol reliance relationship (used in Type Path)
  * After this, one node shall know its parent resolution region and its children.
- */
+ *//*
 class SymbolResolver : public RecursiveVisitor {
 public:
   SymbolResolver(ErrorRecorder *recorder, stype::TypePool *type_pool, ResolutionTree *res_tree)
@@ -412,7 +413,7 @@ private:
   ErrorRecorder *_recorder;
   stype::TypePool *_type_pool;
   ResolutionTree *_res_tree;
-};
+};*/
 
 
 /* A helper class that evaluates const items.

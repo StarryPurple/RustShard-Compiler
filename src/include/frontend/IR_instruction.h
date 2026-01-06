@@ -44,7 +44,7 @@ struct AllocaInst: Instruction {
   }
 };
 
-// store Ty val / %1, ptr %x
+// store Ty val / %1, Ty* %x
 // Assignment, CompoundAssignment
 struct StoreInst: Instruction {
   bool is_instant = false;
@@ -124,16 +124,21 @@ struct ReturnInst: Instruction {
 // (T*) %dst = getelementptr S, S* %ptr, i32 0, index_t idx
 // Array, Index, Field
 struct GEPInst: Instruction {
+  struct Info {
+    IRType type;
+    bool is_instant;
+    std::string index_name_or_value;
+  };
   StringT dst_name, ptr_name;
   IRType base_type, ptr_type;
-  IRType index_type;
-  bool is_idx_instant;
-  std::string index_name_or_value;
+  std::vector<Info> idx_infos;
 
   std::string to_str() const override {
-    return "%" + dst_name + " = getelementptr " + base_type.to_str() + ", "
-      + ptr_type.to_str() + " %" + ptr_name + ", i32 0, " + index_type.to_str() + " "
-      + (is_idx_instant ? "" : "%") + index_name_or_value;
+    std::string res = "%" + dst_name + " = getelementptr " + base_type.to_str() + ", "
+      + ptr_type.to_str() + " %" + ptr_name;
+    for(auto &[type, is_instant, index_name_or_value]: idx_infos)
+      res += ", " + type.to_str() + " " + (is_instant ? "" : "%") + index_name_or_value;
+    return res;
   }
 };
 
@@ -146,7 +151,8 @@ struct CastInst: Instruction {
 
   static int bit_width(stype::TypePrime prime) {
     switch(prime) {
-    case stype::TypePrime::kI8: case stype::TypePrime::kU8: return 8;
+    case stype::TypePrime::kBool: return 1;
+    case stype::TypePrime::kI8: case stype::TypePrime::kU8: case stype::TypePrime::kChar: return 8;
     case stype::TypePrime::kI16: case stype::TypePrime::kU16: return 16;
     case stype::TypePrime::kI32: case stype::TypePrime::kU32: return 32;
     case stype::TypePrime::kI64: case stype::TypePrime::kU64: return 64;
@@ -162,8 +168,10 @@ struct CastInst: Instruction {
     }
     auto src_width = bit_width(src->prime()), dst_width = bit_width(dst->prime());
     if(src_width == dst_width) return "bitcast";
-    if(src_width < dst_width)
-      return src->is_unsigned_int() ? "zext" : "sext";
+    if(src_width < dst_width) {
+      return (src->is_unsigned_int() || src->prime() == stype::TypePrime::kBool || src->prime() == stype::TypePrime::kChar)
+      ? "zext" : "sext";
+    }
     return "trunc";
   }
   std::string to_str() const override {

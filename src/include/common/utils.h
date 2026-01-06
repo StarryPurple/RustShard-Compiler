@@ -59,7 +59,7 @@ inline std::string to_base62(uint64_t num) {
     result += BASE62_CHARS[num % 62];
     num /= 62;
   }
-  std::ranges::reverse(result);
+  std::reverse(result.begin(), result.end());
   return result;
 }
 

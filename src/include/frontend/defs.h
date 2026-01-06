@@ -82,6 +82,7 @@ public:
   SymbolInfo* find_symbol(const StringT &ident);
   const SymbolInfo* find_symbol(const StringT &ident) const;
   bool set_type(const StringT &ident, stype::TypePtr type);
+  const auto& symbol_set() const { return _symbol_set; }
 
 private:
   std::unordered_map<StringT, SymbolInfo> _symbol_set;

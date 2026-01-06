@@ -576,8 +576,12 @@ public:
   virtual bool has_block() const = 0;
   virtual bool is_predict_without_value() const { return false; }
   bool has_constant() const { return static_cast<bool>(_cval); }
+  // left side of assignment
   bool is_lside() const { return _is_lside; }
   void set_lside() { _is_lside = true; }
+  // left side of assignment/method(including index) expression / right side of let statement
+  bool need_addr() const { return _need_addr || _is_lside; }
+  void set_addr_needed() { _need_addr = true; }
   bool is_place_mut() const { return _is_place_mut; }
   void set_place_mut() { _is_place_mut = true; }
   // return early. Reach the end of the expression is not an always_return expression.
@@ -588,6 +592,7 @@ protected:
   sconst::ConstValPtr _cval;
 private:
   bool _is_lside = false;
+  bool _need_addr = false;
   bool _is_place_mut = false;
   bool _always_returns = false;
 

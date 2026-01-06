@@ -36,7 +36,7 @@ public:
   void postVisit(ast::CallExpression &node) override;
   void postVisit(ast::MethodCallExpression &node) override;
 
-
+  void preVisit(ast::LetStatement &node) override; // set addr needed
   void postVisit(ast::LetStatement &node) override;
 
   void postVisit(ast::AssignmentExpression &node) override;
@@ -44,6 +44,7 @@ public:
   void postVisit(ast::BorrowExpression &node) override;
   void postVisit(ast::DereferenceExpression &node) override;
   void postVisit(ast::PathInExpression &node) override;
+  void preVisit(ast::IndexExpression &node) override;
   void postVisit(ast::IndexExpression &node) override;
   void postVisit(ast::TypeCastExpression &node) override;
 
@@ -51,10 +52,11 @@ public:
   void postVisit(ast::ArithmeticOrLogicalExpression &node) override;
   void postVisit(ast::ComparisonExpression &node) override;
   void postVisit(ast::CompoundAssignmentExpression &node) override;
+  void preVisit(ast::FieldExpression &node) override;
   void postVisit(ast::FieldExpression &node) override;
   void postVisit(ast::GroupedExpression &node) override;
-  void postVisit(ast::StructExpression &node) override;
-  void postVisit(ast::ArrayExpression &node) override;
+  void visit(ast::StructExpression &node) override;
+  void visit(ast::ArrayExpression &node) override;
   void postVisit(ast::BlockExpression &node) override;
 
   // branch
@@ -88,7 +90,6 @@ private:
   struct FunctionPack;
   struct IRPack;
 
-  std::string use_string_literal(StringT literal);
 
   bool _is_in_const = false;
 
@@ -99,10 +100,15 @@ private:
   struct FunctionContext;
   std::vector<FunctionContext> _contexts;
 
+  std::string use_string_literal(StringT literal);
   static std::string mangle_method(stype::TypePtr impl_type, const std::string &func_name) {
     // doesn't allow to start as number.
     return "_" + utils::to_base62(impl_type->hash()) + "_" + func_name;
   }
+  // returns ptr_id
+  int store_into_memory(int obj_id, IRType obj_ty);
+  // returns obj_id
+  int load_from_memory(int ptr_id, IRType obj_ty);
 
 };
 

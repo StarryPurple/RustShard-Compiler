@@ -27,3 +27,23 @@ LLVM integer types all start with 'i', no unsigned.
 logicalAnd/logicalOr won't appear in ArithmeticOrLogicalExpression...
 
 You don't need to recursively infilct is_lside property... only one layer is sufficient.
+
+Flaw in control flow tags... when writing phi nodes, use current tags rather than the original then/else 
+(they might end early due to other control flow expressions)
+
+IRGenerator: lifetimes of variables follow scopes, not functions.
+
+The stack space is not that unlimited (especially when you need to create a large array).
+Tag the right side of let statement
+  / expressions of fields in struct construction expression
+  / expressions of entries in array construction expression
+as address-needed.
+(maybe not in semantic check phase) and reduce some useless store-n-load pairs.
+
+The addr-needed and lside property shall not be seen as one.
+
+In-place construction optimization (explicit array / field) is needed.
+
+Unimplemented: It is said that in Rust
+  let mut pool = [Node { edges: [f(); 201] }; 100];
+will call f() for 20100 times. Hope no testcases cover it.
