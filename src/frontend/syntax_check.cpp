@@ -1717,16 +1717,12 @@ void TypeFiller::postVisit(AssignmentExpression &node) {
   // &T <- &T
   // &T <- &mut T
   // &mut T <- &mut T
-  // (auto deref acceptable) &mut T <- T
   bool to_accept = false;
   if(node.expr1()->is_place_mut() && t->is_convertible_from(*f)) to_accept = true;
   auto rt = t.get_if<stype::RefType>(), rf = f.get_if<stype::RefType>();
   // &T <- &T...
   if(rt && rf && rt->inner()->is_convertible_from(*rf->inner()) && (!rt->ref_is_mut() || rf->ref_is_mut()))
     to_accept = true;
-  // auto deref
-  if(node.expr1()->allow_auto_deref() && rt && !rf && rt->ref_is_mut() && rt->inner()->is_convertible_from(*f))
-    to_accept = true; // ...
   if(!to_accept) {
     _recorder->tagged_report(kErrTypeNotMatch, "Invalid assignment: "
       + to_type->to_string() + " <- " + from_type->to_string());
@@ -1976,15 +1972,14 @@ void TypeFiller::postVisit(IndexExpression &node) {
     return;
   }
 
-  // (mut1) [T; N] -> (mut1) &(mut1) T (lside), T (rside)
-  // (mut1) &(mut2) [T; N] -> (mut2) &(mut2) T (lside), T (rside)
+  // (mut1) [T; N] -> (mut1) T (lside), T (rside)
+  // (mut1) &(mut2) [T; N] -> (mut2) T (lside), T (rside)
 
   if(auto a = expr_type.get_if<stype::ArrayType>()) {
     auto tp = a->inner();
     if(node.is_lside()) {
       bool is_mut1 = node.expr_obj()->is_place_mut();
       if(is_mut1) node.set_place_mut();
-      tp = _type_pool->make_type<stype::RefType>(tp, is_mut1);
     }
     node.set_type(tp);
     return;
@@ -2000,7 +1995,6 @@ void TypeFiller::postVisit(IndexExpression &node) {
     bool is_mut2 = r->ref_is_mut();
     if(node.is_lside()) {
       if(is_mut2) node.set_place_mut();
-      tp = _type_pool->make_type<stype::RefType>(tp, is_mut2);
     }
     node.set_type(tp);
     return;
@@ -2263,7 +2257,7 @@ void TypeFiller::postVisit(FieldExpression &node) {
   // a: T, a.x: X (must rside)
   // a: mut T, a.x: mut X (lside), X (rside)
   // a: (mut) &T, a.x: X (must rside)
-  // a: (mut) &mut T, a.x: &mut X (lside), X (rside)
+  // a: (mut) &mut T, a.x: mut X (lside), X (rside)
   if(auto s = type.get_if<stype::StructType>()) {
     auto it = s->fields().find(node.ident());
     if(it == s->fields().end()) {
@@ -2292,14 +2286,12 @@ void TypeFiller::postVisit(FieldExpression &node) {
         return;
       }
       // a: (mut) &T, a.x: X (must rside)
-      // a: (mut) &mut T, a.x: mut &mut X (lside), X (rside)
+      // a: (mut) &mut T, a.x: mut X (lside), X (rside)
       if(r->ref_is_mut()) {
         if(node.is_lside()) {
           node.set_place_mut();
-          node.set_type(_type_pool->make_type<stype::RefType>(it->second, true));
-        } else {
-          node.set_type(it->second);
         }
+        node.set_type(it->second);
       } else {
         if(node.is_lside()) {
           _recorder->tagged_report(kErrNoPlaceMutability, "Field mutability violated");
