@@ -588,6 +588,10 @@ public:
   bool always_returns() const { return _always_returns; }
   void set_always_returns() { _always_returns = true; }
   virtual bool allow_auto_deref() const { return false; }
+  // in case in IR moving ptrs, we don't do bindings.
+  // let a = b(); move &res_of_func to &a is good;
+  // let a = var; move &var to &a is bad.
+  virtual bool can_summon_lvalue() const { return false; }
 protected:
   sconst::ConstValPtr _cval;
 private:
@@ -733,6 +737,7 @@ public:
     std::vector<std::unique_ptr<PathExprSegment>> &&segments
   ): _segments(std::move(segments)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::vector<std::unique_ptr<PathExprSegment>> _segments;
 public:
@@ -766,6 +771,7 @@ public:
     std::unique_ptr<Expression> &&expr
   ): _is_mut(is_mut), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   bool _is_mut;
   std::unique_ptr<Expression> _expr;
@@ -780,6 +786,7 @@ public:
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
 public:
@@ -911,6 +918,7 @@ public:
     std::unique_ptr<Expression> expr
   ): _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
 public:
@@ -973,6 +981,7 @@ public:
   ): _expr_obj(std::move(expr_obj)), _expr_index(std::move(expr_index)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
   bool allow_auto_deref() const override { return true; }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr_obj;
   std::unique_ptr<Expression> _expr_index;
@@ -1094,6 +1103,7 @@ public:
     std::unique_ptr<CallParams> &&params_opt
   ): _expr(std::move(expr)), _params_opt(std::move(params_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<CallParams> _params_opt;
@@ -1123,6 +1133,7 @@ public:
   ): _expr(std::move(expr)), _segment(std::move(segment)),
   _params_opt(std::move(params_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<PathExprSegment> _segment;
@@ -1141,6 +1152,7 @@ public:
   ): _expr(std::move(expr)), _ident(ident) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
   bool allow_auto_deref() const override { return true; }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
   StringT _ident;
@@ -1285,6 +1297,7 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(stmts_opt, _stmts_opt)
 };
 
+// Do I really need to give it a type?
 class FunctionBodyExpr : public ExpressionWithBlock, public ScopeInfo {
 public:
   explicit FunctionBodyExpr(
@@ -1397,6 +1410,7 @@ public:
   ): _block_expr(std::move(block_expr)) {}
   bool is_predict_without_value() const override { return true; }
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<BlockExpression> _block_expr;
 public:
@@ -1410,6 +1424,7 @@ public:
     std::unique_ptr<BlockExpression> &&block_expr
   ): _cond(std::move(cond)), _block_expr(std::move(block_expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Conditions> _cond;
   std::unique_ptr<BlockExpression> _block_expr;
@@ -1444,6 +1459,7 @@ public:
     return true;
   }
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Conditions> _cond;
   std::unique_ptr<BlockExpression> _block_expr;
@@ -1477,6 +1493,7 @@ public:
     std::unique_ptr<MatchArms> &&match_arms_opt
   ): _expr(std::move(expr)), _match_arms_opt(std::move(match_arms_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr; // not StructExpression
   std::unique_ptr<MatchArms> _match_arms_opt;

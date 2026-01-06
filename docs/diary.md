@@ -37,6 +37,7 @@ The stack space is not that unlimited (especially when you need to create a larg
 Tag the right side of let statement
   / expressions of fields in struct construction expression
   / expressions of entries in array construction expression
+  / expressions used by borrow expression
 as address-needed.
 (maybe not in semantic check phase) and reduce some useless store-n-load pairs.
 
@@ -47,3 +48,15 @@ In-place construction optimization (explicit array / field) is needed.
 Unimplemented: It is said that in Rust
   let mut pool = [Node { edges: [f(); 201] }; 100];
 will call f() for 20100 times. Hope no testcases cover it.
+
+comprehensive 3: (fibonacci function)
+If you simply move pointers in let statements (like "a->this = &rhs"), be careful that
+the rhs ptr shall be a rvalue ptr (otherwise you'll meet bindings).
+You can use "RegValue visit(node)" pattern to more precisely identify whether expressions returns lvalues.
+(Assignments and compound assignments need rhs to be value, so it can't be optimized.)
+(Let statements binds pointers, so we have this optimization.)
+
+comprehensive 38:
+At normal cases like (let x; { let x; }), simply eliminating symbol "x" when exiting scope will cause problem.
+Also in definition this also causes problems: If building one more, this may conflict with variable shadowing (let x: t1; let x: t2)
+One solution is to record the reg-map in Scope (so heavy) or a scope-like reg-map stack.

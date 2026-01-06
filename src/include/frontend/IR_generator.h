@@ -41,6 +41,7 @@ public:
 
   void postVisit(ast::AssignmentExpression &node) override;
 
+  void preVisit(ast::BorrowExpression &node) override;
   void postVisit(ast::BorrowExpression &node) override;
   void postVisit(ast::DereferenceExpression &node) override;
   void postVisit(ast::PathInExpression &node) override;
@@ -103,8 +104,10 @@ private:
   std::string use_string_literal(StringT literal);
   static std::string mangle_method(stype::TypePtr impl_type, const std::string &func_name) {
     // doesn't allow to start as number.
-    return "_" + utils::to_base62(impl_type->hash()) + "<" + impl_type->to_string() + ">::" + func_name;
+    // return "_" + utils::to_base62(impl_type->hash()) + "<" + impl_type->to_string() + ">::" + func_name;
+    return "_" + utils::to_base62(impl_type->hash()) + "_" + func_name;
   }
+
   // returns ptr_id
   int store_into_memory(int obj_id, IRType obj_ty);
   // returns obj_id

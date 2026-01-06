@@ -715,6 +715,12 @@ void IRGenerator::postVisit(ast::LetStatement &node) {
   if(node.expr_opt()) {
     // shall already have got a pointer.
     res_id = _contexts.back().node_reg_map.at(node.expr_opt()->id());
+    if(node.expr_opt()->can_summon_lvalue()) {
+      // in case this is a lvalue (can't move the pointer directly)
+      // give it a copy.
+      res_id = load_from_memory(res_id, ty);
+      res_id = store_into_memory(res_id, ty);
+    }
   } else {
     // alloca one place.
     // Warning: Uninitialized variable
@@ -757,48 +763,34 @@ void IRGenerator::postVisit(ast::AssignmentExpression &node) {
   _contexts.back().node_reg_map.emplace(node.id(), rhs_id);
 }
 
+void IRGenerator::preVisit(ast::BorrowExpression &node) {
+  node.expr()->set_addr_needed();
+}
+
 void IRGenerator::postVisit(ast::BorrowExpression &node) {
-  // & val: add a layer of pointer
+  // &val: add a layer of pointer
   // use AllocaInst and StoreInst.
   // %lhs = alloca Ty
   // store Ty %rhs, Ty* %lhs
   // record lhs
+  // if need addr: record rhs
   int rhs_id = _contexts.back().node_reg_map.at(node.expr()->id());
-  int lhs_id = _contexts.back().new_reg_id();
-
-  AllocaInst lineA;
-  lineA.dst_name = std::to_string(lhs_id);
-  lineA.type = IRType(node.expr()->get_type());
-  _contexts.back().push_instruction(std::move(lineA));
-
-  StoreInst lineS;
-  lineS.is_instant = false;
-  lineS.value_type = IRType(node.expr()->get_type());
-  lineS.ptr_type = IRType(node.get_type());
-  lineS.ptr_name = std::to_string(lhs_id);
-  lineS.value_or_name = std::to_string(rhs_id);
-  _contexts.back().push_instruction(std::move(lineS));
-
+  int lhs_id = rhs_id;
+  if(node.need_addr()) {
+    lhs_id = store_into_memory(rhs_id, IRType(node.expr()->get_type()));
+  }
   _contexts.back().node_reg_map.emplace(node.id(), lhs_id);
 }
 
 void IRGenerator::postVisit(ast::DereferenceExpression &node) {
   // *ptr: deprive one layer of pointer.
-  // if rside:
   // %lhs = load Ty, Ty* %rhs
   // record lhs
-  // if lside:
-  // just record rhs
+  // if need addr: just record rhs
   int rhs_id = _contexts.back().node_reg_map.at(node.expr()->id());
   int lhs_id = rhs_id;
   if(!node.need_addr()) {
-    lhs_id = _contexts.back().new_reg_id();
-    LoadInst lineL;
-    lineL.dst_name = std::to_string(lhs_id);
-    lineL.ptr_name = std::to_string(rhs_id);
-    lineL.load_type = IRType(node.get_type());
-    lineL.ptr_type = IRType(node.expr()->get_type());
-    _contexts.back().push_instruction(std::move(lineL));
+    lhs_id = load_from_memory(rhs_id, IRType(node.get_type()));
   }
   _contexts.back().node_reg_map.emplace(node.id(), lhs_id);
 }
@@ -1264,6 +1256,7 @@ void IRGenerator::postVisit(ast::FieldExpression &node) {
 }
 
 void IRGenerator::postVisit(ast::GroupedExpression &node) {
+  if(_is_in_const) return;
   int res_id = _contexts.back().node_reg_map.at(node.expr()->id());
 
   if(node.need_addr()) {
