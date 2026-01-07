@@ -17,6 +17,7 @@ enum class TypeKind;
 class ExprType;
 
 using usize_t = std::uint64_t;
+using isize_t = std::int64_t;
 
 // a wrapper, supporting dynamic cast from basic ExprType
 class TypePtr {

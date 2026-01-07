@@ -1185,7 +1185,7 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     if(first_alpha != StringT::npos)
       suffix_str = lexeme.substr(first_alpha);
     if(suffix_str.starts_with('i')) {
-      std::int64_t value = std::stoll(value_str);
+      std::int64_t value = std::stoll(value_str, nullptr, 0);
       Prime prime;
       if(suffix_str == "i8") prime = Prime::kI8;
       else if(suffix_str == "i16") prime = Prime::kI16;
@@ -1197,7 +1197,7 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
       return std::make_unique<LiteralExpression>(prime, value);
     }
     if(suffix_str.starts_with('u')) {
-      std::uint64_t value = std::stoull(value_str);
+      std::uint64_t value = std::stoull(value_str, nullptr, 0);
       Prime prime;
       if(suffix_str == "u8") prime = Prime::kU8;
       else if(suffix_str == "u16") prime = Prime::kU16;
@@ -1211,7 +1211,7 @@ std::unique_ptr<LiteralExpression> Parser::parseLiteralExpression() {
     if(!suffix_str.empty()) {
       REPORT_FAILURE_AND_RETURN("IntegerLiteral: unknown suffix " + std::string(suffix_str));
     }
-    std::int64_t value = std::stoll(value_str);
+    std::int64_t value = std::stoll(value_str, nullptr, 0);
     tracker.commit();
     return std::make_unique<LiteralExpression>(Prime::kInt, value);
   }

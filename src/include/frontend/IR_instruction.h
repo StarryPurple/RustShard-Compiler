@@ -142,7 +142,8 @@ struct GEPInst: Instruction {
   }
 };
 
-// %c = bitcast(or something else) Ty1* %p to Ty2*
+// like static cast, casts value to value
+// %c = bitcast(or something else) Ty1 %p to Ty2
 // TypeCast
 struct CastInst: Instruction {
   StringT src_name, dst_name;

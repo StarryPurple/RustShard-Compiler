@@ -123,7 +123,7 @@ struct IRGenerator::FunctionContext {
   // break/return result is also stored.
   std::unordered_map<int, int> node_reg_map;
   // which register records the address of variable in memory, and the type of the variable
-  std::unordered_map<StringT, std::pair<int, IRType>> variable_addr_reg_map;
+  std::vector<std::unordered_map<StringT, std::pair<int, IRType>>> variable_addr_reg_maps;
   FunctionPack function_pack;
 
   struct LoopContext {
@@ -149,6 +149,12 @@ struct IRGenerator::FunctionContext {
   void push_instruction(Inst &&inst) {
     if(is_unreachable) return;
     instructions.emplace_back(std::make_unique<Inst>(std::move(inst)));
+  }
+  std::pair<int, IRType> find_variable(const StringT &ident) {
+    for(auto rit = variable_addr_reg_maps.rbegin(); rit != variable_addr_reg_maps.rend(); ++rit) {
+      if(auto it = rit->find(ident); it != rit->end()) return it->second;
+    }
+    throw std::runtime_error("Variable not found");
   }
 };
 
@@ -210,6 +216,9 @@ void IRGenerator::preVisit(ast::Function &node) {
   // a new context
   _contexts.emplace_back();
 
+  // add a new map layer
+  _contexts.back().variable_addr_reg_maps.emplace_back();
+
   // basic block entrance:
   _contexts.back().basic_block_packs.push_back(BasicBlockPack{
     .label = "entry",
@@ -248,25 +257,9 @@ void IRGenerator::preVisit(ast::Function &node) {
     // %x1 = alloca Ty
     // store Ty %x0, Ty* %x1
     // var_ptr-reg-map["self"] = x1, Ty
+    int reg_id1 = store_into_memory(reg_id0, ty);
 
-    int reg_id1 = _contexts.back().new_reg_id();
-    auto reg_name1 = std::to_string(reg_id1);
-
-    AllocaInst lineA;
-    lineA.dst_name = reg_name1; // x1
-    lineA.type = ty;
-
-    _contexts.back().push_instruction(std::move(lineA));
-
-    StoreInst lineS;
-    lineS.is_instant = false;
-    lineS.value_type = ty;
-    lineS.ptr_type = ty.get_ref(_type_pool);
-    lineS.value_or_name = reg_name0;
-    lineS.ptr_name = reg_name1;
-    _contexts.back().push_instruction(std::move(lineS));
-
-    _contexts.back().variable_addr_reg_map.emplace("self", std::pair(reg_id1, ty));
+    _contexts.back().variable_addr_reg_maps.back().emplace("self", std::pair(reg_id1, ty));
 
     // Ty %x0 (self)
     params.emplace_back(reg_name0, ty);
@@ -287,23 +280,9 @@ void IRGenerator::preVisit(ast::Function &node) {
       // var_ptr-reg-map[name] = x1
 
       auto ty = IRType(func_tp->params()[i]);
-      int reg_id1 = _contexts.back().new_reg_id();
-      auto reg_name1 = std::to_string(reg_id1);
+      int reg_id1 = store_into_memory(reg_id0, ty);
 
-      AllocaInst lineA;
-      lineA.dst_name = reg_name1; // x1
-      lineA.type = ty;
-      _contexts.back().push_instruction(std::move(lineA));
-
-      StoreInst lineS;
-      lineS.is_instant = false;
-      lineS.value_type = ty;
-      lineS.ptr_type = ty.get_ref(_type_pool);
-      lineS.value_or_name = reg_name0;
-      lineS.ptr_name = reg_name1;
-      _contexts.back().push_instruction(std::move(lineS));
-
-      _contexts.back().variable_addr_reg_map.emplace(pat->ident(), std::pair(reg_id1, ty));
+      _contexts.back().variable_addr_reg_maps.back().emplace(pat->ident(), std::pair(reg_id1, ty));
     }
     // Ty %x0 (name)
     params.emplace_back(reg_name0, func_tp->params()[i]);
@@ -344,6 +323,10 @@ void IRGenerator::postVisit(ast::Function &node) {
   _contexts.back().basic_block_packs.back().instructions = std::move(_contexts.back().instructions);
   _contexts.back().function_pack.basic_block_packs = std::move(_contexts.back().basic_block_packs);
   _ir_pack->function_packs.push_back(std::move(_contexts.back().function_pack));
+  _contexts.back().variable_addr_reg_maps.pop_back();
+  if(!_contexts.back().variable_addr_reg_maps.empty()) {
+    throw std::runtime_error("Variable-addr-reg map scope management error");
+  }
   _contexts.pop_back();
 }
 
@@ -549,6 +532,11 @@ void IRGenerator::postVisit(ast::LiteralExpression &node) {
   _contexts.back().node_reg_map.emplace(node.id(), res_id);
 }
 
+void IRGenerator::preVisit(ast::CallExpression &node) {
+  // if(node.params_opt()) for(auto &param: node.params_opt()->expr_list())
+  //   param->set_addr_needed();
+}
+
 void IRGenerator::postVisit(ast::CallExpression &node) {
   // %x0 = call ret_t @func(Ty %1, ...)
   // call void @func(Ty %1, ...)
@@ -559,6 +547,10 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
 
   CallInst lineC;
   lineC.func_name = func_tp->ident();
+  if(func_tp->impl_type_opt()) {
+    // static method
+    lineC.func_name = mangle_method(func_tp->impl_type_opt(), lineC.func_name);
+  }
   lineC.ret_type = ret_type;
   if(node.params_opt()) for(int i = 0; i < node.params_opt()->expr_list().size(); ++i) {
     auto &expr = node.params_opt()->expr_list()[i];
@@ -578,6 +570,11 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
     }
     _contexts.back().node_reg_map.emplace(node.id(), res_id);
   }
+}
+
+void IRGenerator::preVisit(ast::MethodCallExpression &node) {
+  // if(node.params_opt()) for(auto &param: node.params_opt()->expr_list())
+  //   param->set_addr_needed();
 }
 
 void IRGenerator::postVisit(ast::MethodCallExpression &node) {
@@ -625,52 +622,22 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
     auto self_tp = func_tp->self_type_opt();
     // caller can be T (is_caller_ref = false) or T* (is_caller_ref = true).
     // caller requires T, &T or &mut T.
-    // if requirement matches, just pass.
-    // if it needs load/store, just do that.
+    // since need addr agreement, one layer of ptr is required.
     bool is_self_ref = static_cast<bool>(self_tp.get_if<stype::RefType>());
     if(is_caller_ref && is_self_ref) {
       // caller T**, caller req T*
-      // load once.
-      int obj_id = _contexts.back().new_reg_id();
-      LoadInst lineL;
-      lineL.ptr_name = std::to_string(caller_id);
-      lineL.dst_name = std::to_string(obj_id);
-      lineL.ptr_type = ty.get_ref(_type_pool).get_ref(_type_pool);
-      lineL.load_type = ty.get_ref(_type_pool);
-      _contexts.back().push_instruction(std::move(lineL));
-      caller_id = obj_id;
+      // just as needed. do nothing.
     } else if(is_caller_ref && !is_self_ref) {
       // caller T**, caller req T.
-      // load twice.
-      int obj_id = _contexts.back().new_reg_id();
-      LoadInst lineL;
-      lineL.ptr_name = std::to_string(caller_id);
-      lineL.dst_name = std::to_string(obj_id);
-      lineL.ptr_type = ty.get_ref(_type_pool).get_ref(_type_pool);
-      lineL.load_type = ty.get_ref(_type_pool);
-      _contexts.back().push_instruction(std::move(lineL));
-      caller_id = obj_id;
-      obj_id = _contexts.back().new_reg_id();
-      lineL.ptr_name = std::to_string(caller_id);
-      lineL.dst_name = std::to_string(obj_id);
-      lineL.ptr_type = ty.get_ref(_type_pool);
-      lineL.load_type = ty;
-      _contexts.back().push_instruction(std::move(lineL));
-      caller_id = obj_id;
+      // load once.
+      caller_id = load_from_memory(caller_id, ty.get_ref(_type_pool));
     } else if(!is_caller_ref && !is_self_ref) {
       // caller T*, caller req T.
-      // load once.
-      int obj_id = _contexts.back().new_reg_id();
-      LoadInst lineL;
-      lineL.ptr_name = std::to_string(caller_id);
-      lineL.dst_name = std::to_string(obj_id);
-      lineL.ptr_type = ty.get_ref(_type_pool);
-      lineL.load_type = ty;
-      _contexts.back().push_instruction(std::move(lineL));
-      caller_id = obj_id;
+      // just as needed. do nothing.
     } else {
       // caller T*, caller req T*.
-      // nothing to do.
+      // store once.
+      caller_id = store_into_memory(caller_id, ty.get_ref(_type_pool));
     }
     lineC.args.emplace_back(IRType(self_tp), std::to_string(caller_id));
   }
@@ -732,14 +699,14 @@ void IRGenerator::postVisit(ast::LetStatement &node) {
     _contexts.back().push_instruction(std::move(lineA));
   }
 
-  if(auto it = _contexts.back().variable_addr_reg_map.find(ip->ident());
-    it != _contexts.back().variable_addr_reg_map.end()) {
+  if(auto it = _contexts.back().variable_addr_reg_maps.back().find(ip->ident());
+    it != _contexts.back().variable_addr_reg_maps.back().end()) {
     // annoying variable shadowing...
     // just remove the previous record.
     // the exact type is flushed here.
-    _contexts.back().variable_addr_reg_map.erase(it);
+    _contexts.back().variable_addr_reg_maps.back().erase(it);
   }
-  _contexts.back().variable_addr_reg_map.emplace(ip->ident(), std::pair(res_id, ty));
+  _contexts.back().variable_addr_reg_maps.back().emplace(ip->ident(), std::pair(res_id, ty));
 }
 
 void IRGenerator::postVisit(ast::AssignmentExpression &node) {
@@ -777,7 +744,7 @@ void IRGenerator::postVisit(ast::BorrowExpression &node) {
   int rhs_id = _contexts.back().node_reg_map.at(node.expr()->id());
   int lhs_id = rhs_id;
   if(node.need_addr()) {
-    lhs_id = store_into_memory(rhs_id, IRType(node.expr()->get_type()));
+    lhs_id = store_into_memory(rhs_id, IRType(node.get_type()));
   }
   _contexts.back().node_reg_map.emplace(node.id(), lhs_id);
 }
@@ -800,6 +767,10 @@ void IRGenerator::postVisit(ast::PathInExpression &node) {
   // if you found it as a function name, ignore it. needless to be handled here.
   // if you found it as a variable name: grab its value.
   // enum variable... sorry I can't do it.
+  if(node.get_type().get_if<stype::FunctionType>()) {
+    // function type already filled. CallExpression know what to call.
+    return;
+  }
   if(node.segments().size() != 1) {
     throw std::runtime_error("PathInExpression too complicated");
   }
@@ -815,19 +786,28 @@ void IRGenerator::postVisit(ast::PathInExpression &node) {
     }
     if(info->kind == ast::SymbolKind::kConstant) {
       // value must be inlined. we only support integers here.
-      auto value = *info->cval->get_if<sconst::ConstPrime>()->get_usize();
+      auto value_opt = info->cval->get_if<sconst::ConstPrime>()->get_integer();
+      if(!value_opt) {
+        throw std::runtime_error("Constant not a integer");
+      }
+      auto value = value_opt.value();
       // record a register that contains this value.
       // %res = add Ty 0, value
+      auto ty = IRType(info->cval->type());
       int res_id = _contexts.back().new_reg_id();
       BinaryOpInst lineB;
       lineB.is_l_instant = true;
       lineB.is_r_instant = true;
       lineB.lhs = "0";
       lineB.rhs = std::to_string(value);
-      lineB.type = IRType(info->cval->type());
+      lineB.type = ty;
       lineB.dst = std::to_string(res_id);
       lineB.op = "add";
       _contexts.back().push_instruction(std::move(lineB));
+      // need addr: store.
+      if(node.need_addr()) {
+        res_id = store_into_memory(res_id, ty);
+      }
       _contexts.back().node_reg_map.emplace(node.id(), res_id);
       return;
     }
@@ -835,7 +815,7 @@ void IRGenerator::postVisit(ast::PathInExpression &node) {
     // Do not rely on info->type: it only records the last type affected by variable shadowing.
   }
 
-  auto [val_ptr_id, ty] = _contexts.back().variable_addr_reg_map.at(ident);
+  auto [val_ptr_id, ty] = _contexts.back().find_variable(ident);
 
   auto here_id = val_ptr_id;
   // lside: record Ty*
@@ -959,6 +939,22 @@ void IRGenerator::postVisit(ast::NegationExpression &node) {
     lineB.dst = std::to_string(dst_id);
     lineB.op = "icmp eq";
     _contexts.back().push_instruction(std::move(lineB));
+
+    // (for that !i32's sake, change the value type to Ty.)
+    // %res = bitcast i1 %dst to Ty
+    if(ty.to_str() != "i1") {
+      int res_id = _contexts.back().new_reg_id();
+      CastInst lineC;
+      lineC.is_static_src = false;
+      lineC.must_be_bitcast = false;
+      lineC.dst_name = std::to_string(res_id);
+      lineC.src_name = std::to_string(dst_id);
+      lineC.src_type = IRType(_type_pool->make_type<stype::PrimeType>(stype::TypePrime::kBool));
+      lineC.dst_type = ty;
+      _contexts.back().push_instruction(std::move(lineC));
+
+      dst_id = res_id;
+    }
   } else if(node.oper() == ast::Operator::kSub) {
     // -val -> 0 - val
     // %dst = sub Ty 0, %val
@@ -1526,13 +1522,23 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
     _contexts.back().push_instruction(std::move(lineG));
     lineG.idx_infos.clear();
 
-    lineS.value_type = IRType(tp);
-    lineS.ptr_type = IRType(tp).get_ref(_type_pool);
-    lineS.ptr_name = std::to_string(elem_ptr_id);
-    lineS.is_instant = false;
-    int expr_val_id = _contexts.back().node_reg_map.at(rptr->val_expr()->id());
-    lineS.value_or_name = std::to_string(expr_val_id);
-    _contexts.back().push_instruction(std::move(lineS));
+    auto expr = rptr->val_expr().get();
+    if(dynamic_cast<ast::ArrayExpression*>(expr)) {
+      _contexts.back().in_place_node_ptr_map.emplace(expr->id(), elem_ptr_id);
+      expr->accept(*this);
+      _contexts.back().in_place_node_ptr_map.erase(expr->id());
+      // construction shall be completed.
+    } else {
+      expr->accept(*this);
+      // manually construct from value
+      int value_id = _contexts.back().node_reg_map.at(expr->id());
+      lineS.value_type = IRType(tp);
+      lineS.is_instant = false;
+      lineS.value_or_name = std::to_string(value_id);
+      lineS.ptr_type = IRType(tp).get_ref(_type_pool);
+      lineS.ptr_name = std::to_string(elem_ptr_id);
+      _contexts.back().push_instruction(std::move(lineS));
+    }
 
     int nxt_cnt_id = _contexts.back().new_reg_id();
     lineBO.op = "add";
@@ -1572,6 +1578,11 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
   RecursiveVisitor::postVisit(node);
 }
 
+void IRGenerator::preVisit(ast::BlockExpression &node) {
+  ScopedVisitor::preVisit(node);
+  _contexts.back().variable_addr_reg_maps.emplace_back();
+}
+
 void IRGenerator::postVisit(ast::BlockExpression &node) {
   // if it has no value, do not register anything into node-reg-map.
   if(node.stmts_opt() && node.stmts_opt()->expr_opt()) {
@@ -1603,11 +1614,7 @@ void IRGenerator::postVisit(ast::BlockExpression &node) {
   }
 
   // eliminate symbols added in this scope.
-  for(auto &[symbol, info]: _scopes.back()->symbol_set()) {
-    if(info.kind == ast::SymbolKind::kVariable) {
-      _contexts.back().variable_addr_reg_map.erase(symbol);
-    }
-  }
+  _contexts.back().variable_addr_reg_maps.pop_back();
   ScopedVisitor::postVisit(node);
 }
 

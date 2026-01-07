@@ -74,7 +74,16 @@ struct ConstPrime : public ConstBase {
       } else if constexpr(std::is_same_v<T, std::uint64_t>) {
         return std::make_optional(static_cast<stype::usize_t>(arg));
       }
-      return std::optional<stype::usize_t>{};
+      return std::optional<stype::usize_t>(std::nullopt);
+    }, value);
+  }
+  std::optional<stype::isize_t> get_integer() const {
+    return std::visit([&]<typename T0>(T0 &&arg) {
+      using T = std::decay_t<T0>;
+      if constexpr(utils::is_one_of<T, std::int64_t, std::uint64_t>) {
+        return std::make_optional(static_cast<stype::isize_t>(arg));
+      }
+      return std::optional<stype::isize_t>(std::nullopt);
     }, value);
   }
 };

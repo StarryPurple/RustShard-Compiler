@@ -15,6 +15,7 @@ return5/return6/return7: more main/exit behaviors (I'd like to take them as warn
 comprehensive (2,19,34,37,...): Allow a strong variable shadowing.
 
 comprehensive 29: !i32 is allowed.
+(line 267   registers[r_dst as usize] = !registers[r_dst as usize];)
 
 
 
@@ -60,3 +61,13 @@ comprehensive 38:
 At normal cases like (let x; { let x; }), simply eliminating symbol "x" when exiting scope will cause problem.
 Also in definition this also causes problems: If building one more, this may conflict with variable shadowing (let x: t1; let x: t2)
 One solution is to record the reg-map in Scope (so heavy) or a scope-like reg-map stack.
+
+comprehensive 50: printlnInt -> printInt
+
+comprehensive 15: it requires sret...
+
+comprehensive 27: be aware that 0x10 is 16, not 0.
+std::stoll("0x10") is 0, but you can use std::stoll("0x10", nullptr, 0) to automatically check the base prefix.
+std::stoull is the same.
+
+comprehensive 19: the first 150 shall be 250 (comment in rx file say it should be 50... hmm.)

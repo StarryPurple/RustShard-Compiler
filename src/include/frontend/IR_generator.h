@@ -33,7 +33,9 @@ public:
   void preVisit(ast::LiteralExpression &node) override;
   void postVisit(ast::LiteralExpression &node) override;
 
+  void preVisit(ast::CallExpression &node) override;
   void postVisit(ast::CallExpression &node) override;
+  void preVisit(ast::MethodCallExpression &node) override;
   void postVisit(ast::MethodCallExpression &node) override;
 
   void preVisit(ast::LetStatement &node) override; // set addr needed
@@ -58,6 +60,7 @@ public:
   void postVisit(ast::GroupedExpression &node) override;
   void visit(ast::StructExpression &node) override;
   void visit(ast::ArrayExpression &node) override;
+  void preVisit(ast::BlockExpression &node) override;
   void postVisit(ast::BlockExpression &node) override;
 
   // branch
