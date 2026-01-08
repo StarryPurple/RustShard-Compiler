@@ -437,6 +437,14 @@ public:
     return true;
   }
 
+  bool tryEvaluate(Expression &node, std::vector<Scope*> cur_scopes) {
+    // fetch the scopes from the root to this expression node.
+    if(node.has_constant()) return true;
+    _scopes = std::move(cur_scopes);
+    node.accept(*this);
+    return node.has_constant();
+  }
+
   // bind lvalue property
   void preVisit(AssignmentExpression &node) override;
   void preVisit(CompoundAssignmentExpression &node) override;

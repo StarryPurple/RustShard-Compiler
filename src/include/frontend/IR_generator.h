@@ -52,9 +52,9 @@ public:
   void postVisit(ast::TypeCastExpression &node) override;
 
   void postVisit(ast::NegationExpression &node) override;
-  void postVisit(ast::ArithmeticOrLogicalExpression &node) override;
+  void visit(ast::ArithmeticOrLogicalExpression &node) override;
   void postVisit(ast::ComparisonExpression &node) override;
-  void postVisit(ast::CompoundAssignmentExpression &node) override;
+  void visit(ast::CompoundAssignmentExpression &node) override;
   void preVisit(ast::FieldExpression &node) override;
   void postVisit(ast::FieldExpression &node) override;
   void postVisit(ast::GroupedExpression &node) override;

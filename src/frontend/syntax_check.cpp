@@ -1285,6 +1285,7 @@ void TypeFiller::postVisit(LiteralExpression &node) {
   if(node.prime() == stype::TypePrime::kStr)
     tp = _type_pool->make_type<stype::RefType>(tp, false);
   node.set_type(tp);
+  _evaluator.tryEvaluate(node, _scopes);
 }
 
 void TypeFiller::postVisit(PathInExpression &node) {

@@ -972,21 +972,44 @@ void IRGenerator::postVisit(ast::NegationExpression &node) {
   _contexts.back().node_reg_map.emplace(node.id(), dst_id);
 }
 
-void IRGenerator::postVisit(ast::ArithmeticOrLogicalExpression &node) {
+void IRGenerator::visit(ast::ArithmeticOrLogicalExpression &node) {
+  RecursiveVisitor::preVisit(node);
   if(_is_in_const) return;
   // binary operation:
   // %dst = icmp op Ty %val1, %val2
-  int val1_id = _contexts.back().node_reg_map.at(node.expr1()->id());
-  int val2_id = _contexts.back().node_reg_map.at(node.expr2()->id());
-  int dst_id = _contexts.back().new_reg_id();
   auto ty = IRType(node.get_type());
 
   BinaryOpInst lineB;
-  lineB.is_l_instant = false;
-  lineB.lhs = std::to_string(val1_id);
-  lineB.is_r_instant = false;
-  lineB.rhs = std::to_string(val2_id);
+  if(node.expr1()->has_constant()) {
+    auto tp1 = node.expr1()->cval()->type();
+    if(auto p1 = tp1.get_if<stype::PrimeType>(); !p1 || !p1->is_number()) {
+      throw std::runtime_error("Literal operand 1 not number");
+    }
+    auto val = node.expr1()->cval()->get_if<sconst::ConstPrime>()->get_integer().value();
+    lineB.is_l_instant = true;
+    lineB.lhs = std::to_string(val);
+  } else {
+    node.expr1()->accept(*this);
+    int val1_id = _contexts.back().node_reg_map.at(node.expr1()->id());
+    lineB.is_l_instant = false;
+    lineB.lhs = std::to_string(val1_id);
+  }
+  if(node.expr2()->has_constant()) {
+    auto tp2 = node.expr2()->cval()->type();
+    if(auto p2 = tp2.get_if<stype::PrimeType>(); !p2 || !p2->is_number()) {
+      throw std::runtime_error("Literal operand 1 not number");
+    }
+    auto val = node.expr2()->cval()->get_if<sconst::ConstPrime>()->get_integer().value();
+    lineB.is_r_instant = true;
+    lineB.rhs = std::to_string(val);
+  } else {
+    node.expr2()->accept(*this);
+    int val2_id = _contexts.back().node_reg_map.at(node.expr2()->id());
+    lineB.is_r_instant = false;
+    lineB.rhs = std::to_string(val2_id);
+  }
   lineB.type = ty;
+  int dst_id = _contexts.back().new_reg_id();
   lineB.dst = std::to_string(dst_id);
 
   if(!node.expr1()->get_type().get_if<stype::PrimeType>()
@@ -1037,6 +1060,7 @@ void IRGenerator::postVisit(ast::ArithmeticOrLogicalExpression &node) {
   }
 
   _contexts.back().node_reg_map.emplace(node.id(), dst_id);
+  RecursiveVisitor::postVisit(node);
 }
 
 void IRGenerator::postVisit(ast::ComparisonExpression &node) {
@@ -1091,9 +1115,9 @@ void IRGenerator::postVisit(ast::ComparisonExpression &node) {
   _contexts.back().node_reg_map.emplace(node.id(), dst_id);
 }
 
-void IRGenerator::postVisit(ast::CompoundAssignmentExpression &node) {
+void IRGenerator::visit(ast::CompoundAssignmentExpression &node) {
+  node.expr1()->accept(*this);
   int ptr1_id = _contexts.back().node_reg_map.at(node.expr1()->id());
-  int val2_id = _contexts.back().node_reg_map.at(node.expr2()->id());
   // a x= b -> _ = a x b, a = _.
   // a: Ty*, b: Ty.
   auto ty = IRType(node.expr2()->get_type());
@@ -1109,14 +1133,26 @@ void IRGenerator::postVisit(ast::CompoundAssignmentExpression &node) {
   _contexts.back().push_instruction(std::move(lineL));
 
   // %res = icmp op Ty %val1, %val2
-  int res_id = _contexts.back().new_reg_id();
 
   BinaryOpInst lineB;
   lineB.is_l_instant = false;
   lineB.lhs = std::to_string(val1_id);
-  lineB.is_r_instant = false;
-  lineB.rhs = std::to_string(val2_id);
+  if(node.expr2()->has_constant()) {
+    auto tp2 = node.expr2()->cval()->type();
+    if(auto p2 = tp2.get_if<stype::PrimeType>(); !p2 || !p2->is_number()) {
+      throw std::runtime_error("Literal operand 1 not number");
+    }
+    auto val = node.expr2()->cval()->get_if<sconst::ConstPrime>()->get_integer().value();
+    lineB.is_r_instant = true;
+    lineB.rhs = std::to_string(val);
+  } else {
+    node.expr2()->accept(*this);
+    int val2_id = _contexts.back().node_reg_map.at(node.expr2()->id());
+    lineB.is_r_instant = false;
+    lineB.rhs = std::to_string(val2_id);
+  }
   lineB.type = ty;
+  int res_id = _contexts.back().new_reg_id();
   lineB.dst = std::to_string(res_id);
 
   auto ty1 = node.expr1()->get_type().get_if<stype::RefType>();

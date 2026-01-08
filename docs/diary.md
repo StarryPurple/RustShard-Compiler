@@ -64,10 +64,14 @@ One solution is to record the reg-map in Scope (so heavy) or a scope-like reg-ma
 
 comprehensive 50: printlnInt -> printInt
 
-comprehensive 15: it requires sret...
+comprehensive 15,21: require sret...
 
 comprehensive 27: be aware that 0x10 is 16, not 0.
 std::stoll("0x10") is 0, but you can use std::stoll("0x10", nullptr, 0) to automatically check the base prefix.
 std::stoull is the same.
 
 comprehensive 19: the first 150 shall be 250 (comment in rx file say it should be 50... hmm.)
+
+comprehensive 6/7/16/17/18...? 
+optimization: integer literal constant integrated into BinaryOperations as instant value without alloca.
+That saves stack space.
