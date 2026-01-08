@@ -1813,18 +1813,12 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
   }
   // Accepted Compound Assignment: (rt <- rf)
   // mut P <- P
-  // (auto deref acceptable) &mut P <- P
+  if(!node.expr1()->is_place_mut()) {
+    _recorder->tagged_report(kErrNoPlaceMutability, "Type 1 has no place mutability in CompoundAssignmentExpression");
+    return;
+  }
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
-  if(!prime1) {
-    auto r = type1.get_if<stype::RefType>();
-    if(!r->ref_is_mut()) {
-      _recorder->tagged_report(kErrTypeNotResolved, "Type not supported in CompoundAssignmentExpression."
-        " type 1:" + type1->to_string() + ", type 2: " + type2->to_string());
-      return;
-    }
-    prime1 = r->inner().get_if<stype::PrimeType>();
-  }
   if(!prime1 || !prime2) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not supported in CompoundAssignmentExpression."
       " type 1:" + type1->to_string() + ", type 2: " + type2->to_string());
@@ -2703,7 +2697,7 @@ void TypeFiller::postVisit(LetStatement &node) {
       _recorder->tagged_report(kErrIdentNotResolved, "Type tag not resolved");
       return;
     }
-    // heh. return13: allow never type.
+    // return13: allow never type.
     bool allow_convert = type_tag->is_coercible_from(*type);
     if(auto r = type.get_if<stype::RefType>();
       node.expr_opt()->allow_auto_deref() && r && type_tag->is_convertible_from(*r->inner())) {

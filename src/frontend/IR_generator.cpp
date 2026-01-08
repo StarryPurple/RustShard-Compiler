@@ -104,11 +104,8 @@ struct IRGenerator::IRPack {
 
   std::string to_str() const {
     std::string res;
-    res += "\n; Writing type declaration packs\n\n";
     for(auto &t: type_declaration_packs) res += t.to_str() + '\n';
-    res += "; Writing static packs\n\n";
     for(auto &s: static_packs) res += s.to_str() + "\n\n";
-    res += "; Writing function packs\n\n";
     for(auto &f: function_packs) res += f.to_definition() + "\n\n\n";
     return res;
   }
@@ -622,22 +619,23 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
     auto self_tp = func_tp->self_type_opt();
     // caller can be T (is_caller_ref = false) or T* (is_caller_ref = true).
     // caller requires T, &T or &mut T.
-    // since need addr agreement, one layer of ptr is required.
     bool is_self_ref = static_cast<bool>(self_tp.get_if<stype::RefType>());
     if(is_caller_ref && is_self_ref) {
       // caller T**, caller req T*
-      // just as needed. do nothing.
-    } else if(is_caller_ref && !is_self_ref) {
-      // caller T**, caller req T.
       // load once.
       caller_id = load_from_memory(caller_id, ty.get_ref(_type_pool));
+    } else if(is_caller_ref && !is_self_ref) {
+      // caller T**, caller req T.
+      // load twice.
+      caller_id = load_from_memory(caller_id, ty.get_ref(_type_pool));
+      caller_id = load_from_memory(caller_id, ty);
     } else if(!is_caller_ref && !is_self_ref) {
       // caller T*, caller req T.
-      // just as needed. do nothing.
+      // load once.
+      caller_id = load_from_memory(caller_id, ty);
     } else {
       // caller T*, caller req T*.
-      // store once.
-      caller_id = store_into_memory(caller_id, ty.get_ref(_type_pool));
+      // just as needed. do nothing.
     }
     lineC.args.emplace_back(IRType(self_tp), std::to_string(caller_id));
   }
