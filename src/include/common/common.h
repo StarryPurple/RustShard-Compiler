@@ -1,6 +1,8 @@
 #ifndef RUST_SHARD_COMMON_H
 #define RUST_SHARD_COMMON_H
 
+#include <cstdint>
+#include <stdexcept>
 #include <string>
 
 namespace insomnia::rust_shard {

@@ -69,12 +69,17 @@ struct IRGenerator::BasicBlockPack {
 
 struct IRGenerator::FunctionPack {
   StringT ident;
+  std::optional<std::pair<StringT, IRType>> sret_param; // if exists: stores var id str and ret_type_ref.
   IRType ret_type;
   std::vector<std::pair<StringT, IRType>> params;
   std::vector<BasicBlockPack> basic_block_packs;
 
   std::string to_declaration() const {
-    std::string res = "declare " + ret_type.to_str() + " @" + ident + "(";
+    std::string res = "declare " + (sret_param ? "void" : ret_type.to_str()) + " @" + ident + "(";
+    if(sret_param) {
+      res += sret_param->second.to_str() + " sret(" + ret_type.to_str() + ") %" + sret_param->first;
+      if(!params.empty()) res += ", ";
+    }
     for(int i = 0; i < params.size(); ++i) {
       res += params[i].second.to_str() + " %" + params[i].first;
       if(i != params.size() - 1) res += ", ";
@@ -84,7 +89,11 @@ struct IRGenerator::FunctionPack {
   }
 
   std::string to_definition() const {
-    std::string res = "define " + ret_type.to_str() + " @" + ident + "(";
+    std::string res = "define " + (sret_param ? "void" : ret_type.to_str()) + " @" + ident + "(";
+    if(sret_param) {
+      res += sret_param->second.to_str() + " sret(" + ret_type.to_str() + ") %" + sret_param->first;
+      if(!params.empty()) res += ", ";
+    }
     for(int i = 0; i < params.size(); ++i) {
       res += params[i].second.to_str() + " %" + params[i].first;
       if(i != params.size() - 1) res += ", ";
@@ -104,9 +113,11 @@ struct IRGenerator::IRPack {
 
   std::string to_str() const {
     std::string res;
+    for(auto &s: static_packs) res += s.to_str() + "\n";
+    res += '\n';
     for(auto &t: type_declaration_packs) res += t.to_str() + '\n';
-    for(auto &s: static_packs) res += s.to_str() + "\n\n";
-    for(auto &f: function_packs) res += f.to_definition() + "\n\n\n";
+    res += '\n';
+    for(auto &f: function_packs) res += f.to_definition() + "\n\n";
     return res;
   }
 };
@@ -134,6 +145,9 @@ struct IRGenerator::FunctionContext {
   // mapping: from node id to the given value ptr id.
   // Now only urges arrays to construct in-place.
   std::unordered_map<int, int> in_place_node_ptr_map;
+
+  // used at PathInExpr tail sret.
+  std::optional<std::pair<std::string, int>> sret_target;
 
   int new_block_id() { return _next_block_id++; }
   int new_reg_id() { return _next_reg_id++; }
@@ -223,6 +237,8 @@ void IRGenerator::preVisit(ast::Function &node) {
 
   auto info = find_symbol(node.ident());
   auto func_tp = info->type.get<stype::FunctionType>();
+
+  std::optional<std::pair<StringT, IRType>> sret_param;
   std::vector<std::pair<StringT, IRType>> params;
 
   /* fail?
@@ -239,12 +255,16 @@ void IRGenerator::preVisit(ast::Function &node) {
   }
   // llvm requires register names in pure number style to appear in order.
   // so...
-  _contexts.back()._next_reg_id += (func_tp->self_type_opt() ? 1 : 0) + static_cast<int>(func_tp->params().size());
+  _contexts.back()._next_reg_id +=
+    (func_tp->need_sret() ? 1 : 0) + (func_tp->self_type_opt() ? 1 : 0) + static_cast<int>(func_tp->params().size());
   int next_param_reg_id = 0;
+  int sret_id = -1;
+  if(func_tp->need_sret()) {
+    sret_id = next_param_reg_id++;
+    sret_param.emplace(std::to_string(sret_id), IRType(func_tp->ret_type()).get_ref(_type_pool));
+  }
   if(func_tp->self_type_opt()) {
-
-    int reg_id0 = next_param_reg_id++;
-    StringT reg_name0 = std::to_string(reg_id0); // x0
+    int self_id = next_param_reg_id++;
 
     // self is passed by Self(self) or Self*(&self, &mut self)
     auto ty = IRType(func_tp->self_type_opt());
@@ -254,18 +274,17 @@ void IRGenerator::preVisit(ast::Function &node) {
     // %x1 = alloca Ty
     // store Ty %x0, Ty* %x1
     // var_ptr-reg-map["self"] = x1, Ty
-    int reg_id1 = store_into_memory(reg_id0, ty);
+    int reg_id1 = store_into_memory(self_id, ty);
 
     _contexts.back().variable_addr_reg_maps.back().emplace("self", std::pair(reg_id1, ty));
 
     // Ty %x0 (self)
-    params.emplace_back(reg_name0, ty);
+    params.emplace_back(std::to_string(self_id), ty);
   }
   for(int i = 0; i < func_tp->params().size(); ++i) {
     // Ty %x0 (name)
-    int reg_id0 = next_param_reg_id++;
+    int arg_id = next_param_reg_id++;
     auto param = node.params_opt()->func_params()[i].get();
-    StringT reg_name0 = std::to_string(reg_id0); // x0
     if(auto p = dynamic_cast<ast::FunctionParamPattern*>(param)) {
       auto pat = dynamic_cast<ast::IdentifierPattern*>(p->pattern().get());
       if(!pat) {
@@ -277,19 +296,41 @@ void IRGenerator::preVisit(ast::Function &node) {
       // var_ptr-reg-map[name] = x1
 
       auto ty = IRType(func_tp->params()[i]);
-      int reg_id1 = store_into_memory(reg_id0, ty);
+      int reg_id1 = store_into_memory(arg_id, ty);
 
       _contexts.back().variable_addr_reg_maps.back().emplace(pat->ident(), std::pair(reg_id1, ty));
     }
     // Ty %x0 (name)
-    params.emplace_back(reg_name0, func_tp->params()[i]);
+    params.emplace_back(std::to_string(arg_id), func_tp->params()[i]);
   }
   _contexts.back().function_pack = FunctionPack{
     .ident = inner_func_ident,
+    .sret_param = sret_param,
     .ret_type = IRType(func_tp->ret_type()),
     .params = params
   };
   ScopedVisitor::preVisit(node);
+
+  if(func_tp->need_sret()) {
+    // sret case 1: tail expr as StructExpression
+    if(auto se = dynamic_cast<ast::StructExpression*>(node.body_opt()->stmts_opt()->expr_opt().get())) {
+      _contexts.back().in_place_node_ptr_map.emplace(se->id(), sret_id);
+      se->set_addr_needed();
+    }
+    // sret case 2: tail expr as PathInExpression
+    if(auto pe = dynamic_cast<ast::PathInExpression*>(node.body_opt()->stmts_opt()->expr_opt().get())) {
+      // find where you define this variable.
+      if(pe->segments().size() != 1) throw std::runtime_error("Can't solve this situation (sret)");
+      auto ident = pe->segments().back()->ident_seg()->ident();
+      auto info = find_symbol(ident);
+      if(!info || info->kind != ast::SymbolKind::kVariable) {
+        throw std::runtime_error("Can't solve this situation (sret)");
+      }
+      // just to be required the last definition... No need worrying about variable shadowing.
+      _contexts.back().sret_target = std::pair(ident, sret_id);
+      pe->set_addr_needed();
+    }
+  }
 }
 
 void IRGenerator::postVisit(ast::Function &node) {
@@ -303,7 +344,9 @@ void IRGenerator::postVisit(ast::Function &node) {
   } else {
     // reaches the end of the function. Return something.
     ReturnInst lineR;
-    if(!node.body_opt()->stmts_opt() || !node.body_opt()->stmts_opt()->expr_opt() ||
+    auto info = find_symbol(node.ident());
+    auto func_tp = info->type.get<stype::FunctionType>();
+    if(func_tp->need_sret() || !node.body_opt()->stmts_opt() || !node.body_opt()->stmts_opt()->expr_opt() ||
       !_contexts.back().node_reg_map.contains(node.body_opt()->stmts_opt()->expr_opt()->id())) { // so amusing a line
       // if nothing is explicitly returned, write a "ret void".
       // check _context.back().is_unreachable?
@@ -537,7 +580,10 @@ void IRGenerator::preVisit(ast::CallExpression &node) {
 void IRGenerator::postVisit(ast::CallExpression &node) {
   // %x0 = call ret_t @func(Ty %1, ...)
   // call void @func(Ty %1, ...)
-  // no sret
+  // if sret:
+  // %res_ptr = alloca ret_t
+  // call void @func(ret_t* res_ptr, ...)
+  // (load res if required)
 
   auto func_tp = node.expr()->get_type().get<stype::FunctionType>();
   auto ret_type = IRType(func_tp->ret_type());
@@ -548,7 +594,18 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
     // static method
     lineC.func_name = mangle_method(func_tp->impl_type_opt(), lineC.func_name);
   }
-  lineC.ret_type = ret_type;
+  int res_ptr_id = -1;
+  if(func_tp->need_sret()) {
+    lineC.ret_type = IRType(_type_pool->make_unit());
+    res_ptr_id = _contexts.back().new_reg_id();
+    AllocaInst lineA;
+    lineA.type = ret_type;
+    lineA.dst_name = std::to_string(res_ptr_id);
+    _contexts.back().push_instruction(std::move(lineA));
+    lineC.args.emplace_back(ret_type.get_ref(_type_pool), std::to_string(res_ptr_id));
+  } else {
+    lineC.ret_type = ret_type;
+  }
   if(node.params_opt()) for(int i = 0; i < node.params_opt()->expr_list().size(); ++i) {
     auto &expr = node.params_opt()->expr_list()[i];
     auto node_id = expr->id();
@@ -558,7 +615,7 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
   if(func_tp->ret_type() == _type_pool->make_unit()) {
     _contexts.back().push_instruction(std::move(lineC));
     // ends.
-  } else {
+  } else if(!func_tp->need_sret()) {
     auto res_id = _contexts.back().new_reg_id();
     lineC.dst_name = std::to_string(res_id);
     _contexts.back().push_instruction(std::move(lineC));
@@ -566,6 +623,12 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
       res_id = store_into_memory(res_id, ret_type);
     }
     _contexts.back().node_reg_map.emplace(node.id(), res_id);
+  } else {
+    _contexts.back().push_instruction(std::move(lineC));
+    if(!node.need_addr()) {
+      res_ptr_id = load_from_memory(res_ptr_id, ret_type);
+    }
+    _contexts.back().node_reg_map.emplace(node.id(), res_ptr_id);
   }
 }
 
@@ -601,6 +664,7 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
     }
   }
 
+  auto ret_tp = func_tp->ret_type();
 
   /* fail?
   if(func_tp->impl_type_opt() != _impl_type) {
@@ -611,7 +675,19 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
   CallInst lineC;
   // method mangling
   lineC.func_name = mangle_method(func_tp->impl_type_opt(), func_tp->ident());
-  lineC.ret_type = IRType(func_tp->ret_type());
+
+  int res_ptr_id = -1;
+  if(func_tp->need_sret()) {
+    lineC.ret_type = IRType(_type_pool->make_unit());
+    res_ptr_id = _contexts.back().new_reg_id();
+    AllocaInst lineA;
+    lineA.type = IRType(ret_tp);
+    lineA.dst_name = std::to_string(res_ptr_id);
+    _contexts.back().push_instruction(std::move(lineA));
+    lineC.args.emplace_back(IRType(ret_tp).get_ref(_type_pool), std::to_string(res_ptr_id));
+  } else {
+    lineC.ret_type = IRType(ret_tp);
+  }
 
   // pass self.
   if(func_tp->self_type_opt()) {
@@ -640,7 +716,6 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
     lineC.args.emplace_back(IRType(self_tp), std::to_string(caller_id));
   }
 
-  auto ret_tp = func_tp->ret_type();
 
   // IR reg id order...
   int res_id = -1;
@@ -657,7 +732,12 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
   }
   _contexts.back().push_instruction(std::move(lineC));
 
-  if(ret_tp != _type_pool->make_unit()) {
+  if(func_tp->need_sret()) {
+    if(!node.need_addr()) {
+      res_ptr_id = load_from_memory(res_ptr_id, IRType(ret_tp));
+    }
+    _contexts.back().node_reg_map.emplace(node.id(), res_id);
+  } else if(ret_tp != _type_pool->make_unit()) {
     if(node.need_addr()) {
       res_id = store_into_memory(res_id, IRType(ret_tp));
     }
@@ -667,6 +747,15 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
 
 void IRGenerator::preVisit(ast::LetStatement &node) {
   if(node.expr_opt()) node.expr_opt()->set_addr_needed();
+  if(_contexts.back().sret_target.has_value()) {
+    auto ip = dynamic_cast<ast::IdentifierPattern*>(node.pattern().get());
+    if(!ip) { throw std::runtime_error("let pattern too complicated"); }
+    if(_contexts.back().sret_target->first == ip->ident()) {
+      if(node.expr_opt()) {
+        _contexts.back().in_place_node_ptr_map.emplace(node.expr_opt()->id(), _contexts.back().sret_target->second);
+      }
+    }
+  }
 }
 
 void IRGenerator::postVisit(ast::LetStatement &node) {
@@ -680,12 +769,15 @@ void IRGenerator::postVisit(ast::LetStatement &node) {
   if(node.expr_opt()) {
     // shall already have got a pointer.
     res_id = _contexts.back().node_reg_map.at(node.expr_opt()->id());
-    if(node.expr_opt()->can_summon_lvalue()) {
+    if(!(_contexts.back().sret_target.has_value() || _contexts.back().sret_target->first == ip->ident())
+      && node.expr_opt()->can_summon_lvalue()) {
       // in case this is a lvalue (can't move the pointer directly)
       // give it a copy.
       res_id = load_from_memory(res_id, ty);
       res_id = store_into_memory(res_id, ty);
     }
+  } else if(_contexts.back().sret_target.has_value() && _contexts.back().sret_target->first == ip->ident()) {
+    res_id = _contexts.back().sret_target->second;
   } else {
     // alloca one place.
     // Warning: Uninitialized variable
@@ -1314,11 +1406,17 @@ void IRGenerator::visit(ast::StructExpression &node) {
   auto struct_ty = node.get_type();
   auto stp = struct_ty.get_if<stype::StructType>();
 
-  int struct_ptr_id = _contexts.back().new_reg_id();
-  AllocaInst lineA;
-  lineA.type = IRType(struct_ty);
-  lineA.dst_name = std::to_string(struct_ptr_id);
-  _contexts.back().push_instruction(std::move(lineA));
+  int struct_ptr_id = -1;
+  if(auto it = _contexts.back().in_place_node_ptr_map.find(node.id());
+    it != _contexts.back().in_place_node_ptr_map.end()) {
+    struct_ptr_id = it->second;
+  } else {
+    struct_ptr_id = _contexts.back().new_reg_id();
+    AllocaInst lineA;
+    lineA.type = IRType(struct_ty);
+    lineA.dst_name = std::to_string(struct_ptr_id);
+    _contexts.back().push_instruction(std::move(lineA));
+  }
 
   // order of field in the struct, field_ty, its node id, the field expr node pointer
   struct Record {

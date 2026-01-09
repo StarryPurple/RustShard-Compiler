@@ -1004,6 +1004,26 @@ void PreTypeFiller::postVisit(Function &node) {
     return;
   }
   auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), _impl_type, caller_type, std::move(params), ret_type);
+  // need sret:
+  // 1. sizeof(ret_t) > 16B
+  // 2. ret_t is StructType
+  // 3. no return statement
+  // 4. has tail expression
+  // 5. tail expr addr is PathInExpr / StructExpr (so I know when to use the ptr %result)
+  do {
+    if(ret_type->size() < 16) break;
+    auto rt = ret_type.get_if<stype::StructType>();
+    if(!rt) break;
+    if(!node.body_opt()) break;
+    if(!node.body_opt()->func_returns().empty()) break;
+    if(!node.body_opt()->stmts_opt()) break;
+    if(!node.body_opt()->stmts_opt()->expr_opt()) break;
+    auto tail_expr = node.body_opt()->stmts_opt()->expr_opt().get();
+    auto path_expr = dynamic_cast<PathInExpression*>(tail_expr);
+    auto struct_expr = dynamic_cast<StructExpression*>(tail_expr);
+    if(!path_expr && !struct_expr) break;
+    func_type.get_if<stype::FunctionType>()->set_need_sret();
+  } while(false);
   add_symbol(node.ident(), SymbolInfo{
     .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction, .type = func_type
   });

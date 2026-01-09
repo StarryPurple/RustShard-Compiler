@@ -7,7 +7,16 @@
 #include "syntax_check.h"
 #include "IR_generator.h"
 
+namespace fs = std::filesystem;
 namespace rs = insomnia::rust_shard;
+
+std::string read_file(const std::string &path) {
+  std::ifstream file(path, std::ios::binary);
+  if(!file) throw std::runtime_error("Failed to open input file.");
+  std::stringstream ss;
+  ss << file.rdbuf();
+  return ss.str();
+}
 
 int main() {
   std::string src_code;

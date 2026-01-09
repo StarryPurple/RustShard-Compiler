@@ -20,7 +20,7 @@ target_include_directories(frontend_lib PUBLIC
     src/template/frontend
 )
 
-add_executable(main main.cpp)
+add_executable(main src/main.cpp)
 target_link_libraries(main PRIVATE frontend_lib)
 
 enable_testing()
