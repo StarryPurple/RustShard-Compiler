@@ -60,6 +60,7 @@ public:
   void postVisit(ast::GroupedExpression &node) override;
   void visit(ast::StructExpression &node) override;
   void visit(ast::ArrayExpression &node) override;
+  void preVisit(ast::FunctionBodyExpr &node) override;
   void preVisit(ast::BlockExpression &node) override;
   void postVisit(ast::BlockExpression &node) override;
 
@@ -113,9 +114,13 @@ private:
 
   // returns ptr_id
   int store_into_memory(int obj_id, IRType obj_ty);
+  void store_into_memory(int ptr_id, int obj_id, IRType obj_ty);
   // returns obj_id
   int load_from_memory(int ptr_id, IRType obj_ty);
+  void load_from_memory(int obj_id, int ptr_id, IRType obj_ty);
 
+  int deal_holding_val(bool if_need_ptr, int node_id, int obj_id, IRType obj_ty);
+  int deal_holding_ptr(bool if_need_ptr, int node_id, int ptr_id, IRType obj_ty);
 };
 
 } // namespace insomnia::rust
