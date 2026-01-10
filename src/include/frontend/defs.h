@@ -43,6 +43,7 @@ inline int BasicNode::_next_node_id = 0;
 
 class ASTTree {
 public:
+  ASTTree() = default;
   explicit ASTTree(std::unique_ptr<Crate> crate);
   void traverse(RecursiveVisitor &r_visitor);
 private:

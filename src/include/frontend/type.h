@@ -299,6 +299,7 @@ public:
   }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
+  std::size_t size() const override;
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;

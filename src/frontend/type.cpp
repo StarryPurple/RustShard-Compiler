@@ -337,6 +337,10 @@ std::string EnumType::to_string() const {
   return _ident;
 }
 
+std::size_t EnumType::size() const {
+  return 4; // i32
+}
+
 void FunctionType::combine_hash(std::size_t &seed) const {
   static constexpr std::hash<StringT> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));

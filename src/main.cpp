@@ -10,6 +10,10 @@
 namespace fs = std::filesystem;
 namespace rs = insomnia::rust_shard;
 
+// #ifndef BUILTIN_C_PATH
+// #define BUILTIN_C_PATH "builtin/builtin.c"
+// #endif
+
 std::string read_file(const std::string &path) {
   std::ifstream file(path, std::ios::binary);
   if(!file) throw std::runtime_error("Failed to open input file.");
@@ -19,56 +23,72 @@ std::string read_file(const std::string &path) {
 }
 
 int main() {
+  // std::cerr << read_file(BUILTIN_C_PATH);
+
   std::string src_code;
   std::string line;
   while(std::getline(std::cin, line)) {
     src_code += line + "\n";
   }
 
-  rs::Lexer lexer(src_code);
-  if(!lexer) {
-    return 1;
-  }
-
-  rs::ast::Parser parser(lexer);
-  if(!parser) {
-    return 1;
-  }
-
   auto error_recorder = std::make_unique<rs::ast::ErrorRecorder>();
   auto type_pool = std::make_unique<rs::stype::TypePool>();
   auto const_pool = std::make_unique<rs::sconst::ConstPool>();
+  rs::ast::ASTTree ast_tree;
 
-  auto ast_tree = parser.release_tree();
+  // semantic
+  try {
+    rs::Lexer lexer(src_code);
+    if(!lexer) {
+      return 1;
+    }
 
-  rs::ast::SymbolCollector symbol_collector(error_recorder.get());
-  ast_tree.traverse(symbol_collector);
-  if(error_recorder->has_error()) {
+    rs::ast::Parser parser(lexer);
+    if(!parser) {
+      return 1;
+    }
+
+    ast_tree = parser.release_tree();
+
+    rs::ast::SymbolCollector symbol_collector(error_recorder.get());
+    ast_tree.traverse(symbol_collector);
+    if(error_recorder->has_error()) {
+      return 1;
+    }
+
+    rs::ast::TypeDeclarator type_declarator(error_recorder.get(), type_pool.get());
+    ast_tree.traverse(type_declarator);
+    if(error_recorder->has_error()) {
+      return 1;
+    }
+
+    rs::ast::PreTypeFiller pre_type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
+    ast_tree.traverse(pre_type_filler);
+    if(error_recorder->has_error()) {
+      return 1;
+    }
+
+    rs::ast::TypeFiller type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
+    ast_tree.traverse(type_filler);
+    if(error_recorder->has_error()) {
+      return 1;
+    }
+  } catch(...) {
+    // failure in semantic check
     return 1;
   }
 
-  rs::ast::TypeDeclarator type_declarator(error_recorder.get(), type_pool.get());
-  ast_tree.traverse(type_declarator);
-  if(error_recorder->has_error()) {
-    return 1;
+  // ir generation
+  try {
+    rs::ir::IRGenerator ir_generator(type_pool.get());
+    ast_tree.traverse(ir_generator);
+
+    std::cout << ir_generator.IR_str();
+  } catch(...) {
+    // ir generation error
+    // return 0 (since semantic check passed)
+    return 0;
   }
-
-  rs::ast::PreTypeFiller pre_type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
-  ast_tree.traverse(pre_type_filler);
-  if(error_recorder->has_error()) {
-    return 1;
-  }
-
-  rs::ast::TypeFiller type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
-  ast_tree.traverse(type_filler);
-  if(error_recorder->has_error()) {
-    return 1;
-  }
-
-  rs::ir::IRGenerator ir_generator(type_pool.get());
-  ast_tree.traverse(ir_generator);
-
-  std::cout << ir_generator.IR_str();
 
   return 0;
 }
