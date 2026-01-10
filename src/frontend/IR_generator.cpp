@@ -493,6 +493,39 @@ void IRGenerator::postVisit(ast::LiteralExpression &node) {
     || node.prime() == stype::TypePrime::kFloat
     || node.prime() == stype::TypePrime::kString) {
     throw std::runtime_error("Unrecognized/Impossible literal type");
+    }
+
+  auto ty = IRType(node.get_type());
+  int val_id = _contexts.back().new_reg_id();
+  BinaryOpInst lineB;
+  lineB.dst = std::to_string(val_id);
+  lineB.is_l_instant = true;
+  lineB.lhs = "0";
+  lineB.is_r_instant = true;
+  lineB.op = "add";
+  lineB.type = ty;
+  std::visit([&]<typename T0>(T0 &&arg) {
+    using T = std::decay_t<T0>;
+    if constexpr(std::is_same_v<T, bool>) {
+      lineB.rhs = arg ? "1" : "0";
+    } else if constexpr(std::is_same_v<T, std::int64_t> || std::is_same_v<T, std::uint64_t>) {
+      lineB.rhs = std::to_string(arg);
+    } else {
+      throw std::runtime_error("Unrecognized/Unsupported type out of primitive container types");
+    }
+  }, node.spec_value());
+  _contexts.back().push_instruction(std::move(lineB));
+  int res_id = val_id;
+  if(node.need_addr()) {
+    res_id = store_into_memory(val_id, ty);
+  }
+  _contexts.back().node_reg_map.emplace(node.id(), res_id);
+  /*
+  if(_is_in_const) return; // ignore this. already const evaluated.
+  if(node.prime() == stype::TypePrime::kInt
+    || node.prime() == stype::TypePrime::kFloat
+    || node.prime() == stype::TypePrime::kString) {
+    throw std::runtime_error("Unrecognized/Impossible literal type");
   }
   // %x0 = alloca Ty
   // store Ty val, Ty* %x0
@@ -570,6 +603,7 @@ void IRGenerator::postVisit(ast::LiteralExpression &node) {
 
   // record %x1 (the value)
   _contexts.back().node_reg_map.emplace(node.id(), res_id);
+  */
 }
 
 void IRGenerator::preVisit(ast::CallExpression &node) {
@@ -623,7 +657,8 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
       res_id = store_into_memory(res_id, ret_type);
     }
     _contexts.back().node_reg_map.emplace(node.id(), res_id);
-  } else {
+  } else
+    {
     _contexts.back().push_instruction(std::move(lineC));
     if(!node.need_addr()) {
       res_ptr_id = load_from_memory(res_ptr_id, ret_type);

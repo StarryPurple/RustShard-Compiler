@@ -34,5 +34,5 @@ target_compile_definitions(compiler PRIVATE
     BUILTIN_LL_PATH="${BUILTIN_LL_ESCAPED}"
 )
 
-# enable_testing()
-# add_subdirectory(test)
+enable_testing()
+add_subdirectory(test)

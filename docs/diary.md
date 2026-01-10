@@ -75,4 +75,6 @@ comprehensive 19: the first 150 shall be 250 (comment in rx file say it should b
 
 comprehensive 6/7/16/17/18...? 
 optimization: integer literal constant integrated into BinaryOperations as instant value without alloca.
-That saves stack space.
+That saves stack space. Or use "add 0 val" (+ store) instead of alloca + store (+ load)
+
+comprehensive 15(?): CallExpr and MethodCallExpr cannot be lvalue.

@@ -1103,7 +1103,8 @@ public:
     std::unique_ptr<CallParams> &&params_opt
   ): _expr(std::move(expr)), _params_opt(std::move(params_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
+  // no, this shall not be possible to be an lvalue
+  // bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<CallParams> _params_opt;
@@ -1133,7 +1134,8 @@ public:
   ): _expr(std::move(expr)), _segment(std::move(segment)),
   _params_opt(std::move(params_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
+  // no, this shall not be possible to be an lvalue
+  // bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
   std::unique_ptr<PathExprSegment> _segment;
