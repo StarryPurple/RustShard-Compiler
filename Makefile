@@ -22,7 +22,6 @@ $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 run:
-	@cat $(BUILTIN_C) >&2
 	@./$(TARGET)
 
 clean:

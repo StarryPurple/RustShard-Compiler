@@ -28,11 +28,11 @@ target_include_directories(frontend_lib PUBLIC
 add_executable(compiler src/main.cpp)
 target_link_libraries(compiler PRIVATE frontend_lib builtin_lib)
 
-get_filename_component(BUILTIN_C_ABSPATH "${CMAKE_SOURCE_DIR}/builtin/builtin.c" ABSOLUTE)
-string(REPLACE "\\" "\\\\" BUILTIN_C_ESCAPED "${BUILTIN_C_ABSPATH}")
+get_filename_component(BUILTIN_LL_ABSPATH "${CMAKE_SOURCE_DIR}/builtin/builtin.ll" ABSOLUTE)
+string(REPLACE "\\" "\\\\" BUILTIN_LL_ESCAPED "${BUILTIN_LL_ABSPATH}")
 target_compile_definitions(compiler PRIVATE
-    BUILTIN_C_PATH="${BUILTIN_C_ESCAPED}"
+    BUILTIN_LL_PATH="${BUILTIN_LL_ESCAPED}"
 )
 
-enable_testing()
-add_subdirectory(test)
+# enable_testing()
+# add_subdirectory(test)

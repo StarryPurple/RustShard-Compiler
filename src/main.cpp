@@ -10,9 +10,9 @@
 namespace fs = std::filesystem;
 namespace rs = insomnia::rust_shard;
 
-// #ifndef BUILTIN_C_PATH
-// #define BUILTIN_C_PATH "builtin/builtin.c"
-// #endif
+#ifndef BUILTIN_LL_PATH
+#define BUILTIN_LL_PATH "builtin/builtin.ll"
+#endif
 
 std::string read_file(const std::string &path) {
   std::ifstream file(path, std::ios::binary);
@@ -23,7 +23,7 @@ std::string read_file(const std::string &path) {
 }
 
 int main() {
-  // std::cerr << read_file(BUILTIN_C_PATH);
+  std::cout << read_file(BUILTIN_LL_PATH);
 
   std::string src_code;
   std::string line;
