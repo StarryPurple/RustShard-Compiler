@@ -3,24 +3,39 @@
 #include <string.h>
 #include <unistd.h>
 
-void print(const char* s) {
-  fflush(stdout);
-  printf("%s", s);
-}
-
-void println(const char* s) {
-  fflush(stdout);
-  printf("%s\n", s);
-}
 
 void printInt(int n) {
-  fflush(stdout);
   printf("%d", n);
 }
 
 void printlnInt(int n) {
-  fflush(stdout);
   printf("%d\n", n);
+}
+
+int getInt() {
+  int n;
+  scanf("%d", &n);
+  return n;
+}
+
+
+void exit(int) {
+
+}
+
+/*
+void print(const char* s) {
+  printf("%s", s);
+}
+
+void println(const char* s) {
+  printf("%s\n", s);
+}
+
+int readInt() {
+  int n;
+  scanf("%d", &n);
+  return n;
 }
 
 char* getString() {
@@ -37,27 +52,13 @@ char* getString() {
   return NULL;
 }
 
-int getInt() {
-  int n;
-  scanf("%d", &n);
-  return n;
-}
-
-int readInt() {
-  return getInt();
-}
-
-void exit(int code) {
-  fflush(stdout);
-  _Exit(code);
-}
-
 char* from(const char* s) {
   size_t len = strlen(s);
   char* result = malloc(len + 1);
   strcpy(result, s);
   return result;
 }
+*/
 
 /*#include <stdio.h>
 #include <stdlib.h>
