@@ -475,6 +475,15 @@ public:
   TypePtr make_never() {
     return make_type<NeverType>();
   }
+  TypePtr make_i32() {
+    return make_type<PrimeType>(TypePrime::kI32);
+  }
+  TypePtr make_f32() {
+    return make_type<PrimeType>(TypePrime::kF32);
+  }
+  TypePtr make_bool() {
+    return make_type<PrimeType>(TypePrime::kBool);
+  }
 
   std::size_t size() const { return _pool.size(); }
 private:

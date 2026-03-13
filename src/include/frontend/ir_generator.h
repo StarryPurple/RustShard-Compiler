@@ -2,19 +2,33 @@
 #define RUST_SHARD_IR_GENERATOR_H
 
 #include <filesystem>
-
-#include "syntax_check.h"
-#include "IR_instruction.h"
+#include "ir_pack.h"
 
 namespace insomnia::rust_shard::ir {
 
+
+struct IRPack {
+  std::vector<TypeDeclarationPack> type_declaration_packs;
+  std::vector<StaticPack> static_packs;
+  std::vector<FunctionPack> function_packs;
+
+  std::string to_str() const {
+    std::string res;
+    for(auto &s: static_packs) res += s.to_str() + "\n";
+    res += '\n';
+    for(auto &t: type_declaration_packs) res += t.to_str() + '\n';
+    res += '\n';
+    for(auto &f: function_packs) res += f.to_definition() + "\n\n";
+    return res;
+  }
+};
 // uses some stype TypePtr. Please ensure that the type pool is still valid.
 class IRGenerator: public ast::ScopedVisitor {
 public:
-  IRGenerator(stype::TypePool *type_pool);
-  ~IRGenerator();
+  IRGenerator(stype::TypePool *type_pool): _type_pool(type_pool) {}
+  ~IRGenerator() = default;
 
-  std::string IR_str() const;
+  IRPack release() { return std::move(_ir_pack); }
 
   void preVisit(ast::ConstantItem &node) override;
   void postVisit(ast::ConstantItem &node) override;
@@ -88,20 +102,12 @@ public:
   void visit(ast::TypePath &node) override {}
 
 private:
-  struct TypeDeclarationPack;
-  struct StaticPack;
-  struct BasicBlockPack;
-  struct FunctionPack;
-  struct IRPack;
-
 
   bool _is_in_const = false;
 
   stype::TypePool *_type_pool;
-  std::unique_ptr<IRPack> _ir_pack;
+  IRPack _ir_pack;
   std::unordered_map<StringT, std::string> _string_literal_pool; // StringLiteral -> allocated global variable name
-
-  struct FunctionContext;
   std::vector<FunctionContext> _contexts;
 
   std::string use_string_literal(StringT literal);
@@ -109,6 +115,10 @@ private:
     // doesn't allow to start as number.
     // return "_" + utils::to_base62(impl_type->hash()) + "<" + impl_type->to_string() + ">::" + func_name;
     return "_" + utils::to_base62(impl_type->hash()) + "_" + func_name;
+  }
+
+  IRType wrap_ref(IRType type) const {
+    return type.get_ref(_type_pool);
   }
 
   // returns ptr_id

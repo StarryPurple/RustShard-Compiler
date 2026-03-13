@@ -5,7 +5,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "syntax_check.h"
-#include "IR_generator.h"
+#include "ir_generator.h"
 
 namespace fs = std::filesystem;
 namespace rs = insomnia::rust_shard;
@@ -23,8 +23,6 @@ std::string read_file(const std::string &path) {
 }
 
 int main() {
-  std::cout << read_file(BUILTIN_LL_PATH);
-
   std::string src_code;
   std::string line;
   while(std::getline(std::cin, line)) {
@@ -83,7 +81,10 @@ int main() {
     rs::ir::IRGenerator ir_generator(type_pool.get());
     ast_tree.traverse(ir_generator);
 
-    std::cout << ir_generator.IR_str();
+    auto ir_pack = ir_generator.release();
+
+    std::cout << read_file(BUILTIN_LL_PATH);
+    std::cout << ir_pack.to_str();
   } catch(...) {
     // ir generation error
     // return 0 (since semantic check passed)
