@@ -10,7 +10,7 @@
 
 #include "common.h"
 
-namespace insomnia::rust_shard {
+namespace rshard {
 enum class TokenTypeCat : uint32_t {
   kSpecial = 1 << 7,
   kKeyword = 1 << 8,

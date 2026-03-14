@@ -1,7 +1,7 @@
 #ifndef RUSTS_SHARD_FRONTEND_FWD_H
 #define RUSTS_SHARD_FRONTEND_FWD_H
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 class Crate;
 class Item;
@@ -124,7 +124,7 @@ class SlicePattern;
 class SlicePatternItems;
 class PathPattern;
 
-#define INSOMNIA_RUST_SHARD_AST_NODES_LIST(M) \
+#define RUST_SHARD_AST_NODES_LIST(M) \
   M(Crate) \
   M(Item) \
   M(VisItem) \

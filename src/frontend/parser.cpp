@@ -66,7 +66,7 @@
     _ast_ctx->consume(); \
   } while(false)
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 class Parser::Context {
   friend Backtracker;

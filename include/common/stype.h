@@ -10,7 +10,7 @@
 
 #include "common.h"
 
-namespace insomnia::rust_shard::stype {
+namespace rshard::stype {
 
 enum class TypeKind;
 class ExprType;

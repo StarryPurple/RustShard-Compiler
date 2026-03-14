@@ -7,7 +7,7 @@
 #define PARSE_FUNCTION_GEN_METHOD(Node) \
   std::unique_ptr<Node> parse##Node();
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 class Parser {
 public:
@@ -29,7 +29,7 @@ private:
 
   // returns an empty pointer as failure signal.
 
-  // INSOMNIA_RUST_SHARD_AST_NODES_LIST(PARSE_FUNCTION_GEN_METHOD)
+  // RUST_SHARD_AST_NODES_LIST(PARSE_FUNCTION_GEN_METHOD)
 
   // Pratt Expression Parsing helper functions.
 

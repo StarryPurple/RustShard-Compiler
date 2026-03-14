@@ -7,7 +7,7 @@
 #include "ir_instruction.h"
 #include "common.h"
 
-namespace insomnia::rust_shard::ir {
+namespace rshard::ir {
 // %Struct = type { type-1, ... }
 struct TypeDeclarationPack {
   StringT ident;

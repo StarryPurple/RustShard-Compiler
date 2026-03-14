@@ -28,7 +28,7 @@
 #include "defs.h"
 #include "visitor.h"
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 #define EXPOSE_FIELD_CONST_REFERENCE(func_name, field_name) \
   auto func_name() const -> const decltype(field_name) & { return field_name; }

@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace insomnia::rust_shard {
+namespace rshard {
 
 #define UNIMPLEMENTED(message) \
   throw std::runtime_error(message);

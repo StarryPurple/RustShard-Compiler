@@ -8,7 +8,7 @@
 #include "ast.h"
 #include "stype.h"
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 /* Check branch syntax (break/continue/return) and collect them.
  * set scopes and collect symbols (for all vis items, not variables)

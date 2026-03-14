@@ -5,7 +5,7 @@
 #include <variant>
 #include <algorithm>
 
-namespace insomnia::rust_shard::utils {
+namespace rshard::utils {
 
 template <typename T, typename... Ts>
 concept is_one_of = (std::is_same_v<T, Ts> || ...);

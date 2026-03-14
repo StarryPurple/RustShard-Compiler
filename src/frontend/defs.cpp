@@ -3,7 +3,7 @@
 #include "ast.h"
 #include "recursive_visitor.h"
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 ASTTree::ASTTree(std::unique_ptr<Crate> crate)
 : _crate(std::move(crate)) { _crate->set_name("Crate"); }

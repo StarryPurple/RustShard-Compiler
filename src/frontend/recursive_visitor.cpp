@@ -2,7 +2,7 @@
 
 #include "ast.h"
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 void RecursiveVisitor::traverse(Crate &crate) {
   crate.accept(*this);

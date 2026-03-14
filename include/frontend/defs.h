@@ -8,7 +8,7 @@
 #include "constant.h"
 #include "fwd.h"
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 enum class SymbolKind {
   kVariable,

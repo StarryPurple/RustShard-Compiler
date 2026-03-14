@@ -7,7 +7,7 @@
 #define ISM_RS_VISIT_METHOD(Node) \
   virtual void visit(Node &) = 0;
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 class BasicVisitor {
 public:
   virtual ~BasicVisitor() = default;

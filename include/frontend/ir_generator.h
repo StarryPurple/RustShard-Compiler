@@ -4,7 +4,7 @@
 #include <filesystem>
 #include "ir_pack.h"
 
-namespace insomnia::rust_shard::ir {
+namespace rshard::ir {
 // uses some stype TypePtr. Please ensure that the type pool is still valid.
 class IRGenerator: public ast::ScopedVisitor {
 public:
@@ -180,6 +180,6 @@ private:
     }
   };
 };
-} // namespace insomnia::rust_shard
+} // namespace rshard
 
 #endif // RUST_SHARD_IR_GENERATOR_H

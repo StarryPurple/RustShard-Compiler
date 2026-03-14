@@ -4,7 +4,7 @@
 #include <format>
 #include "ir_instruction.h"
 
-namespace insomnia::rust_shard::ir {
+namespace rshard::ir {
 
 std::string IRGenerator::use_string_literal(StringT literal) {
   if(auto it = _string_literal_pool.find(literal); it != _string_literal_pool.end())

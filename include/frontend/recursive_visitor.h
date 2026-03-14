@@ -10,7 +10,7 @@
 #define ISM_RS_VISIT_METHOD(Node) \
   void visit(Node &node) override;
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 class RecursiveVisitor : public BasicVisitor {
 public:

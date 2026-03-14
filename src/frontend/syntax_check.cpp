@@ -3,7 +3,7 @@
 #include <limits>
 #include <cmath>
 
-namespace insomnia::rust_shard::ast {
+namespace rshard::ast {
 
 /*************************** TypeDeclarator ***************************************/
 

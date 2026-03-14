@@ -1,6 +1,6 @@
 #include "constant.h"
 
-namespace insomnia::rust_shard::sconst {
+namespace rshard::sconst {
 bool ConstValPtr::operator==(const ConstValPtr &other) const {
   if(!_ptr || !other._ptr) return _ptr == other._ptr;
   return *_ptr == *other._ptr;

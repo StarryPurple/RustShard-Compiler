@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include "stype.h"
 
-namespace insomnia::rust_shard::ir {
+namespace rshard::ir {
 class IRType {
 public:
   IRType() = default;

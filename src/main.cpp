@@ -8,7 +8,7 @@
 #include "ir_generator.h"
 
 namespace fs = std::filesystem;
-namespace rs = insomnia::rust_shard;
+namespace rs = rshard;
 
 #ifndef BUILTIN_LL_PATH
 #define BUILTIN_LL_PATH "builtin/builtin.ll"

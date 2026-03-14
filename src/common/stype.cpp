@@ -2,7 +2,7 @@
 
 #include <unordered_map>
 
-namespace insomnia::rust_shard::stype {
+namespace rshard::stype {
 
 StringT prime_strs(TypePrime prime) {
   static const std::unordered_map<TypePrime, StringT> table = {

@@ -9,7 +9,7 @@
 #include "utils.h"
 
 
-namespace insomnia::rust_shard::sconst {
+namespace rshard::sconst {
 
 struct ConstPrime;
 struct ConstRef;
