@@ -84,7 +84,7 @@ int main() {
     auto ir_pack = ir_generator.release();
 
     std::cout << read_file(BUILTIN_LL_PATH);
-    std::cout << ir_pack.to_str();
+    std::cout << rs::ir::IrPrinter::sprint(ir_pack);
   } catch(...) {
     // ir generation error
     // return 0 (since semantic check passed)

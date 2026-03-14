@@ -1,6 +1,8 @@
 #ifndef RUST_SHARD_IR_INSTRUCTION_H
 #define RUST_SHARD_IR_INSTRUCTION_H
 
+#include <unordered_map>
+
 namespace insomnia::rust_shard::ir {
 
 class IRType {
@@ -25,7 +27,6 @@ private:
   stype::TypePtr _type;
 };
 
-
 enum class OperandKind {
   kImmediate, // x
   // kStatic, // @x
@@ -43,29 +44,38 @@ struct Operand {
   static Operand make_imm(std::int64_t val, IRType type) {
     return Operand{ .kind = OperandKind::kImmediate, .value = val, .type = type };
   }
+};
 
-  std::string value_str() const {
-    switch (kind) {
+struct HintContext {
+  const std::unordered_map<int, std::string>* hints = nullptr;
+
+  std::string hinted_reg(int reg) const {
+    std::string res = "%" + std::to_string(reg);
+    if(hints) {
+      auto it = hints->find(reg);
+      if(it != hints->end()) res += "." + it->second;
+    }
+    return res;
+  }
+  std::string hinted_operand_data(const Operand &operand) const {
+    switch (operand.kind) {
     case OperandKind::kImmediate: {
-      return std::to_string(value);
+      return std::to_string(operand.value);
     } break;
     case OperandKind::kVirtualReg: {
-      return "%" + std::to_string(value);
+      return hinted_reg(operand.value);
     } break;
     }
     throw std::runtime_error("Invalid OperandKind");
   }
-  std::string to_str() const {
-    return type.to_str() + " " + value_str();
+  std::string hinted_operand(const Operand &operand) const {
+    return operand.type.to_str() + " " + hinted_operand_data(operand);
   }
 };
 
 struct Instruction {
   Instruction() = default;
   virtual ~Instruction() = default;
-  virtual std::string to_str() const = 0;
-
-  // std::string reg/label()...
 };
 
 // %x = alloca Ty
@@ -73,20 +83,12 @@ struct Instruction {
 struct AllocaInst: Instruction {
   int dst;
   IRType type;
-
-  std::string to_str() const override {
-    return "%" + std::to_string(dst) + " = alloca " + type.to_str();
-  }
 };
 
 // store Ty val / %1, Ty* %x
 // Assignment, CompoundAssignment
 struct StoreInst: Instruction {
   Operand value, ptr;
-
-  std::string to_str() const {
-    return "store " + value.to_str() + ", " + ptr.to_str();
-  }
 };
 
 // %dst = load Ty, Ty* %ptr
@@ -95,10 +97,6 @@ struct LoadInst: Instruction {
   int dst;
   IRType load_type;
   Operand ptr;
-  std::string to_str() const override {
-    return "%" + std::to_string(dst) + " = load " + load_type.to_str() + ", "
-    + ptr.to_str();
-  }
 };
 
 // %3 = op Ty %1, %2
@@ -112,11 +110,6 @@ struct BinaryOpInst: Instruction {
   StringT op;
   IRType type;
   Operand lhs, rhs;
-
-  std::string to_str() const override {
-    return "%" + std::to_string(dst) + " = " + op + " " + type.to_str()
-    + " " + lhs.value_str() + ", " + rhs.value_str();
-  }
 };
 
 // (%0 = ) call ret_t @func(Ty %1, ...)
@@ -127,33 +120,12 @@ struct CallInst: Instruction {
   IRType ret_type;
   StringT func_name;
   std::vector<Operand> args; // type and reg name
-
-  std::string to_str() const override {
-    std::string res;
-    if(ret_type.to_str() != "void") {
-      if(dst == -1) {
-        throw std::runtime_error("non-void function result not recorded");
-      }
-      res += "%" + std::to_string(dst) + " = ";
-    }
-    res += "call " + ret_type.to_str() + " @" + func_name + "(";
-    for(int i = 0; i < args.size(); ++i) {
-      if(i > 0) res += ", ";
-      res += args[i].to_str();
-    }
-    res += ")";
-    return res;
-  }
 };
 
 // ret Ty %0 / ret void
 // ReturnExpression, FuncBody (return at end)
 struct ReturnInst: Instruction {
   std::optional<Operand> ret_val;
-
-  std::string to_str() const override {
-    return "ret " + (ret_val.has_value() ? ret_val->to_str() : "void");
-  }
 };
 
 // (T*) %dst = getelementptr [N x T], [N x T]* %ptr, i32 0, index_t idx
@@ -164,14 +136,6 @@ struct GEPInst: Instruction {
   IRType base_type;
   Operand ptr;
   std::vector<Operand> indices;
-
-  std::string to_str() const override {
-    std::string res = "%" + std::to_string(dst) + " = getelementptr " + base_type.to_str() + ", "
-      + ptr.to_str();
-    for(auto &operand: indices)
-      res += ", " + operand.to_str();
-    return res;
-  }
 };
 
 // like static cast, casts value to value
@@ -182,17 +146,6 @@ struct CastInst: Instruction {
   IRType dst_type;
   Operand src;
 
-  static int bit_width(stype::TypePrime prime) {
-    switch(prime) {
-    case stype::TypePrime::kBool: return 1;
-    case stype::TypePrime::kI8: case stype::TypePrime::kU8: case stype::TypePrime::kChar: return 8;
-    case stype::TypePrime::kI16: case stype::TypePrime::kU16: return 16;
-    case stype::TypePrime::kI32: case stype::TypePrime::kU32: return 32;
-    case stype::TypePrime::kI64: case stype::TypePrime::kU64: return 64;
-    case stype::TypePrime::kISize: case stype::TypePrime::kUSize: return 64;
-    default: throw std::runtime_error("Unsupported prime type for bit width");
-    }
-  }
   std::string cast_op() const {
     auto srct = src.type.type().get_if<stype::PrimeType>(), dstt = dst_type.type().get_if<stype::PrimeType>();
     if(!srct || !dstt) {
@@ -208,9 +161,17 @@ struct CastInst: Instruction {
     }
     return "trunc";
   }
-  std::string to_str() const override {
-    return "%" + std::to_string(dst) + " = " + cast_op() + " "
-    + src.to_str() + " to " + dst_type.to_str();
+private:
+  static int bit_width(stype::TypePrime prime) {
+    switch(prime) {
+    case stype::TypePrime::kBool: return 1;
+    case stype::TypePrime::kI8: case stype::TypePrime::kU8: case stype::TypePrime::kChar: return 8;
+    case stype::TypePrime::kI16: case stype::TypePrime::kU16: return 16;
+    case stype::TypePrime::kI32: case stype::TypePrime::kU32: return 32;
+    case stype::TypePrime::kI64: case stype::TypePrime::kU64: return 64;
+    case stype::TypePrime::kISize: case stype::TypePrime::kUSize: return 64;
+    default: throw std::runtime_error("Unsupported prime type for bit width");
+    }
   }
 };
 
@@ -263,10 +224,6 @@ struct Label {
 // if, loop, block (end)
 struct BranchInst: Instruction {
   Label label;
-
-  std::string to_str() const override {
-    return "br label %" + label.to_str();
-  }
 };
 
 // br i1 %cond, label %then, label %else
@@ -274,20 +231,11 @@ struct BranchInst: Instruction {
 struct CondBranchInst: Instruction {
   int cond;
   Label true_label, false_label;
-
-  std::string to_str() const override {
-    return "br i1 %" + std::to_string(cond) + ", label %" + true_label.to_str()
-    + ", label %" + false_label.to_str();
-  }
 };
 
 // unreachable
 // exit, break, continue
-struct UnreachableInst: Instruction {
-  std::string to_str() const override {
-    return "unreachable";
-  }
-};
+struct UnreachableInst: Instruction {};
 
 // %0 = insertvalue %Struct/Array undef, Ty val/%reg, 0
 // ...
@@ -297,18 +245,6 @@ struct InsertValueInst: Instruction {
   IRType type; // %Struct/Array
   std::vector<int> interval_regs; // "0", ... "n"
   std::vector<Operand> operands;
-
-  std::string to_str() const override {
-    std::string res;
-    for(int i = 0; i < operands.size(); ++i) {
-      if(i > 0) res += "\n  ";
-      res += "%" + std::to_string(interval_regs[i]) + " = insertvalue " + type.to_str() + " ";
-      res += (i > 0 ? ("%" + interval_regs[i - 1]) : "undef");
-      res += ", " + operands[i].to_str();
-      res += ", " + std::to_string(i);
-    }
-    return res;
-  }
 };
 
 // %dst = phi Ty [val1/%res1, %label1], [val2/%res2, %label2], ..., [valn/%resn, %labeln]
@@ -316,14 +252,6 @@ struct PhiInst: Instruction {
   int dst;
   IRType type;
   std::vector<std::pair<Operand, Label>> incoming;
-  std::string to_str() const override {
-    std::string res = "%" + std::to_string(dst) + " = phi " + type.to_str() + " ";
-    for(std::size_t i = 0; i < incoming.size(); ++i) {
-      if(i > 0) res += ", ";
-      res += "[" + incoming[i].first.value_str() + ", %" + incoming[i].second.to_str() + "]";
-    }
-    return res;
-  }
 };
 
 }

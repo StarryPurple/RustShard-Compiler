@@ -7,7 +7,6 @@
 #include "common.h"
 #include "constant.h"
 #include "fwd.h"
-#include "type.h"
 
 namespace insomnia::rust_shard::ast {
 
