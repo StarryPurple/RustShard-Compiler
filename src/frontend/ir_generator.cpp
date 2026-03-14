@@ -21,6 +21,7 @@ int IRGenerator::store_into_memory(int obj_id, IRType obj_ty) {
   lineA.dst = ptr_id;
   lineA.type = obj_ty;
   _contexts.back().push_instruction(std::move(lineA));
+  // _contexts.back().add_reg_hint_from(ptr_id, obj_id, "addr");
   StoreInst lineS;
   lineS.ptr = Operand::make_reg(ptr_id, wrap_ref(obj_ty));
   lineS.value = Operand::make_reg(obj_id, obj_ty);
@@ -33,8 +34,9 @@ int IRGenerator::load_from_memory(int ptr_id, IRType obj_ty) {
   LoadInst lineL;
   lineL.dst = obj_id;
   lineL.ptr = Operand::make_reg(ptr_id, wrap_ref(obj_ty));
-  lineL.load_type = obj_ty;;
+  lineL.load_type = obj_ty;
   _contexts.back().push_instruction(std::move(lineL));
+  // _contexts.back().add_reg_hint_from(obj_id, ptr_id, "value");
   return obj_id;
 }
 
@@ -329,17 +331,22 @@ void IRGenerator::postVisit(ast::LiteralExpression &node) {
   lineB.dst = val_id;
   lineB.op = "add";
   lineB.type = ty;
+  std::string hint = "lit-";
   std::visit([&]<typename T0>(T0 &&arg) {
     using T = std::decay_t<T0>;
     if constexpr(std::is_same_v<T, bool>) {
       lineB.rhs = Operand::make_imm(arg ? 1 : 0, ty);
+      hint += arg ? "true" : "false";
     } else if constexpr(std::is_same_v<T, std::int64_t> || std::is_same_v<T, std::uint64_t>) {
       lineB.rhs = Operand::make_imm(arg, ty);
+      hint += std::to_string(arg);
     } else {
       throw std::runtime_error("Unrecognized/Unsupported type out of primitive container types");
     }
   }, node.spec_value());
   _contexts.back().push_instruction(std::move(lineB));
+  _contexts.back().add_reg_hint(val_id, hint);
+
   int res_id = val_id;
   if(node.need_addr()) {
     res_id = store_into_memory(val_id, ty);
@@ -461,6 +468,7 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
     lineA.type = ret_type;
     lineA.dst = res_ptr_id;
     _contexts.back().push_instruction(std::move(lineA));
+    _contexts.back().add_reg_hint(res_ptr_id, "call-sret");
     lineC.args.emplace_back(Operand::make_reg(res_ptr_id, wrap_ref(ret_type)));
   } else {
     lineC.ret_type = ret_type;
@@ -478,6 +486,7 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
     auto res_id = _contexts.back().new_reg_id();
     lineC.dst = res_id;
     _contexts.back().push_instruction(std::move(lineC));
+    _contexts.back().add_reg_hint(res_id, "call");
     if(node.need_addr()) {
       res_id = store_into_memory(res_id, ret_type);
     }
@@ -532,6 +541,8 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
   }
   */
 
+  auto caller_id = _contexts.back().node_reg_map.at(node.expr()->id()); // Self*
+
   CallInst lineC;
   // method mangling
   lineC.func_name = mangle_method(func_tp->impl_type_opt(), func_tp->ident());
@@ -544,6 +555,8 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
     lineA.type = IRType(ret_tp);
     lineA.dst = res_ptr_id;
     _contexts.back().push_instruction(std::move(lineA));
+    // _contexts.back().add_reg_hint_from(res_ptr_id, caller_id, "call-sret");
+    _contexts.back().add_reg_hint(res_ptr_id, "method-call-sret");
     lineC.args.emplace_back(Operand::make_reg(res_ptr_id, wrap_ref(IRType(ret_tp))));
   } else {
     lineC.ret_type = IRType(ret_tp);
@@ -551,7 +564,6 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
 
   // pass self.
   if(func_tp->self_type_opt()) {
-    auto caller_id = _contexts.back().node_reg_map.at(node.expr()->id()); // Self*
     auto self_tp = func_tp->self_type_opt();
     // caller can be T (is_caller_ref = false) or T* (is_caller_ref = true).
     // caller requires T, &T or &mut T.
@@ -598,6 +610,8 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
     }
     _contexts.back().node_reg_map.emplace(node.id(), res_id);
   } else if(ret_tp != _type_pool->make_unit()) {
+    // _contexts.back().add_reg_hint_from(res_id, caller_id, "call");
+    _contexts.back().add_reg_hint(res_id, "method-call");
     if(node.need_addr()) {
       res_id = store_into_memory(res_id, IRType(ret_tp));
     }
@@ -629,12 +643,15 @@ void IRGenerator::postVisit(ast::LetStatement &node) {
   if(node.expr_opt()) {
     // shall already have got a pointer.
     res_id = _contexts.back().node_reg_map.at(node.expr_opt()->id());
+    _contexts.back().add_reg_hint(res_id, ip->ident() + ".addr"); // tag override happens
     if(!(_contexts.back().sret_target.has_value() || _contexts.back().sret_target->first == ip->ident())
       && node.expr_opt()->can_summon_lvalue()) {
       // in case this is a lvalue (can't move the pointer directly)
       // give it a copy.
       res_id = load_from_memory(res_id, ty);
+      _contexts.back().add_reg_hint(res_id, ip->ident());
       res_id = store_into_memory(res_id, ty);
+      _contexts.back().add_reg_hint(res_id, ip->ident() + ".addr");
     }
   } else if(_contexts.back().sret_target.has_value() && _contexts.back().sret_target->first == ip->ident()) {
     res_id = _contexts.back().sret_target->second;
@@ -646,6 +663,7 @@ void IRGenerator::postVisit(ast::LetStatement &node) {
     lineA.dst = res_id;
     lineA.type = ty;
     _contexts.back().push_instruction(std::move(lineA));
+    _contexts.back().add_reg_hint(res_id, ip->ident() + ".uninitialized-addr");
   }
 
   if(auto it = _contexts.back().variable_addr_reg_maps.back().find(ip->ident());
@@ -748,6 +766,7 @@ void IRGenerator::postVisit(ast::PathInExpression &node) {
       lineB.dst = res_id;
       lineB.op = "add";
       _contexts.back().push_instruction(std::move(lineB));
+      _contexts.back().add_reg_hint(res_id, "const-" + std::to_string(value));
       // need addr: store.
       if(node.need_addr()) {
         res_id = store_into_memory(res_id, ty);
@@ -760,12 +779,14 @@ void IRGenerator::postVisit(ast::PathInExpression &node) {
   }
 
   auto [val_ptr_id, ty] = _contexts.back().find_variable(ident);
+  _contexts.back().add_reg_hint(val_ptr_id, ident + ".addr");
 
   auto here_id = val_ptr_id;
   // lside: record Ty*
   // rside: load, and record Ty
   if(!node.need_addr()) {
     here_id = load_from_memory(val_ptr_id, ty);
+    _contexts.back().add_reg_hint(here_id, ident);
   }
 
   _contexts.back().node_reg_map.emplace(node.id(), here_id);

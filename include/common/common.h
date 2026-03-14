@@ -12,6 +12,8 @@ namespace insomnia::rust_shard {
 
 using StringT = std::string;
 
+static constexpr bool kEnableVarHints = false;
+
 }
 
 #endif // RUST_SHARD_COMMON_H

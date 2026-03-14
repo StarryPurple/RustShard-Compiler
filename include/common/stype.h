@@ -8,7 +8,6 @@
 #include <vector>
 #include <unordered_set>
 
-#include "type.h"
 #include "common.h"
 
 namespace insomnia::rust_shard::stype {

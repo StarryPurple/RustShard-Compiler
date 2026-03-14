@@ -9,7 +9,8 @@ add_library(builtin_lib STATIC
 )
 
 add_library(frontend_lib STATIC
-    src/frontend/type.cpp
+    src/common/stype.cpp
+    src/common/ir_pack.cpp
     src/frontend/lexer.cpp
     src/frontend/parser.cpp
     src/frontend/recursive_visitor.cpp
@@ -20,9 +21,8 @@ add_library(frontend_lib STATIC
 )
 
 target_include_directories(frontend_lib PUBLIC
-    src/include/common
-    src/include/frontend
-    src/template/frontend
+    include/common
+    include/frontend
 )
 
 add_executable(compiler src/main.cpp)

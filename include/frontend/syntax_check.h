@@ -6,7 +6,7 @@
 
 #include "recursive_visitor.h"
 #include "ast.h"
-#include "type.h"
+#include "stype.h"
 
 namespace insomnia::rust_shard::ast {
 
