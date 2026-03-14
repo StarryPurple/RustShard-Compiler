@@ -107,27 +107,27 @@ private:
   }
 
   // returns ptr_id
-  int store_into_memory(int obj_id, IRType obj_ty);
+  reg_id_t store_into_memory(reg_id_t obj_id, IRType obj_ty);
   // returns obj_id
-  int load_from_memory(int ptr_id, IRType obj_ty);
+  reg_id_t load_from_memory(reg_id_t ptr_id, IRType obj_ty);
 
   struct FunctionContext {
     bool is_unreachable = false;
-    int _next_reg_id = 0;
+    reg_id_t _next_reg_id = 0;
     int _next_hint_tag_id = 0;
     std::vector<BasicBlockPack> basic_block_packs;
     std::vector<std::unique_ptr<Instruction>> instructions;
     // result of node with this node id is in which register
     // break/return result is also stored.
-    std::unordered_map<int, int> node_reg_map;
+    std::unordered_map<int, reg_id_t> node_reg_map;
     // which register records the address of variable in memory, and the type of the variable
-    std::vector<std::unordered_map<StringT, std::pair<int, IRType>>> variable_addr_reg_maps;
+    std::vector<std::unordered_map<StringT, std::pair<reg_id_t, IRType>>> variable_addr_reg_maps;
     FunctionPack function_pack;
 
     struct LoopContext {
       Label jump_label; // cond for while, body for loop
       Label exit_label; // exit for both while and loop
-      int res_ptr_id;
+      reg_id_t res_ptr_id;
     };
 
     std::vector<LoopContext> loop_contexts;
@@ -135,12 +135,12 @@ private:
     // for in-place construction.
     // mapping: from node id to the given value ptr id.
     // Now only urges arrays to construct in-place.
-    std::unordered_map<int, int> in_place_node_ptr_map;
+    std::unordered_map<int, reg_id_t> in_place_node_ptr_map;
 
     // used at PathInExpr tail sret.
-    std::optional<std::pair<std::string, int>> sret_target;
+    std::optional<std::pair<std::string, reg_id_t>> sret_target;
 
-    int new_reg_id() { return _next_reg_id++; }
+    reg_id_t new_reg_id() { return _next_reg_id++; }
     int new_hint_tag_id() { return _next_hint_tag_id++; }
 
     void init_and_start_new_block(Label& label) {
@@ -150,7 +150,7 @@ private:
       basic_block_packs.emplace_back(BasicBlockPack{.label = label});
     }
 
-    void add_reg_hint(int id, const std::string& hint) {
+    void add_reg_hint(reg_id_t id, const std::string& hint) {
       // might override old hint.
       function_pack.hints.emplace(id, hint);
     }

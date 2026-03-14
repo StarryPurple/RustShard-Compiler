@@ -6,9 +6,9 @@
 #include "parser.h"
 #include "syntax_check.h"
 #include "ir_generator.h"
+#include "printer.h"
 
 namespace fs = std::filesystem;
-namespace rs = rshard;
 
 #ifndef BUILTIN_LL_PATH
 #define BUILTIN_LL_PATH "builtin/builtin.ll"
@@ -29,44 +29,44 @@ int main() {
     src_code += line + "\n";
   }
 
-  auto error_recorder = std::make_unique<rs::ast::ErrorRecorder>();
-  auto type_pool = std::make_unique<rs::stype::TypePool>();
-  auto const_pool = std::make_unique<rs::sconst::ConstPool>();
-  rs::ast::ASTTree ast_tree;
+  auto error_recorder = std::make_unique<rshard::ast::ErrorRecorder>();
+  auto type_pool = std::make_unique<rshard::stype::TypePool>();
+  auto const_pool = std::make_unique<rshard::sconst::ConstPool>();
+  rshard::ast::ASTTree ast_tree;
 
   // semantic
   try {
-    rs::Lexer lexer(src_code);
+    rshard::Lexer lexer(src_code);
     if(!lexer) {
       return 1;
     }
 
-    rs::ast::Parser parser(lexer);
+    rshard::ast::Parser parser(lexer);
     if(!parser) {
       return 1;
     }
 
     ast_tree = parser.release_tree();
 
-    rs::ast::SymbolCollector symbol_collector(error_recorder.get());
+    rshard::ast::SymbolCollector symbol_collector(error_recorder.get());
     ast_tree.traverse(symbol_collector);
     if(error_recorder->has_error()) {
       return 1;
     }
 
-    rs::ast::TypeDeclarator type_declarator(error_recorder.get(), type_pool.get());
+    rshard::ast::TypeDeclarator type_declarator(error_recorder.get(), type_pool.get());
     ast_tree.traverse(type_declarator);
     if(error_recorder->has_error()) {
       return 1;
     }
 
-    rs::ast::PreTypeFiller pre_type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
+    rshard::ast::PreTypeFiller pre_type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
     ast_tree.traverse(pre_type_filler);
     if(error_recorder->has_error()) {
       return 1;
     }
 
-    rs::ast::TypeFiller type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
+    rshard::ast::TypeFiller type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
     ast_tree.traverse(type_filler);
     if(error_recorder->has_error()) {
       return 1;
@@ -78,13 +78,13 @@ int main() {
 
   // ir generation
   try {
-    rs::ir::IRGenerator ir_generator(type_pool.get());
+    rshard::ir::IRGenerator ir_generator(type_pool.get());
     ast_tree.traverse(ir_generator);
 
     auto ir_pack = ir_generator.release();
 
     std::cout << read_file(BUILTIN_LL_PATH);
-    std::cout << rs::ir::IrPrinter::sprint(ir_pack);
+    std::cout << rshard::ir::IrPrinter::sprint(ir_pack);
   } catch(...) {
     // ir generation error
     // return 0 (since semantic check passed)

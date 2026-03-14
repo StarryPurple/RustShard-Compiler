@@ -5,6 +5,9 @@
 #include "stype.h"
 
 namespace rshard::ir {
+
+using reg_id_t = int;
+
 class IRType {
 public:
   IRType() = default;
@@ -43,7 +46,7 @@ struct Operand {
   std::int64_t value;
   IRType type;
 
-  static Operand make_reg(int id, IRType type) {
+  static Operand make_reg(reg_id_t id, IRType type) {
     return Operand{.kind = OperandKind::kVirtualReg, .value = id, .type = type};
   }
 
@@ -53,9 +56,9 @@ struct Operand {
 };
 
 struct HintContext {
-  const std::unordered_map<int, std::string>* hints = nullptr;
+  const std::unordered_map<reg_id_t, std::string>* hints = nullptr;
 
-  std::string hinted_reg(int reg) const {
+  std::string hinted_reg(reg_id_t reg) const {
     std::string res = "%" + std::to_string(reg);
     if constexpr(kEnableVarHints) {
       if(hints) {
@@ -93,7 +96,7 @@ struct Instruction {
 // %x = alloca Ty
 // LetExpression
 struct AllocaInst: Instruction {
-  int dst;
+  reg_id_t dst;
   IRType type;
 };
 
@@ -106,7 +109,7 @@ struct StoreInst: Instruction {
 // %dst = load Ty, Ty* %ptr
 // PathExpr, IndexExpr?
 struct LoadInst: Instruction {
-  int dst;
+  reg_id_t dst;
   IRType load_type;
   Operand ptr;
 };
@@ -118,7 +121,7 @@ struct LoadInst: Instruction {
 // add, sub, mul, sdiv, udiv, srem, urem, shl, ashr, lshr, and, or, xor
 // (icmp) eq, ne, ugt, uge, ult, ule, sgt, sge, slt, sle
 struct BinaryOpInst: Instruction {
-  int dst;
+  reg_id_t dst;
   StringT op;
   IRType type;
   Operand lhs, rhs;
@@ -128,7 +131,7 @@ struct BinaryOpInst: Instruction {
 // CallExpr, MethodCall
 // set dst_name = "" if ret_type is void
 struct CallInst: Instruction {
-  int dst = -1; // meaningless if ret_type is void
+  reg_id_t dst = -1; // meaningless if ret_type is void
   IRType ret_type;
   StringT func_name;
   std::vector<Operand> args; // type and reg name
@@ -144,7 +147,7 @@ struct ReturnInst: Instruction {
 // (T*) %dst = getelementptr S, S* %ptr, i32 0, index_t idx
 // Array, Index, Field
 struct GEPInst: Instruction {
-  int dst;
+  reg_id_t dst;
   IRType base_type;
   Operand ptr;
   std::vector<Operand> indices;
@@ -154,7 +157,7 @@ struct GEPInst: Instruction {
 // %c = bitcast(or something else) Ty1 %p to Ty2
 // TypeCast
 struct CastInst: Instruction {
-  int dst;
+  reg_id_t dst;
   IRType dst_type;
   Operand src;
 
@@ -250,7 +253,7 @@ struct BranchInst: Instruction {
 // br i1 %cond, label %then, label %else
 // if, while (condition)
 struct CondBranchInst: Instruction {
-  int cond;
+  reg_id_t cond;
   Label true_label, false_label;
 };
 
@@ -270,7 +273,7 @@ struct InsertValueInst: Instruction {
 
 // %dst = phi Ty [val1/%res1, %label1], [val2/%res2, %label2], ..., [valn/%resn, %labeln]
 struct PhiInst: Instruction {
-  int dst;
+  reg_id_t dst;
   IRType type;
   std::vector<std::pair<Operand, Label>> incoming;
 };
