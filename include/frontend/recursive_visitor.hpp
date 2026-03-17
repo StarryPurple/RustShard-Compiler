@@ -1,7 +1,7 @@
 #ifndef RUST_SHARD_FRONTEND_RECURSIVE_VISITOR_H
 #define RUST_SHARD_FRONTEND_RECURSIVE_VISITOR_H
 
-#include "visitor.h"
+#include "frontend/visitor.hpp"
 
 #define ISM_RS_PRE_VISIT_METHOD(Node) \
   virtual void preVisit(Node &node) {}

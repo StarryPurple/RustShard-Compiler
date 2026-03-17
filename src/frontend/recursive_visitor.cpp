@@ -1,6 +1,6 @@
-#include "recursive_visitor.h"
+#include "frontend/recursive_visitor.hpp"
 
-#include "ast.h"
+#include "frontend/ast.hpp"
 
 namespace rshard::ast {
 

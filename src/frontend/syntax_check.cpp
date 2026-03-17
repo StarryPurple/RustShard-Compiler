@@ -1,4 +1,4 @@
-#include "syntax_check.h"
+#include "frontend/syntax_check.hpp"
 
 #include <limits>
 #include <cmath>

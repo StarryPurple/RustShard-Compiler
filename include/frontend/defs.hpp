@@ -4,9 +4,9 @@
 #include <unordered_map>
 #include <utility>
 
-#include "common.h"
-#include "constant.h"
-#include "fwd.h"
+#include "common/common.hpp"
+#include "frontend/constant.hpp"
+#include "frontend/fwd.hpp"
 
 namespace rshard::ast {
 
@@ -29,16 +29,16 @@ public:
   BasicNode(): _id(_next_node_id++) {}
   virtual ~BasicNode() = default;
   virtual void accept(BasicVisitor &visitor) = 0;
-  int id() const { return _id; }
+  node_id_t id() const { return _id; }
 private:
-  const int _id;
+  const node_id_t _id;
 
 public:
   static void reset_id_counter() { _next_node_id = 0; }
 private:
-  static int _next_node_id;
+  static node_id_t _next_node_id;
 };
-inline int BasicNode::_next_node_id = 0;
+inline node_id_t BasicNode::_next_node_id = 0;
 
 class ASTTree {
 public:

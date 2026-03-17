@@ -2,7 +2,7 @@
 #define RUST_SHARD_IR_GENERATOR_H
 
 #include <filesystem>
-#include "ir_pack.h"
+#include "common/ir_pack.hpp"
 
 namespace rshard::ir {
 // uses some stype TypePtr. Please ensure that the type pool is still valid.
@@ -114,12 +114,12 @@ private:
   struct FunctionContext {
     bool is_unreachable = false;
     reg_id_t _next_reg_id = 0;
-    int _next_hint_tag_id = 0;
+    block_id_t _next_label_hint_id = 0;
     std::vector<BasicBlockPack> basic_block_packs;
     std::vector<std::unique_ptr<Instruction>> instructions;
     // result of node with this node id is in which register
     // break/return result is also stored.
-    std::unordered_map<int, reg_id_t> node_reg_map;
+    std::unordered_map<ast::node_id_t, reg_id_t> node_reg_map;
     // which register records the address of variable in memory, and the type of the variable
     std::vector<std::unordered_map<StringT, std::pair<reg_id_t, IRType>>> variable_addr_reg_maps;
     FunctionPack function_pack;
@@ -135,18 +135,18 @@ private:
     // for in-place construction.
     // mapping: from node id to the given value ptr id.
     // Now only urges arrays to construct in-place.
-    std::unordered_map<int, reg_id_t> in_place_node_ptr_map;
+    std::unordered_map<ast::node_id_t, reg_id_t> in_place_node_ptr_map;
 
     // used at PathInExpr tail sret.
     std::optional<std::pair<std::string, reg_id_t>> sret_target;
 
     reg_id_t new_reg_id() { return _next_reg_id++; }
-    int new_hint_tag_id() { return _next_hint_tag_id++; }
+    hint_id_t new_label_hint_id() { return _next_label_hint_id++; }
 
     void init_and_start_new_block(Label& label) {
       is_unreachable = false;
       basic_block_packs.back().instructions = std::move(instructions);
-      label.label_id = static_cast<int>(basic_block_packs.size()); // set label id.
+      label.block_id = static_cast<int>(basic_block_packs.size()); // set label id.
       basic_block_packs.emplace_back(BasicBlockPack{.label = label});
     }
 

@@ -21,8 +21,7 @@ add_library(frontend_lib STATIC
 )
 
 target_include_directories(frontend_lib PUBLIC
-    include/common
-    include/frontend
+    include
 )
 
 add_executable(compiler src/main.cpp)

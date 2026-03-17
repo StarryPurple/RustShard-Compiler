@@ -8,7 +8,7 @@
 #include <vector>
 #include <iostream>
 
-#include "common.h"
+#include "common/common.hpp"
 
 namespace rshard {
 enum class TokenTypeCat : uint32_t {

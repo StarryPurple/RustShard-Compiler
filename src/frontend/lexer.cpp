@@ -1,4 +1,4 @@
-#include "lexer.h"
+#include "frontend/lexer.hpp"
 
 #include <regex>
 #include <unordered_map>

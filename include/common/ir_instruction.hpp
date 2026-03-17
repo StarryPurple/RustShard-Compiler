@@ -2,11 +2,9 @@
 #define RUST_SHARD_IR_INSTRUCTION_H
 
 #include <unordered_map>
-#include "stype.h"
+#include "common/stype.hpp"
 
 namespace rshard::ir {
-
-using reg_id_t = int;
 
 class IRType {
 public:
@@ -217,17 +215,17 @@ enum class LabelHint {
 };
 
 struct Label {
-  int label_id;
+  block_id_t block_id;
   LabelHint hint;
-  int hint_tag_id;
+  hint_id_t hint_id;
 
   Label() = default;
 
-  Label(LabelHint _hint, int _hint_tag_id):
-    label_id(-1), hint(_hint), hint_tag_id(_hint_tag_id) {}
+  Label(LabelHint _hint, hint_id_t _hint_id):
+    block_id(-1), hint(_hint), hint_id(_hint_id) {}
 
   std::string to_str() const {
-    if(label_id == -1) {
+    if(block_id == -1) {
       throw std::runtime_error("Label id remains invalid (-1).");
     }
     static const std::unordered_map<LabelHint, std::string> map = {
@@ -240,7 +238,7 @@ struct Label {
         {LabelHint::kLazyThen, "lazy.then"}, {LabelHint::kLazyElse, "lazy.else"},
         {LabelHint::kLazyExit, "lazy.exit"},
       };
-    return "_" + std::to_string(label_id) + "_" + map.at(hint) + "." + std::to_string(hint_tag_id);
+    return "_" + std::to_string(block_id) + "_" + map.at(hint) + "." + std::to_string(hint_id);
   }
 };
 

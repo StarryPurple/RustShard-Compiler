@@ -2,7 +2,7 @@
 #ifndef RUSTS_SHARD_FRONTEND_VISITOR_H
 #define RUSTS_SHARD_FRONTEND_VISITOR_H
 
-#include "fwd.h"
+#include "frontend/fwd.hpp"
 
 #define ISM_RS_VISIT_METHOD(Node) \
   virtual void visit(Node &) = 0;

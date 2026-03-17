@@ -1,7 +1,7 @@
 #ifndef RUST_SHARD_PRINTER_H
 #define RUST_SHARD_PRINTER_H
 
-#include "ir_pack.h"
+#include "common/ir_pack.hpp"
 
 namespace rshard::ir {
 

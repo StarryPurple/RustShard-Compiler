@@ -1,8 +1,8 @@
 #ifndef RUST_SHARD_FRONTEND_PARSER_H
 #define RUST_SHARD_FRONTEND_PARSER_H
 
-#include "ast.h"
-#include "lexer.h"
+#include "frontend/ast.hpp"
+#include "frontend/lexer.hpp"
 
 #define PARSE_FUNCTION_GEN_METHOD(Node) \
   std::unique_ptr<Node> parse##Node();

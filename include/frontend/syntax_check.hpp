@@ -4,9 +4,9 @@
 #include <unordered_map>
 #include <utility>
 
-#include "recursive_visitor.h"
-#include "ast.h"
-#include "stype.h"
+#include "frontend/recursive_visitor.hpp"
+#include "frontend/ast.hpp"
+#include "common/stype.hpp"
 
 namespace rshard::ast {
 

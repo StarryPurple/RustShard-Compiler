@@ -23,10 +23,10 @@
 #include <variant>
 #include <vector>
 
-#include "constant.h"
-#include "fwd.h"
-#include "defs.h"
-#include "visitor.h"
+#include "frontend/constant.hpp"
+#include "frontend/fwd.hpp"
+#include "frontend/defs.hpp"
+#include "frontend/visitor.hpp"
 
 namespace rshard::ast {
 

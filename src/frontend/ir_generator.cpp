@@ -1,8 +1,8 @@
-#include "ir_generator.h"
+#include "frontend/ir_generator.hpp"
 
 #include <algorithm>
 #include <format>
-#include "ir_instruction.h"
+#include "common/ir_instruction.hpp"
 
 namespace rshard::ir {
 
@@ -15,7 +15,7 @@ std::string IRGenerator::use_string_literal(StringT literal) {
   return ident;
 }
 
-int IRGenerator::store_into_memory(int obj_id, IRType obj_ty) {
+reg_id_t IRGenerator::store_into_memory(reg_id_t obj_id, IRType obj_ty) {
   auto ptr_id = _contexts.back().new_reg_id();
   AllocaInst lineA;
   lineA.dst = ptr_id;
@@ -29,7 +29,7 @@ int IRGenerator::store_into_memory(int obj_id, IRType obj_ty) {
   return ptr_id;
 }
 
-int IRGenerator::load_from_memory(int ptr_id, IRType obj_ty) {
+reg_id_t IRGenerator::load_from_memory(reg_id_t ptr_id, IRType obj_ty) {
   auto obj_id = _contexts.back().new_reg_id();
   LoadInst lineL;
   lineL.dst = obj_id;
@@ -57,8 +57,8 @@ void IRGenerator::preVisit(ast::Function &node) {
   _contexts.back().variable_addr_reg_maps.emplace_back();
 
   // basic block entrance:
-  Label entry_label(LabelHint::kEntry, _contexts.back().new_hint_tag_id());
-  entry_label.label_id = 0;
+  Label entry_label(LabelHint::kEntry, _contexts.back().new_label_hint_id());
+  entry_label.block_id = 0;
   _contexts.back().basic_block_packs.push_back(BasicBlockPack{
     .label = entry_label
   });
@@ -189,7 +189,7 @@ void IRGenerator::postVisit(ast::Function &node) {
   _contexts.back().basic_block_packs.back().instructions = std::move(_contexts.back().instructions);
   _contexts.back().function_pack.basic_block_packs = std::move(_contexts.back().basic_block_packs);
 
-  _contexts.back().function_pack.fill_label_ids();
+  _contexts.back().function_pack.update_block_ids();
   _ir_pack.function_packs.push_back(std::move(_contexts.back().function_pack));
 
   _contexts.back().variable_addr_reg_maps.pop_back();
@@ -639,7 +639,7 @@ void IRGenerator::postVisit(ast::LetStatement &node) {
   // type tag first; or something like let a: i32 = 1 (deduced to kInt) might happen. Avoiding it.
   auto ty = IRType(node.type_opt() ? node.type_opt()->get_type() : node.expr_opt()->get_type());
   if(!ty) { throw std::runtime_error("No type in let statement"); }
-  auto res_id;
+  reg_id_t res_id;
   if(node.expr_opt()) {
     // shall already have got a pointer.
     res_id = _contexts.back().node_reg_map.at(node.expr_opt()->id());
@@ -1405,7 +1405,7 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
     // new.arr.exit:
     //   (%arr_val = load [T; N], [T; N]* %arr_ptr)
 
-    auto hint_tag_id = _contexts.back().new_hint_tag_id();
+    auto hint_tag_id = _contexts.back().new_label_hint_id();
     Label cond_label(LabelHint::kArrayCond, hint_tag_id);
     Label body_label(LabelHint::kArrayBody, hint_tag_id);
     Label exit_label(LabelHint::kArrayExit, hint_tag_id);
@@ -1594,7 +1594,7 @@ void IRGenerator::visit(ast::IfExpression &node) {
   //   %if_res = phi Ty [%then_res, %from_then], [%else_res, %from_else]
   //   (go on)
 
-  auto hint_tag_id = _contexts.back().new_hint_tag_id();
+  auto hint_tag_id = _contexts.back().new_label_hint_id();
   Label then_label(LabelHint::kIfThen, hint_tag_id);
   Label else_label(LabelHint::kIfElse, hint_tag_id);
   Label exit_label(LabelHint::kIfExit, hint_tag_id);
@@ -1688,7 +1688,7 @@ void IRGenerator::visit(ast::PredicateLoopExpression &node) {
   //   (end of body) br label while.cond
   // while.exit:
   //   ...
-  auto hint_tag_id = _contexts.back().new_hint_tag_id();
+  auto hint_tag_id = _contexts.back().new_label_hint_id();
   Label cond_label(LabelHint::kWhileCond, hint_tag_id);
   Label body_label(LabelHint::kWhileBody, hint_tag_id);
   Label exit_label(LabelHint::kWhileExit, hint_tag_id);
@@ -1740,7 +1740,7 @@ void IRGenerator::visit(ast::InfiniteLoopExpression &node) {
   // loop.exit:
   //   (if not_void) %res = load Ty, Ty* %res_ptr
 
-  auto hint_tag_id = _contexts.back().new_hint_tag_id();
+  auto hint_tag_id = _contexts.back().new_label_hint_id();
   Label body_label(LabelHint::kLoopBody, hint_tag_id);
   Label exit_label(LabelHint::kLoopExit, hint_tag_id);
 
@@ -1865,7 +1865,7 @@ void IRGenerator::visit(ast::LazyBooleanExpression &node) {
   auto lhs_id = _contexts.back().node_reg_map.at(node.expr1()->id());
   reg_id_t rhs_id = -1;
 
-  auto hint_tag_id = _contexts.back().new_hint_tag_id();
+  auto hint_tag_id = _contexts.back().new_label_hint_id();
   Label then_label(LabelHint::kLazyThen, hint_tag_id);
   Label else_label(LabelHint::kLazyElse, hint_tag_id);
   Label exit_label(LabelHint::kLazyExit, hint_tag_id);

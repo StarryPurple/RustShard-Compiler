@@ -1,7 +1,7 @@
-#include "defs.h"
+#include "frontend/defs.hpp"
 
-#include "ast.h"
-#include "recursive_visitor.h"
+#include "frontend/ast.hpp"
+#include "frontend/recursive_visitor.hpp"
 
 namespace rshard::ast {
 

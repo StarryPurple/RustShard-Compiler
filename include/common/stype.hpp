@@ -8,7 +8,7 @@
 #include <vector>
 #include <unordered_set>
 
-#include "common.h"
+#include "common/common.hpp"
 
 namespace rshard::stype {
 

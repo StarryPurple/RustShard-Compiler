@@ -5,8 +5,8 @@
 #include <optional>
 #include <variant>
 
-#include "stype.h"
-#include "utils.h"
+#include "common/stype.hpp"
+#include "common/utils.hpp"
 
 
 namespace rshard::sconst {

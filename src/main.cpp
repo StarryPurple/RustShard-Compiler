@@ -1,12 +1,12 @@
 #include <fstream>
 #include <iostream>
 
-#include "ast.h"
-#include "lexer.h"
-#include "parser.h"
-#include "syntax_check.h"
-#include "ir_generator.h"
-#include "printer.h"
+#include "frontend/ast.hpp"
+#include "frontend/lexer.hpp"
+#include "frontend/parser.hpp"
+#include "frontend/syntax_check.hpp"
+#include "frontend/ir_generator.hpp"
+#include "common/printer.hpp"
 
 namespace fs = std::filesystem;
 

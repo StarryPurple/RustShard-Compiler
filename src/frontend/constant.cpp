@@ -1,4 +1,4 @@
-#include "constant.h"
+#include "frontend/constant.hpp"
 
 namespace rshard::sconst {
 bool ConstValPtr::operator==(const ConstValPtr &other) const {
