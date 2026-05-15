@@ -4,6 +4,8 @@
 #include <type_traits>
 #include <variant>
 #include <algorithm>
+#include <string>
+#include <cstdint>
 
 namespace rshard::utils {
 

@@ -6,6 +6,7 @@
 #include "frontend/parser.hpp"
 #include "frontend/syntax_check.hpp"
 #include "frontend/ir_generator.hpp"
+#include "frontend/optimizer.hpp"
 #include "common/printer.hpp"
 
 namespace fs = std::filesystem;

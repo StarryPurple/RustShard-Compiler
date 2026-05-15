@@ -15,7 +15,7 @@ std::string IRGenerator::use_string_literal(StringT literal) {
   return ident;
 }
 
-reg_id_t IRGenerator::store_into_memory(reg_id_t obj_id, IRType obj_ty) {
+reg_id_t IRGenerator::store_into_memory(reg_id_t obj_id, IrType obj_ty) {
   auto ptr_id = _contexts.back().new_reg_id();
   AllocaInst lineA;
   lineA.dst = ptr_id;
@@ -29,7 +29,7 @@ reg_id_t IRGenerator::store_into_memory(reg_id_t obj_id, IRType obj_ty) {
   return ptr_id;
 }
 
-reg_id_t IRGenerator::load_from_memory(reg_id_t ptr_id, IRType obj_ty) {
+reg_id_t IRGenerator::load_from_memory(reg_id_t ptr_id, IrType obj_ty) {
   auto obj_id = _contexts.back().new_reg_id();
   LoadInst lineL;
   lineL.dst = obj_id;
@@ -66,8 +66,8 @@ void IRGenerator::preVisit(ast::Function &node) {
   auto info = find_symbol(node.ident());
   auto func_tp = info->type.get<stype::FunctionType>();
 
-  std::optional<std::pair<StringT, IRType>> sret_param;
-  std::vector<std::pair<StringT, IRType>> params;
+  std::optional<Operand> sret_param;
+  std::vector<Operand> params;
 
   /* fail?
   if(func_tp->impl_type_opt() != _impl_type) {
@@ -89,13 +89,13 @@ void IRGenerator::preVisit(ast::Function &node) {
   auto sret_id = -1;
   if(func_tp->need_sret()) {
     sret_id = next_param_reg_id++;
-    sret_param.emplace(std::to_string(sret_id), wrap_ref(IRType(func_tp->ret_type())));
+    sret_param.emplace(Operand::make_reg(sret_id, wrap_ref(IrType(func_tp->ret_type()))));
   }
   if(func_tp->self_type_opt()) {
     auto self_id = next_param_reg_id++;
 
     // self is passed by Self(self) or Self*(&self, &mut self)
-    auto ty = IRType(func_tp->self_type_opt());
+    auto ty = IrType(func_tp->self_type_opt());
 
     // pass as the first parameter
     // Ty* %x0 (self)
@@ -107,7 +107,7 @@ void IRGenerator::preVisit(ast::Function &node) {
     _contexts.back().variable_addr_reg_maps.back().emplace("self", std::pair(reg_id1, ty));
 
     // Ty %x0 (self)
-    params.emplace_back(std::to_string(self_id), ty);
+    params.emplace_back(Operand::make_reg(self_id, ty));
   }
   for(int i = 0; i < func_tp->params().size(); ++i) {
     // Ty %x0 (name)
@@ -123,18 +123,18 @@ void IRGenerator::preVisit(ast::Function &node) {
       // store Ty %x0, Ty* %x1
       // var_ptr-reg-map[name] = x1
 
-      auto ty = IRType(func_tp->params()[i]);
+      auto ty = IrType(func_tp->params()[i]);
       auto reg_id1 = store_into_memory(arg_id, ty);
 
       _contexts.back().variable_addr_reg_maps.back().emplace(pat->ident(), std::pair(reg_id1, ty));
     }
     // Ty %x0 (name)
-    params.emplace_back(std::to_string(arg_id), func_tp->params()[i]);
+    params.emplace_back(Operand::make_reg(arg_id, IrType(func_tp->params()[i])));
   }
   _contexts.back().function_pack = FunctionPack{
     .ident = inner_func_ident,
     .sret_param = sret_param,
-    .ret_type = IRType(func_tp->ret_type()),
+    .ret_type = IrType(func_tp->ret_type()),
     .params = params
   };
   ScopedVisitor::preVisit(node);
@@ -202,7 +202,7 @@ void IRGenerator::postVisit(ast::Function &node) {
 void IRGenerator::preVisit(ast::StructStruct &node) {
   auto info = find_symbol(node.ident());
   auto struct_tp = info->type.get<stype::StructType>();
-  std::vector<IRType> fields;
+  std::vector<IrType> fields;
   for(auto &field: struct_tp->ordered_fields()) {
     fields.emplace_back(field.second);
   }
@@ -324,7 +324,7 @@ void IRGenerator::postVisit(ast::LiteralExpression &node) {
     throw std::runtime_error("Unrecognized/Impossible literal type");
     }
 
-  auto ty = IRType(node.get_type());
+  auto ty = IrType(node.get_type());
   auto val_id = _contexts.back().new_reg_id();
   BinaryOpInst lineB;
   lineB.lhs = Operand::make_imm(0, ty);
@@ -452,7 +452,7 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
   // (load res if required)
 
   auto func_tp = node.expr()->get_type().get<stype::FunctionType>();
-  auto ret_type = IRType(func_tp->ret_type());
+  auto ret_type = IrType(func_tp->ret_type());
 
   CallInst lineC;
   lineC.func_name = func_tp->ident();
@@ -462,7 +462,7 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
   }
   auto res_ptr_id = -1;
   if(func_tp->need_sret()) {
-    lineC.ret_type = IRType(_type_pool->make_unit());
+    lineC.ret_type = IrType(_type_pool->make_unit());
     res_ptr_id = _contexts.back().new_reg_id();
     AllocaInst lineA;
     lineA.type = ret_type;
@@ -477,7 +477,7 @@ void IRGenerator::postVisit(ast::CallExpression &node) {
     auto &expr = node.params_opt()->expr_list()[i];
     auto node_id = expr->id();
     auto reg_id = _contexts.back().node_reg_map.at(node_id);
-    lineC.args.emplace_back(Operand::make_reg(reg_id, IRType(func_tp->params()[i])));
+    lineC.args.emplace_back(Operand::make_reg(reg_id, IrType(func_tp->params()[i])));
   }
   if(func_tp->ret_type() == _type_pool->make_unit()) {
     _contexts.back().push_instruction(std::move(lineC));
@@ -519,14 +519,14 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
   auto func_tp = find_asso_method(caller, func_name, _type_pool);
   bool is_caller_ref = false;
   // ty: Self.
-  auto ty = IRType(caller);
+  auto ty = IrType(caller);
   if(!func_tp) {
     if(!dynamic_cast<ast::IndexExpression*>(node.expr().get())) {
       is_caller_ref = true;
     }
     // Assume caller = &T / &mut T and find methods of T.
     if(auto r = caller.get_if<stype::RefType>()) {
-      ty = IRType(r->inner());
+      ty = IrType(r->inner());
       func_tp = find_asso_method(r->inner(), func_name, _type_pool);
     } else {
       throw std::runtime_error("Caller type mismatch or too complicated");
@@ -549,17 +549,17 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
 
   auto res_ptr_id = -1;
   if(func_tp->need_sret()) {
-    lineC.ret_type = IRType(_type_pool->make_unit());
+    lineC.ret_type = IrType(_type_pool->make_unit());
     res_ptr_id = _contexts.back().new_reg_id();
     AllocaInst lineA;
-    lineA.type = IRType(ret_tp);
+    lineA.type = IrType(ret_tp);
     lineA.dst = res_ptr_id;
     _contexts.back().push_instruction(std::move(lineA));
     // _contexts.back().add_reg_hint_from(res_ptr_id, caller_id, "call-sret");
     _contexts.back().add_reg_hint(res_ptr_id, "method-call-sret");
-    lineC.args.emplace_back(Operand::make_reg(res_ptr_id, wrap_ref(IRType(ret_tp))));
+    lineC.args.emplace_back(Operand::make_reg(res_ptr_id, wrap_ref(IrType(ret_tp))));
   } else {
-    lineC.ret_type = IRType(ret_tp);
+    lineC.ret_type = IrType(ret_tp);
   }
 
   // pass self.
@@ -585,7 +585,7 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
       // caller T*, caller req T*.
       // just as needed. do nothing.
     }
-    lineC.args.emplace_back(Operand::make_reg(caller_id, IRType(self_tp)));
+    lineC.args.emplace_back(Operand::make_reg(caller_id, IrType(self_tp)));
   }
 
 
@@ -600,20 +600,20 @@ void IRGenerator::postVisit(ast::MethodCallExpression &node) {
     auto &expr = node.params_opt()->expr_list()[i];
     auto node_id = expr->id();
     auto reg_id = _contexts.back().node_reg_map.at(node_id);
-    lineC.args.emplace_back(Operand::make_reg(reg_id, IRType(func_tp->params()[i])));
+    lineC.args.emplace_back(Operand::make_reg(reg_id, IrType(func_tp->params()[i])));
   }
   _contexts.back().push_instruction(std::move(lineC));
 
   if(func_tp->need_sret()) {
     if(!node.need_addr()) {
-      res_ptr_id = load_from_memory(res_ptr_id, IRType(ret_tp));
+      res_ptr_id = load_from_memory(res_ptr_id, IrType(ret_tp));
     }
     _contexts.back().node_reg_map.emplace(node.id(), res_id);
   } else if(ret_tp != _type_pool->make_unit()) {
     // _contexts.back().add_reg_hint_from(res_id, caller_id, "call");
     _contexts.back().add_reg_hint(res_id, "method-call");
     if(node.need_addr()) {
-      res_id = store_into_memory(res_id, IRType(ret_tp));
+      res_id = store_into_memory(res_id, IrType(ret_tp));
     }
     _contexts.back().node_reg_map.emplace(node.id(), res_id);
   }
@@ -637,7 +637,7 @@ void IRGenerator::postVisit(ast::LetStatement &node) {
   auto ip = dynamic_cast<ast::IdentifierPattern*>(node.pattern().get());
   if(!ip) { throw std::runtime_error("let pattern too complicated"); }
   // type tag first; or something like let a: i32 = 1 (deduced to kInt) might happen. Avoiding it.
-  auto ty = IRType(node.type_opt() ? node.type_opt()->get_type() : node.expr_opt()->get_type());
+  auto ty = IrType(node.type_opt() ? node.type_opt()->get_type() : node.expr_opt()->get_type());
   if(!ty) { throw std::runtime_error("No type in let statement"); }
   reg_id_t res_id;
   if(node.expr_opt()) {
@@ -681,7 +681,7 @@ void IRGenerator::postVisit(ast::AssignmentExpression &node) {
   // Just use one store.
   auto lhs_id = _contexts.back().node_reg_map.at(node.expr1()->id());
   auto rhs_id = _contexts.back().node_reg_map.at(node.expr2()->id());
-  auto ty = IRType(node.expr2()->get_type());
+  auto ty = IrType(node.expr2()->get_type());
 
   // store Ty %rhs, Ty* %lhs
   StoreInst lineS;
@@ -708,7 +708,7 @@ void IRGenerator::postVisit(ast::BorrowExpression &node) {
   auto rhs_id = _contexts.back().node_reg_map.at(node.expr()->id());
   auto lhs_id = rhs_id;
   if(node.need_addr()) {
-    lhs_id = store_into_memory(rhs_id, IRType(node.get_type()));
+    lhs_id = store_into_memory(rhs_id, IrType(node.get_type()));
   }
   _contexts.back().node_reg_map.emplace(node.id(), lhs_id);
 }
@@ -721,7 +721,7 @@ void IRGenerator::postVisit(ast::DereferenceExpression &node) {
   auto rhs_id = _contexts.back().node_reg_map.at(node.expr()->id());
   auto lhs_id = rhs_id;
   if(!node.need_addr()) {
-    lhs_id = load_from_memory(rhs_id, IRType(node.get_type()));
+    lhs_id = load_from_memory(rhs_id, IrType(node.get_type()));
   }
   _contexts.back().node_reg_map.emplace(node.id(), lhs_id);
 }
@@ -757,7 +757,7 @@ void IRGenerator::postVisit(ast::PathInExpression &node) {
       auto value = value_opt.value();
       // record a register that contains this value.
       // %res = add Ty 0, value
-      auto ty = IRType(info->cval->type());
+      auto ty = IrType(info->cval->type());
       auto res_id = _contexts.back().new_reg_id();
       BinaryOpInst lineB;
       lineB.lhs = Operand::make_imm(0, ty);
@@ -806,7 +806,7 @@ void IRGenerator::postVisit(ast::IndexExpression &node) {
   auto index_id = _contexts.back().node_reg_map.at(node.expr_index()->id());
 
   auto ptr_id = -1; // ArrTy*
-  auto arr_ty = IRType(node.expr_obj()->get_type());
+  auto arr_ty = IrType(node.expr_obj()->get_type());
   if(node.expr_obj()->need_addr()) {
     // I know I modified it... sigh.
     arr_ty = wrap_ref(arr_ty);
@@ -820,12 +820,12 @@ void IRGenerator::postVisit(ast::IndexExpression &node) {
   } else {
     // if given [T; N]* / **, then the address is needed. deref it to [T; N]*.
     ptr_id = obj_id;
-    arr_ty = IRType(arr_ty.type().get_if<stype::RefType>()->inner());
+    arr_ty = IrType(arr_ty.type().get_if<stype::RefType>()->inner());
     while(true) {
       auto r = arr_ty.type().get_if<stype::RefType>();
       if(!r) break;
       ptr_id = load_from_memory(ptr_id, arr_ty);
-      arr_ty = IRType(r->inner());
+      arr_ty = IrType(r->inner());
     }
   }
 
@@ -836,16 +836,16 @@ void IRGenerator::postVisit(ast::IndexExpression &node) {
   lineG.dst = dst_id;
   lineG.base_type = arr_ty;
   lineG.ptr = Operand::make_reg(ptr_id, wrap_ref(arr_ty));
-  auto i32_type = IRType(_type_pool->make_i32());
+  auto i32_type = IrType(_type_pool->make_i32());
   lineG.indices.emplace_back(Operand::make_imm(0, i32_type));
-  lineG.indices.emplace_back(Operand::make_reg(index_id, IRType(node.expr_index()->get_type())));
+  lineG.indices.emplace_back(Operand::make_reg(index_id, IrType(node.expr_index()->get_type())));
   _contexts.back().push_instruction(std::move(lineG));
 
   auto val_id = dst_id;
   // if it's on lside, we need it to remain &T (Ty*);
   // if it's on rside, we need to load its value (T, Ty).
   if(!node.need_addr()) {
-    val_id = load_from_memory(dst_id, IRType(node.get_type()));
+    val_id = load_from_memory(dst_id, IrType(node.get_type()));
   }
   // record %val
   _contexts.back().node_reg_map.emplace(node.id(), val_id);
@@ -854,8 +854,8 @@ void IRGenerator::postVisit(ast::IndexExpression &node) {
 void IRGenerator::postVisit(ast::TypeCastExpression &node) {
   if(_is_in_const) return;
   // %c = bitcast/zext/sext/trunc Ty1* %p to Ty2*
-  auto ty1 = IRType(node.expr()->get_type());
-  auto ty2 = IRType(node.type_no_bounds()->get_type());
+  auto ty1 = IrType(node.expr()->get_type());
+  auto ty2 = IrType(node.type_no_bounds()->get_type());
   auto src_id = _contexts.back().node_reg_map.at(node.expr()->id());
 
   // if the two types are the same in LLVM (like, i32 and usize are both "i32")
@@ -871,7 +871,7 @@ void IRGenerator::postVisit(ast::TypeCastExpression &node) {
   }
 
   if(node.need_addr()) {
-    dst_id = store_into_memory(dst_id, IRType(node.get_type()));
+    dst_id = store_into_memory(dst_id, IrType(node.get_type()));
   }
 
   _contexts.back().node_reg_map.emplace(node.id(), dst_id);
@@ -882,7 +882,7 @@ void IRGenerator::postVisit(ast::NegationExpression &node) {
   // unary operation: LogicalNot and ArithmeticInverse
   auto val_id = _contexts.back().node_reg_map.at(node.expr()->id());
   auto dst_id = _contexts.back().new_reg_id();
-  auto ty = IRType(node.expr()->get_type());
+  auto ty = IrType(node.expr()->get_type());
   if(node.oper() == ast::Operator::kLogicalNot) {
     // !val -> val == 0
     // %dst = icmp eq Ty %val, 0
@@ -900,7 +900,7 @@ void IRGenerator::postVisit(ast::NegationExpression &node) {
       auto res_id = _contexts.back().new_reg_id();
       CastInst lineC;
       lineC.dst = res_id;
-      lineC.src = Operand::make_reg(dst_id, IRType(_type_pool->make_bool()));
+      lineC.src = Operand::make_reg(dst_id, IrType(_type_pool->make_bool()));
       lineC.dst_type = ty;
       _contexts.back().push_instruction(std::move(lineC));
 
@@ -928,7 +928,7 @@ void IRGenerator::visit(ast::ArithmeticOrLogicalExpression &node) {
   if(_is_in_const) return;
   // binary operation:
   // %dst = icmp op Ty %val1, %val2
-  auto ty = IRType(node.get_type());
+  auto ty = IrType(node.get_type());
 
   BinaryOpInst lineB;
   lineB.type = ty;
@@ -1018,7 +1018,7 @@ void IRGenerator::postVisit(ast::ComparisonExpression &node) {
   auto val2_id = _contexts.back().node_reg_map.at(node.expr2()->id());
   auto dst_id = _contexts.back().new_reg_id();
 
-  auto ty = IRType(node.expr1()->get_type()); // operand type, not result type
+  auto ty = IrType(node.expr1()->get_type()); // operand type, not result type
   BinaryOpInst lineB;
   lineB.lhs = Operand::make_reg(val1_id, ty);
   lineB.rhs = Operand::make_reg(val2_id, ty);
@@ -1055,7 +1055,7 @@ void IRGenerator::postVisit(ast::ComparisonExpression &node) {
   _contexts.back().push_instruction(std::move(lineB));
 
   if(node.need_addr()) {
-    dst_id = store_into_memory(dst_id, IRType(_type_pool->make_bool()));
+    dst_id = store_into_memory(dst_id, IrType(_type_pool->make_bool()));
   }
 
   _contexts.back().node_reg_map.emplace(node.id(), dst_id);
@@ -1066,7 +1066,7 @@ void IRGenerator::visit(ast::CompoundAssignmentExpression &node) {
   auto ptr1_id = _contexts.back().node_reg_map.at(node.expr1()->id());
   // a x= b -> _ = a x b, a = _.
   // a: Ty*, b: Ty.
-  auto ty = IRType(node.expr2()->get_type());
+  auto ty = IrType(node.expr2()->get_type());
   auto ty_ref = wrap_ref(ty);
 
   auto val1_id = _contexts.back().new_reg_id();
@@ -1157,19 +1157,19 @@ void IRGenerator::preVisit(ast::FieldExpression &node) {
 
 void IRGenerator::postVisit(ast::FieldExpression &node) {
   auto obj_id = _contexts.back().node_reg_map.at(node.expr()->id());
-  auto ftp = IRType(node.expr()->get_type());
+  auto ftp = IrType(node.expr()->get_type());
   if(node.expr()->need_addr()) {
     // I know I modified it... sigh.
     ftp = wrap_ref(ftp);
   }
   auto struct_ptr = ftp.type().get_if<stype::StructType>();
-  auto ty = IRType(ftp);
+  auto ty = IrType(ftp);
   if(!struct_ptr) {
     auto p = ftp.type();
     while(p.get_if<stype::RefType>()) {
       p = p.get_if<stype::RefType>()->inner();
     }
-    ty = IRType(p);
+    ty = IrType(p);
     struct_ptr = p.get_if<stype::StructType>();
     if(!struct_ptr) {
       throw std::runtime_error("Not a struct");
@@ -1190,7 +1190,7 @@ void IRGenerator::postVisit(ast::FieldExpression &node) {
     while(true) {
       auto r = ftp.type().get_if<stype::RefType>();
       if(r && !r->inner().get_if<stype::RefType>()) break;
-      ftp = IRType(r->inner());
+      ftp = IrType(r->inner());
       ptr_id = _contexts.back().new_reg_id();
       LoadInst lineL;
       lineL.load_type = ftp;
@@ -1205,9 +1205,9 @@ void IRGenerator::postVisit(ast::FieldExpression &node) {
   // %rptr = getelementptr STy, STy* %ptr, i32 0, i32(usize) diff_idx
   GEPInst lineG;
   lineG.dst = rptr_id;
-  lineG.base_type = IRType(ty);
+  lineG.base_type = IrType(ty);
   lineG.ptr = Operand::make_reg(ptr_id, ty_ref);
-  auto i32_tp = IRType(_type_pool->make_i32());
+  auto i32_tp = IrType(_type_pool->make_i32());
   lineG.indices.emplace_back(Operand::make_imm(0, i32_tp));
   lineG.indices.emplace_back(Operand::make_imm(diff_idx, i32_tp));
   _contexts.back().push_instruction(std::move(lineG));
@@ -1216,7 +1216,7 @@ void IRGenerator::postVisit(ast::FieldExpression &node) {
   // if on rside, record a value res.
   auto res_id = rptr_id;
   if(!node.need_addr()) {
-    res_id = load_from_memory(rptr_id, IRType(field_ty));
+    res_id = load_from_memory(rptr_id, IrType(field_ty));
   }
   // record %res
   _contexts.back().node_reg_map.emplace(node.id(), res_id);
@@ -1228,7 +1228,7 @@ void IRGenerator::postVisit(ast::GroupedExpression &node) {
 
   if(node.need_addr()) {
     auto ptr_id = _contexts.back().new_reg_id();
-    auto ty = IRType(node.get_type());
+    auto ty = IrType(node.get_type());
     AllocaInst lineA;
     lineA.dst = ptr_id;
     lineA.type = ty;
@@ -1255,7 +1255,7 @@ void IRGenerator::visit(ast::StructExpression &node) {
   } else {
     struct_ptr_id = _contexts.back().new_reg_id();
     AllocaInst lineA;
-    lineA.type = IRType(struct_ty);
+    lineA.type = IrType(struct_ty);
     lineA.dst = struct_ptr_id;
     _contexts.back().push_instruction(std::move(lineA));
   }
@@ -1263,7 +1263,7 @@ void IRGenerator::visit(ast::StructExpression &node) {
   // order of field in the struct, field_ty, its node id, the field expr node pointer
   struct Record {
     int order;
-    IRType type;
+    IrType type;
     int node_id;
     ast::NamedStructExprField* field_ptr;
   };
@@ -1276,22 +1276,22 @@ void IRGenerator::visit(ast::StructExpression &node) {
     auto ident = ptr->ident();
     auto [order, ty] = stp->field_orders().at(ident);
     auto node_id = ptr->expr()->id();
-    records.emplace_back(order, IRType(ty), node_id, ptr);
+    records.emplace_back(order, IrType(ty), node_id, ptr);
   }
   std::sort(records.begin(), records.end(),
     [](const Record &A, const Record &B) {
       return A.order < B.order;
     });
 
-  auto i32_tp = IRType(_type_pool->make_i32());
+  auto i32_tp = IrType(_type_pool->make_i32());
 
   for(int i = 0; i < stp->fields().size(); ++i) {
     auto elem_ptr_id = _contexts.back().new_reg_id();
     // %elem_ptr = getelementptr St, St* %struct_ptr, i32 0, i32 i
     GEPInst lineG;
     lineG.dst = elem_ptr_id;
-    lineG.ptr = Operand::make_reg(struct_ptr_id, wrap_ref(IRType(struct_ty)));
-    lineG.base_type = IRType(struct_ty);
+    lineG.ptr = Operand::make_reg(struct_ptr_id, wrap_ref(IrType(struct_ty)));
+    lineG.base_type = IrType(struct_ty);
     lineG.indices.emplace_back(Operand::make_imm(0, i32_tp));
     lineG.indices.emplace_back(Operand::make_imm(i, i32_tp));
     _contexts.back().push_instruction(std::move(lineG));
@@ -1315,7 +1315,7 @@ void IRGenerator::visit(ast::StructExpression &node) {
 
   auto res_id = struct_ptr_id;
   if(!node.need_addr()) {
-    res_id = load_from_memory(struct_ptr_id, IRType(struct_ty));
+    res_id = load_from_memory(struct_ptr_id, IrType(struct_ty));
   }
 
   _contexts.back().node_reg_map.emplace(node.id(), res_id);
@@ -1327,7 +1327,7 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
   auto arr_tp = node.get_type();
   auto length = arr_tp.get_if<stype::ArrayType>()->length();
   auto tp = arr_tp.get_if<stype::ArrayType>()->inner();
-  auto i32_tp = IRType(_type_pool->make_i32());
+  auto i32_tp = IrType(_type_pool->make_i32());
 
   reg_id_t res_id = -1;
   reg_id_t arr_ptr_id = -1;
@@ -1339,7 +1339,7 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
     } else {
       arr_ptr_id = _contexts.back().new_reg_id();
       AllocaInst lineA;
-      lineA.type = IRType(arr_tp);
+      lineA.type = IrType(arr_tp);
       lineA.dst = arr_ptr_id;
       _contexts.back().push_instruction(std::move(lineA));
     }
@@ -1358,8 +1358,8 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
     for(int i = 0; i < length; ++i) {
       auto elem_ptr_id = _contexts.back().new_reg_id();
       GEPInst lineG;
-      lineG.ptr = Operand::make_reg(arr_ptr_id, wrap_ref(IRType(arr_tp)));
-      lineG.base_type = IRType(arr_tp);
+      lineG.ptr = Operand::make_reg(arr_ptr_id, wrap_ref(IrType(arr_tp)));
+      lineG.base_type = IrType(arr_tp);
       lineG.dst = elem_ptr_id;
       lineG.indices.emplace_back(Operand::make_imm(0, i32_tp));
       lineG.indices.emplace_back(Operand::make_imm(i, i32_tp));
@@ -1376,8 +1376,8 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
         // manually construct from value
         auto value_id = _contexts.back().node_reg_map.at(expr->id());
         StoreInst lineS;
-        lineS.ptr = Operand::make_reg(elem_ptr_id, wrap_ref(IRType(tp)));
-        lineS.value = Operand::make_reg(value_id, IRType(tp));
+        lineS.ptr = Operand::make_reg(elem_ptr_id, wrap_ref(IrType(tp)));
+        lineS.value = Operand::make_reg(value_id, IrType(tp));
         _contexts.back().push_instruction(std::move(lineS));
       }
     }
@@ -1416,15 +1416,15 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
       } else {
         arr_ptr_id = _contexts.back().new_reg_id();
         AllocaInst lineA;
-        lineA.type = IRType(arr_tp);
+        lineA.type = IrType(arr_tp);
         lineA.dst = arr_ptr_id;
         _contexts.back().push_instruction(std::move(lineA));
       }
 
     auto ptr_id = _contexts.back().new_reg_id();
     GEPInst lineG;
-    lineG.ptr = Operand::make_reg(arr_ptr_id, wrap_ref(IRType(arr_tp)));
-    lineG.base_type = IRType(arr_tp);
+    lineG.ptr = Operand::make_reg(arr_ptr_id, wrap_ref(IrType(arr_tp)));
+    lineG.base_type = IrType(arr_tp);
     lineG.dst = ptr_id;
     lineG.indices.emplace_back(Operand::make_imm(0, i32_tp));
     lineG.indices.emplace_back(Operand::make_imm(0, i32_tp));
@@ -1465,7 +1465,7 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
     _contexts.back().push_instruction(std::move(lineBO));
 
     CondBranchInst lineC;
-    lineC.cond = cmp_id;
+    lineC.cond = Operand::make_reg(cmp_id, i32_tp);
     lineC.true_label = body_label;
     lineC.false_label = exit_label;
     _contexts.back().push_instruction(std::move(lineC));
@@ -1473,8 +1473,8 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
     _contexts.back().init_and_start_new_block(body_label);
 
     auto elem_ptr_id = _contexts.back().new_reg_id();
-    lineG.base_type = IRType(tp);
-    lineG.ptr = Operand::make_reg(ptr_id, wrap_ref(IRType(tp)));
+    lineG.base_type = IrType(tp);
+    lineG.ptr = Operand::make_reg(ptr_id, wrap_ref(IrType(tp)));
     lineG.dst = elem_ptr_id;
     lineG.indices.emplace_back(Operand::make_reg(cnt_id, i32_tp));
     _contexts.back().push_instruction(std::move(lineG));
@@ -1490,8 +1490,8 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
       expr->accept(*this);
       // manually construct from value
       auto value_id = _contexts.back().node_reg_map.at(expr->id());
-      lineS.ptr = Operand::make_reg(elem_ptr_id, wrap_ref(IRType(tp)));
-      lineS.value = Operand::make_reg(value_id, IRType(tp));
+      lineS.ptr = Operand::make_reg(elem_ptr_id, wrap_ref(IrType(tp)));
+      lineS.value = Operand::make_reg(value_id, IrType(tp));
       _contexts.back().push_instruction(std::move(lineS));
     }
 
@@ -1520,7 +1520,7 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
 
   res_id = arr_ptr_id;
   if(!node.need_addr()) {
-    res_id = load_from_memory(arr_ptr_id, IRType(arr_tp));
+    res_id = load_from_memory(arr_ptr_id, IrType(arr_tp));
   }
 
   _contexts.back().node_reg_map.emplace(node.id(), res_id);
@@ -1543,7 +1543,7 @@ void IRGenerator::postVisit(ast::BlockExpression &node) {
 
       if(node.need_addr()) {
         auto ptr_id = _contexts.back().new_reg_id();
-        auto ty = IRType(node.get_type());
+        auto ty = IrType(node.get_type());
         AllocaInst lineA;
         lineA.dst = ptr_id;
         lineA.type = ty;
@@ -1603,7 +1603,7 @@ void IRGenerator::visit(ast::IfExpression &node) {
 
   auto cond_id = _contexts.back().node_reg_map.at(node.cond()->id());
   CondBranchInst lineC;
-  lineC.cond = cond_id;
+  lineC.cond = Operand::make_reg(cond_id, IrType(_type_pool->make_i32()));
   lineC.true_label = then_label;
   lineC.false_label = else_label;
   _contexts.back().push_instruction(std::move(lineC));
@@ -1655,7 +1655,7 @@ void IRGenerator::visit(ast::IfExpression &node) {
   }
   auto exit_id = _contexts.back().new_reg_id();
   if(then_id != -1 && else_id != -1) {
-    auto ty = IRType(node.get_type());
+    auto ty = IrType(node.get_type());
     PhiInst lineP;
     lineP.dst = exit_id;
     lineP.type = ty;
@@ -1669,7 +1669,7 @@ void IRGenerator::visit(ast::IfExpression &node) {
   }
 
   if(node.need_addr()) {
-    exit_id = store_into_memory(exit_id, IRType(node.get_type()));
+    exit_id = store_into_memory(exit_id, IrType(node.get_type()));
   }
 
   _contexts.back().node_reg_map.emplace(node.id(), exit_id);
@@ -1705,7 +1705,7 @@ void IRGenerator::visit(ast::PredicateLoopExpression &node) {
   _contexts.back().loop_contexts.emplace_back(cond_label, exit_label, -1);
 
   CondBranchInst lineC;
-  lineC.cond = cond_id;
+  lineC.cond = Operand::make_reg(cond_id, IrType(_type_pool->make_i32()));
   lineC.true_label = body_label;
   lineC.false_label = exit_label;
   _contexts.back().push_instruction(std::move(lineC));
@@ -1726,7 +1726,7 @@ void IRGenerator::visit(ast::InfiniteLoopExpression &node) {
   // loop { block }
   // label: loop.body, loop.exit
 
-  auto ty = IRType(node.get_type());
+  auto ty = IrType(node.get_type());
   bool not_void = !ty.is_void(_type_pool);
 
   //   (if not_void) %res_ptr = alloca Ty
@@ -1783,7 +1783,7 @@ void IRGenerator::postVisit(ast::BreakExpression &node) {
   if(node.expr_opt()) {
     // break value;
     auto value_id = _contexts.back().node_reg_map.at(node.expr_opt()->id());
-    auto ty = IRType(node.expr_opt()->get_type());
+    auto ty = IrType(node.expr_opt()->get_type());
     // must be InfiniteLoop, and res_ptr_id is not -1.
     auto res_ptr_id = _contexts.back().loop_contexts.back().res_ptr_id;
     // store Ty &value, Ty* %res_ptr
@@ -1817,7 +1817,7 @@ void IRGenerator::postVisit(ast::ReturnExpression &node) {
     lineR.ret_val = std::nullopt;
   } else {
     auto reg_id = _contexts.back().node_reg_map.at(node.expr_opt()->id());
-    IRType ret_type(node.expr_opt()->get_type());
+    IrType ret_type(node.expr_opt()->get_type());
     lineR.ret_val = Operand::make_reg(reg_id, ret_type);
   }
   _contexts.back().push_instruction(std::move(lineR));
@@ -1871,7 +1871,7 @@ void IRGenerator::visit(ast::LazyBooleanExpression &node) {
   Label exit_label(LabelHint::kLazyExit, hint_tag_id);
 
   CondBranchInst lineC;
-  lineC.cond = lhs_id;
+  lineC.cond = Operand::make_reg(lhs_id, IrType(_type_pool->make_i32()));
   lineC.true_label = then_label;
   lineC.false_label = else_label;
   _contexts.back().push_instruction(std::move(lineC));
@@ -1906,18 +1906,18 @@ void IRGenerator::visit(ast::LazyBooleanExpression &node) {
   auto res_id = _contexts.back().new_reg_id();
   PhiInst lineP;
   lineP.dst = res_id;
-  lineP.type = IRType(_type_pool->make_bool());
+  lineP.type = IrType(_type_pool->make_bool());
 
   switch(node.oper()) {
   case ast::Operator::kLogicalAnd: {
     // %res = phi i1 [%rhs, %laz.then], [0, %laz.else]
-    lineP.incoming.emplace_back(Operand::make_reg(rhs_id, IRType(_type_pool->make_bool())), then_from_label);
-    lineP.incoming.emplace_back(Operand::make_imm(0, IRType(_type_pool->make_bool())), else_from_label);
+    lineP.incoming.emplace_back(Operand::make_reg(rhs_id, IrType(_type_pool->make_bool())), then_from_label);
+    lineP.incoming.emplace_back(Operand::make_imm(0, IrType(_type_pool->make_bool())), else_from_label);
   } break;
   case ast::Operator::kLogicalOr: {
     // %res = phi i1 [1, %laz.then], [%rhs, %laz.else]
-    lineP.incoming.emplace_back(Operand::make_imm(1, IRType(_type_pool->make_bool())), then_from_label);
-    lineP.incoming.emplace_back(Operand::make_reg(rhs_id, IRType(_type_pool->make_bool())), else_from_label);
+    lineP.incoming.emplace_back(Operand::make_imm(1, IrType(_type_pool->make_bool())), then_from_label);
+    lineP.incoming.emplace_back(Operand::make_reg(rhs_id, IrType(_type_pool->make_bool())), else_from_label);
   } break;
   default: throw std::runtime_error("Unrecognized operator in LazyBooleanExpression");
   }
@@ -1925,7 +1925,7 @@ void IRGenerator::visit(ast::LazyBooleanExpression &node) {
   _contexts.back().push_instruction(std::move(lineP));
 
   if(node.need_addr()) {
-    res_id = store_into_memory(res_id, IRType(_type_pool->make_bool()));
+    res_id = store_into_memory(res_id, IrType(_type_pool->make_bool()));
   }
 
   // record res

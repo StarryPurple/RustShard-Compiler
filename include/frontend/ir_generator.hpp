@@ -102,14 +102,14 @@ private:
     return "_" + utils::to_base62(impl_type->hash()) + "_" + func_name;
   }
 
-  IRType wrap_ref(IRType type) const {
+  IrType wrap_ref(IrType type) const {
     return type.get_ref(_type_pool);
   }
 
   // returns ptr_id
-  reg_id_t store_into_memory(reg_id_t obj_id, IRType obj_ty);
+  reg_id_t store_into_memory(reg_id_t obj_id, IrType obj_ty);
   // returns obj_id
-  reg_id_t load_from_memory(reg_id_t ptr_id, IRType obj_ty);
+  reg_id_t load_from_memory(reg_id_t ptr_id, IrType obj_ty);
 
   struct FunctionContext {
     bool is_unreachable = false;
@@ -121,7 +121,7 @@ private:
     // break/return result is also stored.
     std::unordered_map<ast::node_id_t, reg_id_t> node_reg_map;
     // which register records the address of variable in memory, and the type of the variable
-    std::vector<std::unordered_map<StringT, std::pair<reg_id_t, IRType>>> variable_addr_reg_maps;
+    std::vector<std::unordered_map<StringT, std::pair<reg_id_t, IrType>>> variable_addr_reg_maps;
     FunctionPack function_pack;
 
     struct LoopContext {
@@ -172,7 +172,7 @@ private:
       instructions.emplace_back(std::move(inst_ptr));
     }
 
-    std::pair<int, IRType> find_variable(const StringT& ident) {
+    std::pair<int, IrType> find_variable(const StringT& ident) {
       for(auto rit = variable_addr_reg_maps.rbegin(); rit != variable_addr_reg_maps.rend(); ++rit) {
         if(auto it = rit->find(ident); it != rit->end()) return it->second;
       }
