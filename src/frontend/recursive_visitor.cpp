@@ -385,7 +385,7 @@ void RecursiveVisitor::visit(CallParams &node) {
 
 void RecursiveVisitor::visit(MethodCallExpression &node) {
   preVisit(node);
-  node.expr()->accept(*this);
+  node.caller()->accept(*this);
   node.segment()->accept(*this);
   if(node.params_opt()) node.params_opt()->accept(*this);
   postVisit(node);

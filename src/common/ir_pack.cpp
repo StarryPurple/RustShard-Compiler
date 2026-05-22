@@ -38,7 +38,7 @@ struct Bitmap {
   explicit Bitmap(int n, bool val): map((n + 63) / 64), width(n) {
     if(val) {
       std::memset(map.data(), 0xff, map.size() * sizeof(std::uint64_t));
-      map.back() &= (1ull << (n % 64)) - 1;
+      if(n % 64 != 0) map.back() &= (1ull << (n % 64)) - 1;
     }
   }
 

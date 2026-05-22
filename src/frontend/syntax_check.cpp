@@ -421,6 +421,17 @@ void ConstEvaluator::postVisit(ArithmeticOrLogicalExpression &node) {
     _recorder->tagged_report(kErrTag, "Mismatched types in arithmetic/logical expression");
     return;
   }
+  {
+    auto t = tp1;
+    if(tp2->is_convertible_from(*tp1)) t = tp2;
+    bool flag = true;
+    if(t != tp1) flag &= node.expr1()->set_type(t);
+    if(t != tp2) flag &= node.expr2()->set_type(t);
+    if(!flag) {
+      _recorder->tagged_report(kErrTag, "Arith/LogicExpr type induction failed.");
+      return;
+    }
+  }
 
   // TODO: NaN implementation (currently treated as compilation error)
 
@@ -497,6 +508,19 @@ void ConstEvaluator::postVisit(ComparisonExpression &node) {
   if(!inner1->type()->is_convertible_from(*inner2->type()) && !inner2->type()->is_convertible_from(*inner1->type())) {
     _recorder->tagged_report(kErrTag, "Mismatched types in comparison expression");
     return;
+  }
+  {
+    auto tp1 = inner1->type();
+    auto tp2 = inner2->type();
+    auto t = tp1;
+    if(tp2->is_convertible_from(*tp1)) t = tp2;
+    bool flag = true;
+    if(t != tp1) flag &= node.expr1()->set_type(t);
+    if(t != tp2) flag &= node.expr2()->set_type(t);
+    if(!flag) {
+      _recorder->tagged_report(kErrTag, "CompExpr type induction failed.");
+      return;
+    }
   }
   if(node.oper() == Operator::kGt || node.oper() == Operator::kLt
     || node.oper() == Operator::kGe || node.oper() == Operator::kGt) {
@@ -1005,25 +1029,14 @@ void PreTypeFiller::postVisit(Function &node) {
   }
   auto func_type = _type_pool->make_type<stype::FunctionType>(node.ident(), _impl_type, caller_type, std::move(params), ret_type);
   // need sret:
-  // 1. sizeof(ret_t) > 16B
-  // 2. ret_t is StructType
-  // 3. no return statement
-  // 4. has tail expression
-  // 5. tail expr addr is PathInExpr / StructExpr (so I know when to use the ptr %result)
-  do {
-    if(ret_type->size() < 16) break;
-    auto rt = ret_type.get_if<stype::StructType>();
-    if(!rt) break;
-    if(!node.body_opt()) break;
-    if(!node.body_opt()->func_returns().empty()) break;
-    if(!node.body_opt()->stmts_opt()) break;
-    if(!node.body_opt()->stmts_opt()->expr_opt()) break;
-    auto tail_expr = node.body_opt()->stmts_opt()->expr_opt().get();
-    auto path_expr = dynamic_cast<PathInExpression*>(tail_expr);
-    auto struct_expr = dynamic_cast<StructExpression*>(tail_expr);
-    if(!path_expr && !struct_expr) break;
+  // (deprecated) 1. sizeof(ret_t) > 16B
+  // 2. ret_t need indirect pass.
+  // (deprecated) 3. no return statement
+  // (deprecated) 4. has tail expression
+  // (deprecated) 5. tail expr addr is PathInExpr / StructExpr (so I know when to use the ptr %result)
+  if(ret_type->need_indirect_pass()) {
     func_type.get_if<stype::FunctionType>()->set_need_sret();
-  } while(false);
+  }
   add_symbol(node.ident(), SymbolInfo{
     .node = &node, .ident = node.ident(), .kind = SymbolKind::kFunction, .type = func_type
   });
@@ -1402,7 +1415,7 @@ void TypeFiller::postVisit(PathInExpression &node) {
     }
     auto info = find_symbol(ident);
     if(!info) {
-      _recorder->tagged_report(kErrIdentNotResolved, "Identifier not found as the end of PathInExpression");
+      _recorder->tagged_report(kErrIdentNotResolved, "Identifier \"" + std::string(ident) + "\" not found as the end of PathInExpression");
       return;
     }
     if(info->kind == SymbolKind::kConstant || info->kind == SymbolKind::kVariable || info->kind == SymbolKind::kFunction
@@ -1503,6 +1516,7 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ArithmeticOrLogicalExpression");
     return;
   }
+
   auto prime1 = type1.get_if<stype::PrimeType>();
   auto prime2 = type2.get_if<stype::PrimeType>();
   if(!prime1 || !prime2) {
@@ -1510,6 +1524,19 @@ void TypeFiller::postVisit(ArithmeticOrLogicalExpression &node) {
       " type 1: " + type1->to_string() + " , type 2: " + type2->to_string());
     return;
   }
+
+  {
+    auto t = type1;
+    if(type2->is_convertible_from(*t)) t = type2;
+    bool flag = true;
+    if(t != type1) flag &= node.expr1()->set_type(t);
+    if(t != type2) flag &= node.expr2()->set_type(t);
+    if(!flag) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Arith/LogicExpr type induction failed.");
+      return;
+    }
+  }
+
   switch(node.oper()) {
   case Operator::kShl:
   case Operator::kShr:
@@ -1573,6 +1600,19 @@ void TypeFiller::postVisit(ComparisonExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type 2 not got in ComparisonExpression");
     return;
   }
+
+  {
+    auto t = type1;
+    if(type2->is_convertible_from(*t)) t = type2;
+    bool flag = true;
+    if(t != type1) flag &= node.expr1()->set_type(t);
+    if(t != type2) flag &= node.expr2()->set_type(t);
+    if(!flag) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Arith/LogicExpr type induction failed.");
+      return;
+    }
+  }
+
   switch(node.oper()) {
   case Operator::kGt:
   case Operator::kLt:
@@ -1739,17 +1779,27 @@ void TypeFiller::postVisit(AssignmentExpression &node) {
   // &T <- &mut T
   // &mut T <- &mut T
   bool to_accept = false;
-  if(node.expr1()->is_place_mut() && t->is_convertible_from(*f)) to_accept = true;
+  if(node.expr1()->is_place_mut() && t->is_convertible_from(*f)) {
+    if(t != f) {
+      node.expr2()->set_type(t);
+    }
+    to_accept = true;
+  }
   auto rt = t.get_if<stype::RefType>(), rf = f.get_if<stype::RefType>();
   // &T <- &T...
-  if(rt && rf && rt->inner()->is_convertible_from(*rf->inner()) && (!rt->ref_is_mut() || rf->ref_is_mut()))
+  if(rt && rf && rt->inner()->is_convertible_from(*rf->inner()) && (!rt->ref_is_mut() || rf->ref_is_mut())) {
+    if(t != f) {
+      node.expr2()->set_type(t);
+    }
     to_accept = true;
+  }
+
   if(!to_accept) {
     _recorder->tagged_report(kErrTypeNotMatch, "Invalid assignment: "
       + to_type->to_string() + " <- " + from_type->to_string());
     return;
   }
-  node.set_type(to_type);
+  node.set_type(_type_pool->make_unit());
 }
 
 void TypeFiller::preVisit(CompoundAssignmentExpression &node) {
@@ -1809,12 +1859,14 @@ void TypeFiller::visit(Function &node) {
     }
     auto info = find_symbol(node.ident());
     auto f = info->type.get_if<stype::FunctionType>(); // ignore empty check...
-    if(!f->ret_type()->is_convertible_from(*tp)
-      || (tp.get_if<stype::NeverType>() && !f->ret_type().get_if<stype::NeverType>())) {
+    auto ret_type = f->ret_type();
+    if(!ret_type->is_convertible_from(*tp)
+      || (tp.get_if<stype::NeverType>() && !ret_type.get_if<stype::NeverType>())) {
       _recorder->tagged_report(kErrTypeNotMatch, "Function return type not match with its body."
-        " tag: " + f->ret_type()->to_string() + ", evaluation: " + tp->to_string());
+        " tag: " + ret_type->to_string() + ", evaluation: " + tp->to_string());
       break;
     }
+    node.body_opt()->set_type(ret_type);
   } while(false);
 
   ScopedVisitor::postVisit(node);
@@ -1844,6 +1896,17 @@ void TypeFiller::postVisit(CompoundAssignmentExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not supported in CompoundAssignmentExpression."
       " type 1:" + type1->to_string() + ", type 2: " + type2->to_string());
     return;
+  }
+  {
+    auto t = type1;
+    if(type2->is_convertible_from(*t)) t = type2;
+    bool flag = true;
+    if(t != type1) flag &= node.expr1()->set_type(t);
+    if(t != type2) flag &= node.expr2()->set_type(t);
+    if(!flag) {
+      _recorder->tagged_report(kErrTypeNotMatch, "Arith/LogicExpr type induction failed.");
+      return;
+    }
   }
   switch(node.oper()) {
   case Operator::kShlAssign:
@@ -1980,11 +2043,33 @@ void TypeFiller::postVisit(IndexExpression &node) {
 
   // out_of_range is a runtime problem
   auto index_primitive = index_type.get_if<stype::PrimeType>();
+
   // In fact, we need an is_unsigned() here...
   // But the testcases say we shall allow i32. Make them happy.
+  // ...
+  // Maybe usize?
+  /*
   if(!index_primitive || !(index_primitive->is_integer() || index_primitive->prime() == stype::TypePrime::kInt)) {
     _recorder->tagged_report(kErrTypeNotMatch, "Index not an integer");
     return;
+  }
+  */
+  // Together with literal non-negative check... Lazy.
+  if(!index_primitive || !(index_primitive->is_unsigned_int()
+    || index_primitive->prime() == stype::TypePrime::kInt)) {
+    _recorder->tagged_report(kErrTypeNotMatch, "Index not an integer");
+    return;
+  }
+  {
+    if(index_primitive->prime() != stype::TypePrime::kUSize) {
+      auto usize_type =
+        _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kUSize);
+      bool flag = node.expr_index()->set_type(usize_type);
+      if(!flag) {
+        _recorder->tagged_report(kErrTypeNotMatch, "IndexExpr: index type induction failed");
+        return;
+      }
+    }
   }
 
   // (mut1) [T; N] -> (mut1) T (lside), T (rside)
@@ -2073,6 +2158,7 @@ void TypeFiller::postVisit(StructExpression &node) {
         _recorder->tagged_report(kErrTypeNotMatch, "Field type not match");
         return;
       }
+      ptr->expr()->set_type(it->second);
       it->second = stype::TypePtr();
     } else {
       auto ptr = static_cast<IndexStructExprField*>(field.get());
@@ -2130,6 +2216,8 @@ void TypeFiller::postVisit(CallExpression &node) {
           + expr_type->to_string());
         return;
       }
+      if(expr_type != params[i])
+        argv[i]->set_type(params[i]);
       if(auto p = expr_type.get_if<stype::PrimeType>(); p && p->is_undetermined()) {
         auto succeed = argv[i]->set_type(params[i]);
         if(!succeed) {
@@ -2143,11 +2231,11 @@ void TypeFiller::postVisit(CallExpression &node) {
 }
 
 void TypeFiller::preVisit(MethodCallExpression &node) {
-  node.expr()->set_lside();
+  node.caller()->set_lside();
 }
 
 void TypeFiller::postVisit(MethodCallExpression &node) {
-  auto caller = node.expr()->get_type();
+  auto caller = node.caller()->get_type();
   if(!caller) {
     _recorder->tagged_report(kErrTypeNotResolved, "Method caller type not resolved");
     return;
@@ -2157,11 +2245,11 @@ void TypeFiller::postVisit(MethodCallExpression &node) {
   if(auto p = caller.get_if<stype::PrimeType>(); p && p->is_undetermined()) {
     if(p->prime() == stype::TypePrime::kInt) {
       caller = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kI32);
-      node.expr()->set_type(caller);
+      node.caller()->set_type(caller);
     }
     if(p->prime() == stype::TypePrime::kFloat) {
       caller = _type_pool->make_type<stype::PrimeType>(stype::TypePrime::kF32);
-      node.expr()->set_type(caller);
+      node.caller()->set_type(caller);
     }
   }
   // allow auto deref
@@ -2195,7 +2283,7 @@ void TypeFiller::postVisit(MethodCallExpression &node) {
     } else {
       auto tc = caller.get_if<stype::RefType>();
       auto tcr = caller_req.get_if<stype::RefType>();
-      if(tcr && tcr->inner()->is_convertible_from(*caller) && (node.expr()->is_place_mut() || !tcr->ref_is_mut())) {
+      if(tcr && tcr->inner()->is_convertible_from(*caller) && (node.caller()->is_place_mut() || !tcr->ref_is_mut())) {
         // caller = T, caller_req = &T
         // caller = mut T, caller_req = &T / &mut T
         is_valid = true;
@@ -2241,6 +2329,8 @@ void TypeFiller::postVisit(MethodCallExpression &node) {
           + expr_type->to_string());
         return;
       }
+      if(expr_type != params[i])
+        argv[i]->set_type(params[i]);
       if(auto p = expr_type.get_if<stype::PrimeType>(); p && p->is_undetermined()) {
         auto succeed = argv[i]->set_type(params[i]);
         if(!succeed) {
@@ -2719,7 +2809,15 @@ void TypeFiller::postVisit(LetStatement &node) {
       return;
     }
     // return13: allow never type.
-    bool allow_convert = type_tag->is_coercible_from(*type);
+    bool allow_convert = false;
+    if(type_tag->is_coercible_from(*type)) {
+      bool flag = node.expr_opt()->set_type(type_tag);
+      if(!flag) {
+        _recorder->tagged_report(kErrTypeNotMatch, "LetStmt type induction failed");
+        return;
+      }
+      allow_convert = true;
+    }
     if(auto r = type.get_if<stype::RefType>();
       node.expr_opt()->allow_auto_deref() && r && type_tag->is_convertible_from(*r->inner())) {
       allow_convert = true;

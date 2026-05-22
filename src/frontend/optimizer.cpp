@@ -202,13 +202,37 @@ bool constant_fold(FunctionPack& func) {
   return changed;
 }
 
+void reorder_register(FunctionPack& func) {
+  std::unordered_map<reg_id_t, reg_id_t> reorder_map;
+  reg_id_t init_cnt = (func.sret_param ? 1 : 0) + func.params.size();
+  reg_id_t cnt = init_cnt; // some -1 also cannot be substituted
+  for(const auto& block: func.basic_block_packs) {
+    for(const auto &inst: block.instructions) {
+      if(auto dst = inst->get_dst()) {
+        if(*dst >= init_cnt && !reorder_map.contains(*dst)) {
+          reorder_map.emplace(*dst, cnt++);
+        }
+      }
+    }
+  }
+  for(auto& block: func.basic_block_packs) {
+    for(auto &inst: block.instructions) {
+      if(auto dst = inst->get_dst()) {
+        if(*dst >= init_cnt) {
+          inst->set_dst(reorder_map.at(*dst));
+        }
+      }
+      inst->rename_use_reg(reorder_map);
+    }
+  }
+}
+
 void Canonicalization::optimize(FunctionPack& func) {
   eliminate_single_phi(func);
   while(eliminate_deadcode(func)) { /* loop */ }
   while(constant_fold(func)) { /* loop */ }
+  reorder_register(func);
 }
-
-
 
 std::unordered_map<reg_id_t, IrType> find_promotable_slots(FunctionPack& func) {
   std::unordered_map<reg_id_t, IrType> alloca_slots;
@@ -406,9 +430,7 @@ struct SlotRenamer {
     }
 
     // rollback
-    for(int i = 0; i < pushed_count; ++i) {
-      pop();
-    }
+    while(pushed_count--) pop();
   }
 };
 
@@ -425,8 +447,7 @@ void remove_alloca_for_slot(FunctionPack& func, reg_id_t slot) {
 }
 
 void PromoteAlloca::optimize(FunctionPack& func) {
-  if(!func.cfg.valid) func.construct_cfg();
-  if(!func.dom_tree.valid) func.construct_domtree();
+  func.construct_domtree();
 
   auto promotable = find_promotable_slots(func);
 
@@ -463,25 +484,6 @@ void PromoteAlloca::optimize(FunctionPack& func) {
   // single phi cannot pass LLVM check.
   // eliminate_single_phi(func);
 }
-
-
-
-void Resolution::optimize(FunctionPack& func) {
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 }

@@ -87,8 +87,8 @@ std::string PrimeType::IR_string() const {
     {TypePrime::kI32, "i32"}, {TypePrime::kI64, "i64"},
     {TypePrime::kU8, "i8"}, {TypePrime::kU16, "i16"},
     {TypePrime::kU32, "i32"}, {TypePrime::kU64, "i64"},
-    {TypePrime::kISize, "i32"}, {TypePrime::kUSize, "i32"},
-    {TypePrime::kStr, "i8"}, {TypePrime::kInt, "i32"}
+    {TypePrime::kISize, "i64"}, {TypePrime::kUSize, "i64"}, // target fixed
+    {TypePrime::kStr, "i8"}, {TypePrime::kInt, "i32"},
   };
   return table.at(_prime);
 }
@@ -100,7 +100,8 @@ std::size_t PrimeType::size() const {
     {TypePrime::kI32, 4}, {TypePrime::kI64, 8},
     {TypePrime::kU8, 1}, {TypePrime::kU16, 2},
     {TypePrime::kU32, 4}, {TypePrime::kU64, 8},
-    {TypePrime::kISize, 4}, {TypePrime::kUSize, 4},
+    {TypePrime::kISize, 8}, {TypePrime::kUSize, 8}, // target fixed
+    {TypePrime::kInt, 4},
   };
   return table.at(_prime);
 }
@@ -219,8 +220,23 @@ std::string StructType::IR_string() const {
 
 std::size_t StructType::size() const {
   std::size_t res = 0;
-  for(auto &[ident, tp]: _ordered_fields)
+  std::size_t max_align = 0;
+  for(auto &[ident, tp]: _ordered_fields) {
+    std::size_t cur_align = tp->align();
+    max_align = std::max(max_align, cur_align);
+    // padding up, with alignments are all 2^x
+    res = (res + cur_align - 1) & ~(cur_align - 1);
     res += tp->size();
+  }
+  res = (res + max_align - 1) & ~(max_align - 1);
+  return res;
+}
+
+std::size_t StructType::align() const {
+  std::size_t res = 0;
+  for(auto &[ident, tp]: _ordered_fields) {
+    res = std::max(res, tp->align());
+  }
   return res;
 }
 
@@ -275,10 +291,26 @@ std::string TupleType::IR_string() const {
 
 std::size_t TupleType::size() const {
   std::size_t res = 0;
-  for(auto &tp: _members)
+  std::size_t max_align = 0;
+  for(auto &tp: _members) {
+    std::size_t cur_align = tp->align();
+    max_align = std::max(max_align, cur_align);
+    // padding up, with alignments are all 2^x
+    res = (res + cur_align - 1) & ~(cur_align - 1);
     res += tp->size();
+  }
+  res = (res + max_align - 1) & ~(max_align - 1);
   return res;
 }
+
+std::size_t TupleType::align() const {
+  std::size_t res = 0;
+  for(auto &tp: _members) {
+    res = std::max(res, tp->align());
+  }
+  return res;
+}
+
 
 void SliceType::combine_hash(std::size_t &seed) const {
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));

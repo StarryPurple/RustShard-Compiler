@@ -581,7 +581,7 @@ public:
   void set_lside() { _is_lside = true; }
   // left side of assignment/method(including index) expression / right side of let statement
   bool need_addr() const { return _need_addr || _is_lside; }
-  void set_addr_needed() { _need_addr = true; }
+  void set_need_addr() { _need_addr = true; }
   bool is_place_mut() const { return _is_place_mut; }
   void set_place_mut() { _is_place_mut = true; }
   // return early. Reach the end of the expression is not an always_return expression.
@@ -591,7 +591,6 @@ public:
   // in case in IR moving ptrs, we don't do bindings.
   // let a = b(); move &res_of_func to &a is good;
   // let a = var; move &var to &a is bad.
-  virtual bool can_summon_lvalue() const { return false; }
 protected:
   sconst::ConstValPtr _cval;
 private:
@@ -737,7 +736,6 @@ public:
     std::vector<std::unique_ptr<PathExprSegment>> &&segments
   ): _segments(std::move(segments)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
 private:
   std::vector<std::unique_ptr<PathExprSegment>> _segments;
 public:
@@ -771,7 +769,13 @@ public:
     std::unique_ptr<Expression> &&expr
   ): _is_mut(is_mut), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
+  bool set_type(stype::TypePtr tp) override {
+    bool flag = TypeInfo::set_type(tp);
+    auto inn = tp.get_if<stype::RefType>()->inner();
+    if(!inn) return false;
+    flag &= _expr->set_type(inn);
+    return flag;
+  }
 private:
   bool _is_mut;
   std::unique_ptr<Expression> _expr;
@@ -786,7 +790,6 @@ public:
     std::unique_ptr<Expression> &&expr
   ): _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
 public:
@@ -800,6 +803,11 @@ public:
     std::unique_ptr<Expression> &&expr
   ): _oper(oper), _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool set_type(stype::TypePtr tp) override {
+    bool flag = TypeInfo::set_type(tp);
+    flag &= _expr->set_type(tp);
+    return flag;
+  }
 private:
   Operator _oper;
   std::unique_ptr<Expression> _expr;
@@ -817,6 +825,12 @@ public:
   std::unique_ptr<Expression> &&expr2
 ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool set_type(stype::TypePtr tp) override {
+    bool flag = TypeInfo::set_type(tp);
+    flag &= _expr1->set_type(tp);
+    flag &= _expr2->set_type(tp);
+    return flag;
+  }
 private:
   Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
@@ -835,6 +849,7 @@ public:
   std::unique_ptr<Expression> &&expr2
 ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  // evaluated as boolean type. no special type set.
 private:
   Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
@@ -885,6 +900,7 @@ public:
     std::unique_ptr<Expression> &&expr2
   ): _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  // evaluated as unit type. no special type set.
 private:
   std::unique_ptr<Expression> _expr1, _expr2;
 public:
@@ -900,6 +916,7 @@ public:
     std::unique_ptr<Expression> &&expr2
   ): _oper(oper), _expr1(std::move(expr1)), _expr2(std::move(expr2)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  // evaluated as unit type. no special type set.
 private:
   Operator _oper;
   std::unique_ptr<Expression> _expr1, _expr2;
@@ -918,7 +935,11 @@ public:
     std::unique_ptr<Expression> expr
   ): _expr(std::move(expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
+  bool set_type(stype::TypePtr tp) override {
+    bool flag = TypeInfo::set_type(tp);
+    flag &= _expr->set_type(tp);
+    return flag;
+  }
 private:
   std::unique_ptr<Expression> _expr;
 public:
@@ -931,6 +952,7 @@ public:
     std::unique_ptr<ArrayElements> &&elements_opt
   ): _elements_opt(std::move(elements_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool set_type(stype::TypePtr tp) override; // defined several lines and classes later
 private:
   std::unique_ptr<ArrayElements> _elements_opt;
 public:
@@ -973,6 +995,20 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(len_expr, _len_expr)
 };
 
+inline bool ArrayExpression::set_type(stype::TypePtr tp) {
+  bool flag = TypeInfo::set_type(tp);
+  auto inner_tp = tp.get<stype::ArrayType>()->inner();
+  if(auto e = dynamic_cast<ExplicitArrayElements*>(_elements_opt.get())) {
+    for(auto &elem: e->expr_list()) {
+      flag &= elem->set_type(inner_tp);
+    }
+  } else if(auto r = dynamic_cast<RepeatedArrayElements*>(_elements_opt.get())) {
+    flag &= r->val_expr()->set_type(inner_tp);
+  }
+  return flag;
+}
+
+
 class IndexExpression : public ExpressionWithoutBlock {
 public:
   IndexExpression(
@@ -981,7 +1017,6 @@ public:
   ): _expr_obj(std::move(expr_obj)), _expr_index(std::move(expr_index)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
   bool allow_auto_deref() const override { return true; }
-  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr_obj;
   std::unique_ptr<Expression> _expr_index;
@@ -1128,20 +1163,20 @@ public:
 class MethodCallExpression : public ExpressionWithoutBlock {
 public:
   MethodCallExpression(
-    std::unique_ptr<Expression> &&expr,
+    std::unique_ptr<Expression> &&caller,
     std::unique_ptr<PathExprSegment> &&segment,
     std::unique_ptr<CallParams> &&params_opt
-  ): _expr(std::move(expr)), _segment(std::move(segment)),
+  ): _caller(std::move(caller)), _segment(std::move(segment)),
   _params_opt(std::move(params_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  // no, this shall not be possible to be an lvalue
+  // no, this shall not be possible to be a lvalue
   // bool can_summon_lvalue() const override { return true; }
 private:
-  std::unique_ptr<Expression> _expr;
+  std::unique_ptr<Expression> _caller;
   std::unique_ptr<PathExprSegment> _segment;
   std::unique_ptr<CallParams> _params_opt;
 public:
-  EXPOSE_FIELD_CONST_REFERENCE(expr, _expr)
+  EXPOSE_FIELD_CONST_REFERENCE(caller, _caller)
   EXPOSE_FIELD_CONST_REFERENCE(segment, _segment)
   EXPOSE_FIELD_CONST_REFERENCE(params_opt, _params_opt)
 };
@@ -1154,7 +1189,6 @@ public:
   ): _expr(std::move(expr)), _ident(ident) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
   bool allow_auto_deref() const override { return true; }
-  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr;
   StringT _ident;
@@ -1306,6 +1340,7 @@ public:
     std::unique_ptr<Statements> &&stmts_opt
   ): _stmts_opt(std::move(stmts_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
+  bool set_type(stype::TypePtr tp) override; // lines later
 private:
   std::unique_ptr<Statements> _stmts_opt;
 public:
@@ -1332,6 +1367,19 @@ public:
   EXPOSE_FIELD_CONST_REFERENCE(stmts, _stmts)
   EXPOSE_FIELD_CONST_REFERENCE(expr_opt, _expr_opt)
 };
+
+inline bool FunctionBodyExpr::set_type(stype::TypePtr tp) {
+  bool flag = TypeInfo::set_type(tp);
+  for(auto &ret: _func_returns) {
+    if(ret->expr_opt()) {
+      flag &= ret->expr_opt()->set_type(tp);
+    }
+  }
+  if(_stmts_opt && _stmts_opt->expr_opt()) {
+    flag &= _stmts_opt->expr_opt()->set_type(tp);
+  }
+  return flag;
+}
 
 class Statement : public BasicNode {
 public:
@@ -1412,7 +1460,6 @@ public:
   ): _block_expr(std::move(block_expr)) {}
   bool is_predict_without_value() const override { return true; }
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<BlockExpression> _block_expr;
 public:
@@ -1426,7 +1473,6 @@ public:
     std::unique_ptr<BlockExpression> &&block_expr
   ): _cond(std::move(cond)), _block_expr(std::move(block_expr)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Conditions> _cond;
   std::unique_ptr<BlockExpression> _block_expr;
@@ -1461,7 +1507,6 @@ public:
     return true;
   }
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Conditions> _cond;
   std::unique_ptr<BlockExpression> _block_expr;
@@ -1495,7 +1540,6 @@ public:
     std::unique_ptr<MatchArms> &&match_arms_opt
   ): _expr(std::move(expr)), _match_arms_opt(std::move(match_arms_opt)) {}
   void accept(BasicVisitor &visitor) override { visitor.visit(*this); }
-  bool can_summon_lvalue() const override { return true; }
 private:
   std::unique_ptr<Expression> _expr; // not StructExpression
   std::unique_ptr<MatchArms> _match_arms_opt;

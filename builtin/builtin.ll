@@ -1,6 +1,7 @@
 @.str = private unnamed_addr constant [3 x i8] c"%d\00", align 1
 @.str.1 = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
 
+declare void @memcpy(ptr, ptr, i64)
 declare i32 @printf(ptr, ...)
 declare i32 @scanf(ptr, ...)
 

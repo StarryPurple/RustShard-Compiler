@@ -28,15 +28,6 @@ public:
   static void optimize(FunctionPack& func);
 };
 
-// SSA-destruction.
-class Resolution {
-public:
-  static void optimize(IrPack& ir) {
-    for(auto &func: ir.function_packs) optimize(func);
-  }
-  static void optimize(FunctionPack& func);
-};
-
 
 }
 

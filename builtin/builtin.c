@@ -18,7 +18,6 @@ int getInt() {
   return n;
 }
 
-
 void exit(int) {
 
 }

@@ -78,3 +78,10 @@ optimization: integer literal constant integrated into BinaryOperations as insta
 That saves stack space. Or use "add 0 val" (+ store) instead of alloca + store (+ load)
 
 - comprehensive 15(?): CallExpr and MethodCallExpr cannot be lvalue.
+
+// IR Optimization
+
+When you pass params indirectly by pointers, remember to deep copy those value-passed args.
+Do not simply turn them to pointers. Clone the value.
+
+Be cautious as bitmap boundary.

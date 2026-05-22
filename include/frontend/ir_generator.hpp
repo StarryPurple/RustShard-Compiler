@@ -35,9 +35,9 @@ public:
   void preVisit(ast::MethodCallExpression& node) override;
   void postVisit(ast::MethodCallExpression& node) override;
 
-  void preVisit(ast::LetStatement& node) override; // set addr needed
-  void postVisit(ast::LetStatement& node) override;
+  void visit(ast::LetStatement& node) override;
 
+  void preVisit(ast::AssignmentExpression& node) override;
   void postVisit(ast::AssignmentExpression& node) override;
 
   void preVisit(ast::BorrowExpression& node) override;
@@ -54,6 +54,7 @@ public:
   void visit(ast::CompoundAssignmentExpression& node) override;
   void preVisit(ast::FieldExpression& node) override;
   void postVisit(ast::FieldExpression& node) override;
+  void preVisit(ast::GroupedExpression& node) override;
   void postVisit(ast::GroupedExpression& node) override;
   void visit(ast::StructExpression& node) override;
   void visit(ast::ArrayExpression& node) override;
@@ -69,6 +70,7 @@ public:
 
   void postVisit(ast::BreakExpression& node) override;
   void postVisit(ast::ContinueExpression& node) override;
+  void preVisit(ast::ReturnExpression& node) override;
   void postVisit(ast::ReturnExpression& node) override;
 
   void visit(ast::LazyBooleanExpression& node) override;
@@ -94,7 +96,14 @@ private:
   std::unordered_map<StringT, std::string> _string_literal_pool; // StringLiteral -> allocated global variable name
   std::vector<FunctionContext> _contexts;
 
-  std::string use_string_literal(StringT literal);
+  std::string use_string_literal(StringT literal) {
+    if(auto it = _string_literal_pool.find(literal); it != _string_literal_pool.end())
+      return it->second;
+    std::string ident = ".str" + std::to_string(_string_literal_pool.size());
+    _string_literal_pool.emplace(literal, ident);
+    _ir_pack.static_packs.push_back(StaticPack{.ident = ident, .literal = literal});
+    return ident;
+  }
 
   static std::string mangle_method(stype::TypePtr impl_type, const std::string& func_name) {
     // doesn't allow to start as number.
@@ -107,14 +116,90 @@ private:
   }
 
   // returns ptr_id
-  reg_id_t store_into_memory(reg_id_t obj_id, IrType obj_ty);
+  reg_id_t store_into_memory(reg_id_t obj_id, IrType obj_ty, ast::node_id_t node_id) {
+    auto ptr_id = _contexts.back().get_res_ptr_id(node_id, obj_ty);
+    StoreInst lineS;
+    lineS.ptr = Operand::make_reg(ptr_id, wrap_ref(obj_ty));
+    lineS.value = Operand::make_reg(obj_id, obj_ty);
+    _contexts.back().push_instruction(std::move(lineS));
+    return ptr_id;
+  }
+
   // returns obj_id
-  reg_id_t load_from_memory(reg_id_t ptr_id, IrType obj_ty);
+  reg_id_t load_from_memory(reg_id_t ptr_id, IrType obj_ty) {
+    auto obj_id = _contexts.back().new_reg_id();
+    LoadInst lineL;
+    lineL.dst = obj_id;
+    lineL.ptr = Operand::make_reg(ptr_id, wrap_ref(obj_ty));
+    lineL.load_type = obj_ty;
+    _contexts.back().push_instruction(std::move(lineL));
+    // _contexts.back().add_reg_hint_from(obj_id, ptr_id, "value");
+    return obj_id;
+  }
+
+  std::optional<reg_id_t> inplace_at(ast::node_id_t node_id) {
+    auto &map = _contexts.back().inplace_node_ptr_map;
+    if(auto it = map.find(node_id); it != map.end()) {
+      return it->second;
+    }
+    return std::nullopt;
+  }
+
+  // With dst and src holding *T ptrs, do *dst <- *src.
+  // Will check whether dst == src. At this case, do nothing.
+  //
+  // As a special circumstance, the following usage:
+  //   (already have src, irty)
+  //   dst = new_reg; dst = alloca irty;
+  //   deep_copy(dst, src, irty);
+  // is equivalent to
+  //   tmp = load_from_memory(src, irty);
+  //   dst = store_into_memory(tmp, irty); // dst newly allocated here.
+  // but with no internal object (tmp) in registers.
+  // load_from_memory/store_into_memory is designed to allocate one reg,
+  // so the equivalence does not hold without "dst = new_reg" line.
+  void deep_copy(reg_id_t dst, reg_id_t src, IrType irty) {
+    if(dst == src) return;
+    auto ptrTy = wrap_ref(irty);
+    if(irty.type()->need_indirect_pass()) {
+      // call void @memcpy(ptr %dst, ptr %src, i64 %size, i1 false)
+      CallInst lineC;
+      lineC.ret_type = IrType(_type_pool->make_unit());
+      lineC.func_name = "memcpy";
+      lineC.args.push_back(Operand::make_reg(dst, ptrTy));
+      lineC.args.push_back(Operand::make_reg(src, ptrTy));
+      lineC.args.push_back(Operand::make_imm(irty.size(), IrType(_type_pool->make_i64())));
+      _contexts.back().push_instruction(std::move(lineC));
+    } else {
+      auto obj_id = _contexts.back().new_reg_id();
+      LoadInst lineL;
+      lineL.dst = obj_id;
+      lineL.ptr = Operand::make_reg(src, ptrTy);
+      lineL.load_type = irty;
+      _contexts.back().push_instruction(std::move(lineL));
+
+      StoreInst lineS;
+      lineS.ptr = Operand::make_reg(dst, ptrTy);
+      lineS.value = Operand::make_reg(obj_id, irty);
+      _contexts.back().push_instruction(std::move(lineS));
+    }
+  }
+
+
+  // Clone the value stored in src(T*) to another static allocated space.
+  // Return the addr of that space.
+  reg_id_t clone_to_static(reg_id_t src, IrType irty) {
+    reg_id_t dst = _contexts.back().static_allocation(irty);
+    deep_copy(dst, src, irty);
+    return dst;
+  }
+
 
   struct FunctionContext {
     bool is_unreachable = false;
     reg_id_t _next_reg_id = 0;
     block_id_t _next_label_hint_id = 0;
+    reg_id_t _static_alloc_count = 0;
     std::vector<BasicBlockPack> basic_block_packs;
     std::vector<std::unique_ptr<Instruction>> instructions;
     // result of node with this node id is in which register
@@ -135,13 +220,24 @@ private:
     // for in-place construction.
     // mapping: from node id to the given value ptr id.
     // Now only urges arrays to construct in-place.
-    std::unordered_map<ast::node_id_t, reg_id_t> in_place_node_ptr_map;
-
-    // used at PathInExpr tail sret.
-    std::optional<std::pair<std::string, reg_id_t>> sret_target;
+    std::unordered_map<ast::node_id_t, reg_id_t> inplace_node_ptr_map;
 
     reg_id_t new_reg_id() { return _next_reg_id++; }
     hint_id_t new_label_hint_id() { return _next_label_hint_id++; }
+
+    // if not assigned, alloc one via @new_reg_id.
+    // Must be an expression node. The irtype is the object type (not the pointer)
+    reg_id_t get_res_ptr_id(ast::node_id_t node_id, IrType irtype) {
+      if(auto it = inplace_node_ptr_map.find(node_id); it != inplace_node_ptr_map.end()) {
+        return it->second;
+      }
+      reg_id_t res_ptr_id = new_reg_id();
+      AllocaInst lineA;
+      lineA.type = irtype;
+      lineA.dst = res_ptr_id;
+      push_instruction(std::move(lineA));
+      return res_ptr_id;
+    }
 
     void init_and_start_new_block(Label& label) {
       is_unreachable = false;
@@ -170,6 +266,25 @@ private:
       auto inst_ptr = std::make_unique<Inst>(std::forward<Inst>(inst));
       // auto raw_ptr = inst_ptr.get();
       instructions.emplace_back(std::move(inst_ptr));
+    }
+
+    reg_id_t static_allocation(IrType irty) {
+      // Add this allocation to the beginning of the function
+      // to avoid multiple stack usage in loops.
+      reg_id_t addr_id = new_reg_id();
+      AllocaInst lineA;
+      lineA.dst = addr_id;
+      lineA.type = irty;
+
+      // Add to a place more global than current block.
+      // The entry block is the only always-reliable helper.
+      auto &instrs
+         = (basic_block_packs.size() == 1)
+         ? instructions : basic_block_packs.front().instructions;
+      // For prettiness, put them at the beginning.
+      instrs.insert(instrs.begin() + (_static_alloc_count++), std::make_unique<AllocaInst>(std::move(lineA)));
+
+      return addr_id;
     }
 
     std::pair<int, IrType> find_variable(const StringT& ident) {

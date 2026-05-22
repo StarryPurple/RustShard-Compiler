@@ -14,14 +14,15 @@ public:
   IrType() = default;
   explicit IrType(stype::TypePtr type): _type(std::move(type)) {}
   stype::TypePtr type() const { return _type; }
-  std::size_t size() const { return _type ? 0 : _type->size(); }
+  std::size_t size() const {
+    if(!_type) {
+      throw std::runtime_error("Evaluating size of empty IrType");
+    }
+    return _type->size();
+  }
 
   IrType get_ref(stype::TypePool* pool) {
     return IrType(pool->make_type<stype::RefType>(_type, true));
-  }
-
-  bool is_void(stype::TypePool* pool) const {
-    return _type == pool->make_never() || _type == pool->make_unit();
   }
 
   std::string to_str() const {
@@ -68,13 +69,19 @@ struct Operand {
       kind = new_op.kind;
     }
   }
+
+  void rename_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) {
+    if(kind == OperandKind::kVirtualReg && reorder_map.contains(value)) {
+      value = reorder_map.at(value);
+    }
+  }
 };
 
 struct HintContext {
   const std::unordered_map<reg_id_t, std::string>* hints = nullptr;
 
   std::string hinted_reg(reg_id_t reg) const {
-    std::string res = "%r" + std::to_string(reg);
+    std::string res = "%" + std::to_string(reg);
     if constexpr(kEnableVarHints) {
       if(hints) {
         auto it = hints->find(reg);
@@ -118,6 +125,8 @@ struct Instruction {
 
   // replace all reg usages
   virtual void replace_use(reg_id_t old_reg, Operand new_op) {}
+
+  virtual void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) {}
 };
 
 // %x = alloca Ty
@@ -146,6 +155,10 @@ struct StoreInst: Instruction {
     value.replace_reg(old_reg, new_op);
     ptr.replace_reg(old_reg, new_op);
   }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    value.rename_reg(reorder_map);
+    ptr.rename_reg(reorder_map);
+  }
 };
 
 // %dst = load Ty, Ty* %ptr
@@ -164,6 +177,9 @@ struct LoadInst: Instruction {
   }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     ptr.replace_reg(old_reg, new_op);
+  }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    ptr.rename_reg(reorder_map);
   }
 };
 
@@ -190,6 +206,10 @@ struct BinaryOpInst: Instruction {
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     lhs.replace_reg(old_reg, new_op);
     rhs.replace_reg(old_reg, new_op);
+  }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    lhs.rename_reg(reorder_map);
+    rhs.rename_reg(reorder_map);
   }
 };
 
@@ -220,6 +240,11 @@ struct CallInst: Instruction {
       arg.replace_reg(old_reg, new_op);
     }
   }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    for(auto& arg: args) {
+      arg.rename_reg(reorder_map);
+    }
+  }
 };
 
 // ret Ty %0 / ret void
@@ -236,6 +261,10 @@ struct ReturnInst: Instruction {
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     if(ret_val)
       ret_val->replace_reg(old_reg, new_op);
+  }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    if(ret_val)
+      ret_val->rename_reg(reorder_map);
   }
 };
 
@@ -265,6 +294,12 @@ struct GEPInst: Instruction {
       idx.replace_reg(old_reg, new_op);
     }
   }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    ptr.rename_reg(reorder_map);
+    for(auto& idx: indices) {
+      idx.rename_reg(reorder_map);
+    }
+  }
 };
 
 // like static cast, casts value to value
@@ -284,6 +319,9 @@ struct CastInst: Instruction {
   }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     src.replace_reg(old_reg, new_op);
+  }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    src.rename_reg(reorder_map);
   }
 
   std::string cast_op() const {
@@ -351,6 +389,8 @@ struct Label {
   Label(LabelHint _hint, hint_id_t _hint_id):
     block_id(-1), hint(_hint), hint_id(_hint_id) {}
 
+  auto operator<=>(const Label&) const = default;
+
   std::string to_str() const {
     if(block_id == -1) {
       throw std::runtime_error("Label id remains invalid (-1).");
@@ -388,6 +428,9 @@ struct CondBranchInst: Instruction {
   }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     cond.replace_reg(old_reg, new_op);
+  }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    cond.rename_reg(reorder_map);
   }
 };
 
@@ -432,6 +475,16 @@ struct InsertValueInst: Instruction {
       }
     }
   }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    for(auto& op: operands) {
+      op.rename_reg(reorder_map);
+    }
+    for(std::size_t i = 0; i + 1 < interval_regs.size(); ++i) {
+      if(reorder_map.contains(interval_regs[i])) {
+        interval_regs[i] = reorder_map.at(interval_regs[i]);
+      }
+    }
+  }
 };
 
 // %dst = phi Ty [val1/%res1, %label1], [val2/%res2, %label2], ..., [valn/%resn, %labeln]
@@ -440,7 +493,7 @@ struct PhiInst: Instruction {
     Operand oper;
     Label label;
   };
-  reg_id_t original_slot = -2; // for PromoteAlloca
+  reg_id_t original_slot = -2; // for PromoteAlloca. The original value shall not matter.
   reg_id_t dst;
   IrType type;
   std::vector<Income> incoming;
@@ -458,6 +511,11 @@ struct PhiInst: Instruction {
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     for(auto& [op, _label]: incoming) {
       op.replace_reg(old_reg, new_op);
+    }
+  }
+  void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
+    for(auto& [op, _label]: incoming) {
+      op.rename_reg(reorder_map);
     }
   }
 };

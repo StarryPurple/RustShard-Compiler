@@ -49,7 +49,6 @@ public:
   // uses dynamic_pointer_cast.
   template <class T> requires std::derived_from<T, ExprType>
   std::shared_ptr<T> get_if() const { return std::dynamic_pointer_cast<T>(_ptr); } // NOLINT
-
 };
 
 struct TypePath {
@@ -118,12 +117,13 @@ public:
   virtual std::string to_string() const = 0;
   virtual std::string IR_string() const { throw std::runtime_error("Unimplemented IR string"); }
 
-  // Is it really needed?
+  // Is it really needed? Yes.
   virtual std::size_t size() const { throw std::runtime_error("Unimplemented type size"); }
+  virtual std::size_t align() const { throw std::runtime_error("Invalid call of type alignment"); }
 
   // whether this_tp <- from_tp is allowed.
   // 1. tt = ft
-  // 2. i32... <- NatI, u32... <- NatI, i32... <- NegI, f32... <- Float
+  // 2. kInt -> integer, kFloat -> float
   // 3. recursive
   bool is_convertible_from(const ExprType &other) const {
     auto lhs = remove_alias(), rhs = other.remove_alias();
@@ -140,7 +140,22 @@ public:
     return lhs->convertible_impl(*rhs);
   }
 
-  virtual bool is_undetermined() const { return false; }
+  virtual bool is_undetermined() const {
+    throw std::runtime_error("Invalid checking: ExprType::is_undetermined");
+  }
+  virtual bool need_indirect_pass() const {
+    throw std::runtime_error("Invalid checking: ExprType::nedd_indirect_pass");
+  }
+
+  // whether this is unit type.
+  virtual bool is_unit() const { return false; }
+  // whether this is never type.
+  bool is_never() const { return _kind == TypeKind::kNever; }
+  // helper: unit || never
+  bool is_void() const {
+    return is_unit() || is_never();
+  }
+
 protected:
   TypeKind _kind;
 
@@ -176,10 +191,12 @@ public:
   bool is_undetermined() const override {
     return _prime == TypePrime::kInt || _prime == TypePrime::kFloat;
   }
+  bool need_indirect_pass() const override { return _prime == TypePrime::kStr; }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
   std::size_t size() const override;
+  std::size_t align() const override { return size(); }
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -197,6 +214,8 @@ public:
   std::string to_string() const override;
   std::string IR_string() const override;
   std::size_t size() const override;
+  std::size_t align() const override { return _inner->align(); }
+  bool need_indirect_pass() const override { return true; }
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -215,6 +234,8 @@ public:
   std::string to_string() const override;
   std::string IR_string() const override;
   std::size_t size() const override;
+  std::size_t align() const override { return 8; } // target fixed
+  bool need_indirect_pass() const override { return false; }
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -243,6 +264,8 @@ public:
   std::string to_string() const override;
   std::string IR_string() const override;
   std::size_t size() const override;
+  std::size_t align() const override;
+  bool need_indirect_pass() const override { return true; }
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -258,10 +281,14 @@ public:
   explicit TupleType(std::vector<TypePtr> &&members)
   : ExprType(TypeKind::kTuple), _members(std::move(members)) {}
   const std::vector<TypePtr>& members() const { return _members; }
+  std::size_t member_num() const { return _members.size(); }
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
   std::size_t size() const override;
+  std::size_t align() const override;
+  bool is_unit() const override { return _members.empty(); }
+  bool need_indirect_pass() const override { return !is_unit(); }
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
@@ -476,6 +503,9 @@ public:
   }
   TypePtr make_i32() {
     return make_type<PrimeType>(TypePrime::kI32);
+  }
+  TypePtr make_i64() {
+    return make_type<PrimeType>(TypePrime::kI64);
   }
   TypePtr make_f32() {
     return make_type<PrimeType>(TypePrime::kF32);
