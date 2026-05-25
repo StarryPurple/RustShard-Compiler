@@ -120,6 +120,7 @@ public:
   // Is it really needed? Yes.
   virtual std::size_t size() const { throw std::runtime_error("Unimplemented type size"); }
   virtual std::size_t align() const { throw std::runtime_error("Invalid call of type alignment"); }
+  virtual offset_t offset_at(std::size_t index) { throw std::runtime_error("Invalid use of offset"); }
 
   // whether this_tp <- from_tp is allowed.
   // 1. tt = ft
@@ -215,6 +216,7 @@ public:
   std::string IR_string() const override;
   std::size_t size() const override;
   std::size_t align() const override { return _inner->align(); }
+  offset_t offset_at(std::size_t index) override { return _inner->size() * index; }
   bool need_indirect_pass() const override { return true; }
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -233,7 +235,7 @@ public:
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
-  std::size_t size() const override;
+  std::size_t size() const override { return 8; }
   std::size_t align() const override { return 8; } // target fixed
   bool need_indirect_pass() const override { return false; }
 protected:
@@ -255,6 +257,17 @@ public:
       _field_orders.emplace(_ordered_fields[i].first, std::pair(i, _ordered_fields[i].second));
       _fields.emplace(_ordered_fields[i].first, _ordered_fields[i].second);
     }
+
+    _size = 0; _align = 0;
+    for(auto &[ident, tp]: _ordered_fields) {
+      std::size_t cur_align = tp->align();
+      _align = std::max(_align, cur_align);
+      // padding up, with alignments are all 2^x
+      _size = (_size + cur_align - 1) & ~(cur_align - 1);
+      _offsets.push_back(_size);
+      _size += tp->size();
+    }
+    _size = (_size + _align - 1) & ~(_align - 1);
   }
   StringT ident() const { return _ident; }
   const auto& fields() const { return _fields; }
@@ -263,8 +276,9 @@ public:
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::string IR_string() const override;
-  std::size_t size() const override;
-  std::size_t align() const override;
+  std::size_t size() const override { return _size; }
+  std::size_t align() const override { return _align; }
+  offset_t offset_at(std::size_t index) override { return _offsets[index]; }
   bool need_indirect_pass() const override { return true; }
 protected:
   bool equals_impl(const ExprType &other) const override;
@@ -274,6 +288,9 @@ private:
   std::map<StringT, TypePtr> _fields;
   std::vector<std::pair<StringT, TypePtr>> _ordered_fields;
   std::unordered_map<StringT, std::pair<int, TypePtr>> _field_orders;
+
+  std::vector<offset_t> _offsets;
+  std::size_t _size, _align;
 };
 
 class TupleType : public ExprType {

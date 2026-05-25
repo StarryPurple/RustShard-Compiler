@@ -23,6 +23,9 @@ namespace ir {
   using block_id_t = int;
   using hint_id_t = int;
 }
+
+using imm_val_t = std::int64_t;
+using offset_t = std::int32_t;
 }
 
 #endif // RUST_SHARD_COMMON_H

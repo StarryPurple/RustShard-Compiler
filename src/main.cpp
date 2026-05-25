@@ -5,9 +5,9 @@
 #include "frontend/lexer.hpp"
 #include "frontend/parser.hpp"
 #include "frontend/syntax_check.hpp"
-#include "frontend/ir_generator.hpp"
-#include "frontend/optimizer.hpp"
-#include "common/printer.hpp"
+#include "../include/ir/ir_generator.hpp"
+#include "../include/ir/optimizer.hpp"
+#include "../include/ir/ir_printer.hpp"
 
 namespace fs = std::filesystem;
 

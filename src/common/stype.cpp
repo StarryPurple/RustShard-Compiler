@@ -172,10 +172,6 @@ std::string RefType::IR_string() const {
   return _inner->IR_string() + "*";
 }
 
-std::size_t RefType::size() const {
-  return 4;
-}
-
 void StructType::combine_hash(std::size_t &seed) const {
   static constexpr std::hash<StringT> hasher;
   combine_hash_impl(seed, static_cast<std::size_t>(_kind));
@@ -216,28 +212,6 @@ std::string StructType::to_string() const {
 
 std::string StructType::IR_string() const {
   return "%" + _ident;
-}
-
-std::size_t StructType::size() const {
-  std::size_t res = 0;
-  std::size_t max_align = 0;
-  for(auto &[ident, tp]: _ordered_fields) {
-    std::size_t cur_align = tp->align();
-    max_align = std::max(max_align, cur_align);
-    // padding up, with alignments are all 2^x
-    res = (res + cur_align - 1) & ~(cur_align - 1);
-    res += tp->size();
-  }
-  res = (res + max_align - 1) & ~(max_align - 1);
-  return res;
-}
-
-std::size_t StructType::align() const {
-  std::size_t res = 0;
-  for(auto &[ident, tp]: _ordered_fields) {
-    res = std::max(res, tp->align());
-  }
-  return res;
 }
 
 void TupleType::combine_hash(std::size_t &seed) const {

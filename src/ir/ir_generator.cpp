@@ -1,4 +1,4 @@
-#include "frontend/ir_generator.hpp"
+#include "ir/ir_generator.hpp"
 
 #include <algorithm>
 #include <format>

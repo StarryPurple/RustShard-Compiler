@@ -5,7 +5,7 @@
 #include <cstring>
 
 #include "frontend/syntax_check.hpp"
-#include "common/ir_instruction.hpp"
+#include "ir_instruction.hpp"
 #include "common/common.hpp"
 
 namespace rshard::ir {
@@ -72,6 +72,8 @@ struct FunctionPack {
   void construct_domtree();
 
   void reorder_reg_ids();
+  void instr_renumbering(); // start from 1. 0 reserved for param def.
+  Instruction* get_instruction(instr_no_t instr_no);
 };
 
 struct IrPack {

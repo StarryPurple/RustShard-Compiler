@@ -1,4 +1,4 @@
-#include "common/ir_pack.hpp"
+#include "ir/ir_pack.hpp"
 
 namespace rshard::ir {
 void FunctionPack::update_block_ids() {
@@ -204,7 +204,50 @@ void FunctionPack::construct_domtree() {
 }
 
 void FunctionPack::reorder_reg_ids() {
+  std::unordered_map<reg_id_t, reg_id_t> reorder_map;
+  reg_id_t init_cnt = (sret_param ? 1 : 0) + params.size();
+  reg_id_t cnt = init_cnt; // some -1 also cannot be substituted
+  for(const auto& block: basic_block_packs) {
+    for(const auto& inst: block.instructions) {
+      if(auto dst = inst->get_dst()) {
+        if(*dst >= init_cnt && !reorder_map.contains(*dst)) {
+          reorder_map.emplace(*dst, cnt++);
+        }
+      }
+    }
+  }
+  for(auto& block: basic_block_packs) {
+    for(auto& inst: block.instructions) {
+      if(auto dst = inst->get_dst()) {
+        if(*dst >= init_cnt) {
+          inst->set_dst(reorder_map.at(*dst));
+        }
+      }
+      inst->rename_use_reg(reorder_map);
+    }
+  }
+}
 
+void FunctionPack::instr_renumbering() {
+  instr_no_t idx = 0;
+  for(auto& bb: basic_block_packs) {
+    for(auto& inst: bb.instructions) {
+      inst->instr_no = ++idx;
+    }
+  }
+}
+
+Instruction* FunctionPack::get_instruction(instr_no_t instr_no) {
+  auto it = std::upper_bound(basic_block_packs.begin(), basic_block_packs.end(), instr_no,
+    [](size_t no, const BasicBlockPack& bb) {
+        return no < bb.instructions.front()->instr_no;
+    });
+  if (it == basic_block_packs.begin()) return nullptr;
+  --it;
+
+  size_t offset = instr_no - it->instructions.front()->instr_no;
+  if (offset >= it->instructions.size()) return nullptr;
+  return it->instructions[offset].get();
 }
 
 

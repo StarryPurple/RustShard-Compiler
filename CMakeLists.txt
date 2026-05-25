@@ -10,15 +10,18 @@ add_library(builtin_lib STATIC
 
 add_library(frontend_lib STATIC
     src/common/stype.cpp
-    src/common/ir_pack.cpp
+    src/ir/ir_pack.cpp
     src/frontend/lexer.cpp
     src/frontend/parser.cpp
     src/frontend/recursive_visitor.cpp
     src/frontend/syntax_check.cpp
     src/frontend/defs.cpp
     src/frontend/constant.cpp
-    src/frontend/ir_generator.cpp
-    src/frontend/optimizer.cpp
+    src/ir/ir_generator.cpp
+    src/ir/optimizer.cpp
+    src/backend/asm_generator.cpp
+    src/backend/asm_printer.cpp
+    src/backend/regalloc.cpp
 )
 
 target_include_directories(frontend_lib PUBLIC

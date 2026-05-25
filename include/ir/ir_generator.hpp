@@ -2,7 +2,7 @@
 #define RUST_SHARD_IR_GENERATOR_H
 
 #include <filesystem>
-#include "common/ir_pack.hpp"
+#include "ir_pack.hpp"
 
 namespace rshard::ir {
 // uses some stype TypePtr. Please ensure that the type pool is still valid.

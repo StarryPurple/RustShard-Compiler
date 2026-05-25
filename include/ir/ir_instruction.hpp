@@ -14,12 +14,8 @@ public:
   IrType() = default;
   explicit IrType(stype::TypePtr type): _type(std::move(type)) {}
   stype::TypePtr type() const { return _type; }
-  std::size_t size() const {
-    if(!_type) {
-      throw std::runtime_error("Evaluating size of empty IrType");
-    }
-    return _type->size();
-  }
+  std::size_t size() const { return _type->size(); }
+  std::size_t align() const { return _type->align(); }
 
   IrType get_ref(stype::TypePool* pool) {
     return IrType(pool->make_type<stype::RefType>(_type, true));
@@ -46,32 +42,38 @@ enum class OperandKind {
 
 struct Operand {
   OperandKind kind;
-  std::int64_t value;
+  imm_val_t value;
   IrType type;
 
   static Operand make_reg(reg_id_t id, IrType type) {
     return Operand{.kind = OperandKind::kVirtualReg, .value = id, .type = type};
   }
 
-  static Operand make_imm(std::int64_t val, IrType type) {
+  static Operand make_imm(imm_val_t val, IrType type) {
     return Operand{.kind = OperandKind::kImmediate, .value = val, .type = type};
   }
 
+  bool is_imm() const { return kind == OperandKind::kImmediate; }
+  bool is_reg() const { return kind == OperandKind::kVirtualReg; }
+
+  reg_id_t as_reg() const { return static_cast<reg_id_t>(value); }
+  imm_val_t as_imm() const { return value; }
+
   void set_reg(reg_id_t id) {
-    if(kind == OperandKind::kVirtualReg) {
+    if(is_reg()) {
       value = id;
     }
   }
 
   void replace_reg(reg_id_t old_reg, Operand new_op) {
-    if(kind == OperandKind::kVirtualReg && value == old_reg) {
+    if(is_reg() && value == old_reg) {
       value = new_op.value;
       kind = new_op.kind;
     }
   }
 
   void rename_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) {
-    if(kind == OperandKind::kVirtualReg && reorder_map.contains(value)) {
+    if(is_reg() && reorder_map.contains(value)) {
       value = reorder_map.at(value);
     }
   }
@@ -110,7 +112,11 @@ struct HintContext {
   }
 };
 
+using instr_no_t = std::uint32_t;
+
 struct Instruction {
+  instr_no_t instr_no{};
+
   Instruction() = default;
   virtual ~Instruction() = default;
 
@@ -146,8 +152,8 @@ struct StoreInst: Instruction {
 
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
-    if(value.kind == OperandKind::kVirtualReg) uses.push_back(value.value);
-    if(ptr.kind == OperandKind::kVirtualReg) uses.push_back(ptr.value);
+    if(value.is_reg()) uses.push_back(value.value);
+    if(ptr.is_reg()) uses.push_back(ptr.value);
     return uses;
   }
 
@@ -172,7 +178,7 @@ struct LoadInst: Instruction {
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
-    if(ptr.kind == OperandKind::kVirtualReg) uses.push_back(ptr.value);
+    if(ptr.is_reg()) uses.push_back(ptr.value);
     return uses;
   }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
@@ -199,8 +205,8 @@ struct BinaryOpInst: Instruction {
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
-    if(lhs.kind == OperandKind::kVirtualReg) uses.push_back(lhs.value);
-    if(rhs.kind == OperandKind::kVirtualReg) uses.push_back(rhs.value);
+    if(lhs.is_reg()) uses.push_back(lhs.value);
+    if(rhs.is_reg()) uses.push_back(rhs.value);
     return uses;
   }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
@@ -217,20 +223,19 @@ struct BinaryOpInst: Instruction {
 // CallExpr, MethodCall
 // set dst_name = "" if ret_type is void
 struct CallInst: Instruction {
-  reg_id_t dst = -1; // meaningless if ret_type is void
+  std::optional<reg_id_t> dst; // meaningless if ret_type is void
   IrType ret_type;
   StringT func_name;
   std::vector<Operand> args; // type and reg name
 
   std::optional<reg_id_t> get_dst() const override {
-    if(dst != -1) return dst;
-    return std::nullopt;
+    return dst;
   }
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
     for(auto& arg: args) {
-      if(arg.kind == OperandKind::kVirtualReg)
+      if(arg.is_reg())
         uses.push_back(arg.value);
     }
     return uses;
@@ -254,7 +259,7 @@ struct ReturnInst: Instruction {
 
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
-    if(ret_val && ret_val->kind == OperandKind::kVirtualReg)
+    if(ret_val && ret_val->is_reg())
       uses.push_back(ret_val->value);
     return uses;
   }
@@ -281,9 +286,9 @@ struct GEPInst: Instruction {
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
-    if(ptr.kind == OperandKind::kVirtualReg) uses.push_back(ptr.value);
+    if(ptr.is_reg()) uses.push_back(ptr.value);
     for(auto& idx: indices) {
-      if(idx.kind == OperandKind::kVirtualReg)
+      if(idx.is_reg())
         uses.push_back(idx.value);
     }
     return uses;
@@ -314,7 +319,7 @@ struct CastInst: Instruction {
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
-    if(src.kind == OperandKind::kVirtualReg) uses.push_back(src.value);
+    if(src.is_reg()) uses.push_back(src.value);
     return uses;
   }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
@@ -405,7 +410,7 @@ struct Label {
         {LabelHint::kLazyThen, "lazy.then"}, {LabelHint::kLazyElse, "lazy.else"},
         {LabelHint::kLazyExit, "lazy.exit"},
       };
-    return "_" + std::to_string(block_id) + "_" + map.at(hint) + "." + std::to_string(hint_id);
+    return std::to_string(block_id) + "." + map.at(hint) + "." + std::to_string(hint_id);
   }
 };
 
@@ -423,7 +428,7 @@ struct CondBranchInst: Instruction {
 
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
-    if(cond.kind == OperandKind::kVirtualReg) uses.push_back(cond.value);
+    if(cond.is_reg()) uses.push_back(cond.value);
     return uses;
   }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
@@ -456,7 +461,7 @@ struct InsertValueInst: Instruction {
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
     for(auto& op: operands) {
-      if(op.kind == OperandKind::kVirtualReg)
+      if(op.is_reg())
         uses.push_back(op.value);
     }
     for(std::size_t i = 0; i + 1 < interval_regs.size(); ++i) {
@@ -470,7 +475,7 @@ struct InsertValueInst: Instruction {
     }
     for(std::size_t i = 0; i + 1 < interval_regs.size(); ++i) {
       if(interval_regs[i] == old_reg) {
-        assert(new_op.kind == OperandKind::kVirtualReg);
+        assert(new_op.is_reg());
         interval_regs[i] = new_op.value;
       }
     }
@@ -503,7 +508,7 @@ struct PhiInst: Instruction {
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
     for(auto& [op, _label]: incoming) {
-      if(op.kind == OperandKind::kVirtualReg)
+      if(op.is_reg())
         uses.push_back(op.value);
     }
     return uses;

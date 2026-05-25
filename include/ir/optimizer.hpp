@@ -1,7 +1,7 @@
 #ifndef RUST_SHARD_OPTIMIZER_H
 #define RUST_SHARD_OPTIMIZER_H
 
-#include "common/ir_pack.hpp"
+#include "ir_pack.hpp"
 
 namespace rshard::ir {
 
