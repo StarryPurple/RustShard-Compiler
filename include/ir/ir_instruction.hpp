@@ -410,7 +410,7 @@ struct Label {
         {LabelHint::kLazyThen, "lazy.then"}, {LabelHint::kLazyElse, "lazy.else"},
         {LabelHint::kLazyExit, "lazy.exit"},
       };
-    return std::to_string(block_id) + "." + map.at(hint) + "." + std::to_string(hint_id);
+    return "_" + std::to_string(block_id) + "." + map.at(hint) + "." + std::to_string(hint_id);
   }
 };
 

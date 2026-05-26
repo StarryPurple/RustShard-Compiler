@@ -57,22 +57,55 @@ struct AsmInstruction {
   std::vector<AsmOperand> operands;
   std::string comment;
 
-  static AsmInstruction R(std::string op, PhysReg rd, PhysReg rs1, PhysReg rs2, std::string cmt = "");
-  static AsmInstruction I(std::string op, PhysReg rd, PhysReg rs1, int64_t imm, std::string cmt = "");
-  static AsmInstruction L(std::string op, PhysReg rd, PhysReg base, int32_t offset, std::string cmt = "");
-  static AsmInstruction S(std::string op, PhysReg rs2, PhysReg base, int32_t offset, std::string cmt = "");
-  static AsmInstruction B(std::string op, PhysReg rs1, PhysReg rs2, std::string label, std::string cmt = "");
-  static AsmInstruction U(std::string op, PhysReg rd, int64_t imm, std::string cmt = "");
-  static AsmInstruction J(std::string op, PhysReg rd, std::string label, std::string cmt = "");
-  static AsmInstruction JI(std::string op, PhysReg rd, PhysReg rs1, int64_t offset, std::string cmt = "");
-  static AsmInstruction O(std::string op, std::string cmt = "");
-  static AsmInstruction P(std::string op, std::string label, std::string cmt = "");
-  static AsmInstruction BL(std::string op, PhysReg rs, std::string label, std::string cmt = "");
-  static AsmInstruction RR(std::string op, PhysReg rd, PhysReg rs, std::string cmt = "");
-  static AsmInstruction RI(std::string op, PhysReg rd, int64_t imm, std::string cmt = "");
+  static AsmInstruction LineComment(std::string cmt) {
+    return {"", {}, std::move(cmt)};
+  }
+  static AsmInstruction R(std::string op, PhysReg rd, PhysReg rs1, PhysReg rs2, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rd), AsmOperand::reg(rs1), AsmOperand::reg(rs2)}, std::move(cmt)};
+  }
+  static AsmInstruction I(std::string op, PhysReg rd, PhysReg rs1, int64_t imm, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rd), AsmOperand::reg(rs1), AsmOperand::imm(imm)}, std::move(cmt)};
+  }
+  static AsmInstruction L(std::string op, PhysReg rd, PhysReg base, int32_t offset, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rd), AsmOperand::mem(base, offset)}, std::move(cmt)};
+  }
+  static AsmInstruction S(std::string op, PhysReg rs2, PhysReg base, int32_t offset, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rs2), AsmOperand::mem(base, offset)}, std::move(cmt)};
+  }
+  static AsmInstruction B(std::string op, PhysReg rs1, PhysReg rs2, std::string label, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rs1), AsmOperand::reg(rs2), AsmOperand::label(std::move(label))}, std::move(cmt)};
+  }
+  static AsmInstruction U(std::string op, PhysReg rd, int64_t imm, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rd), AsmOperand::imm(imm)}, std::move(cmt)};
+  }
+  static AsmInstruction J(std::string op, PhysReg rd, std::string label, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rd), AsmOperand::label(std::move(label))}, std::move(cmt)};
+  }
+  static AsmInstruction JI(std::string op, PhysReg rd, PhysReg rs1, int64_t offset, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rd), AsmOperand::reg(rs1), AsmOperand::imm(offset)}, std::move(cmt)};
+  }
+  static AsmInstruction O(std::string op, std::string cmt = "") {
+    return {std::move(op), {}, std::move(cmt)};
+  }
+  static AsmInstruction P(std::string op, std::string label, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::label(std::move(label))}, std::move(cmt)};
+  }
+  static AsmInstruction BL(std::string op, PhysReg rs, std::string label, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rs), AsmOperand::label(std::move(label))}, std::move(cmt)};
+  }
+  static AsmInstruction RR(std::string op, PhysReg rd, PhysReg rs, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rd), AsmOperand::reg(rs)}, std::move(cmt)};
+  }
+  static AsmInstruction RI(std::string op, PhysReg rd, int64_t imm, std::string cmt = "") {
+    return {std::move(op), {AsmOperand::reg(rd), AsmOperand::imm(imm)}, std::move(cmt)};
+  }
 };
 
 namespace RV64I {
+  inline AsmInstruction LineComment(std::string c) {
+    return AsmInstruction::LineComment(c);
+  }
+
   inline AsmInstruction ADD(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
     return AsmInstruction::R("add", rd, rs1, rs2, c);
   }
@@ -93,8 +126,16 @@ namespace RV64I {
     return AsmInstruction::R("div", rd, rs1, rs2, c);
   }
 
+  inline AsmInstruction UDIV(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
+    return AsmInstruction::R("udiv", rd, rs1, rs2, c);
+  }
+
   inline AsmInstruction REM(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
     return AsmInstruction::R("rem", rd, rs1, rs2, c);
+  }
+
+  inline AsmInstruction UREM(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
+    return AsmInstruction::R("urem", rd, rs1, rs2, c);
   }
 
   inline AsmInstruction AND(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {

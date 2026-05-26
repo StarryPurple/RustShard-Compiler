@@ -9,7 +9,6 @@ namespace rshard::backend {
 
 class AsmGenerator {
 public:
-  static constexpr std::string kEpilogueLabel = "Epilogue";
   explicit AsmGenerator(const ir::IrPack& ir_pack);
   AsmPack generate();
 
@@ -17,7 +16,7 @@ private:
   AsmFunction generate_func(const ir::FunctionPack& func);
 
   void generate_prologue(const AllocationResult& alloc);
-  void generate_epilogue(const AllocationResult& alloc, AsmBasicBlock& bb);
+  void generate_epilogue(const AllocationResult& alloc);
   void generate_block(const ir::BasicBlockPack& bb, const AllocationResult& alloc);
   void generate_instruction(const ir::Instruction* inst, AsmBasicBlock& bb,
                             const AllocationResult& alloc);

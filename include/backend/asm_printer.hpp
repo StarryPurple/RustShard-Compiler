@@ -13,10 +13,8 @@ struct AsmPrinter {
 
 private:
   static std::string sprint(const AsmFunction& func);
-  static std::string sprint_prologue(const AsmFunction& func);
-  static std::string sprint_epilogue(const AsmFunction& func);
   static std::string sprint(const AsmBasicBlock& block);
-  static std::string sprint_instruction_body(const AsmInstruction& inst);
+  static std::string sprint(const AsmInstruction& inst);
   static std::string sprint(const AsmOperand& op);
   static std::string sprint_reg(PhysReg reg);
 };

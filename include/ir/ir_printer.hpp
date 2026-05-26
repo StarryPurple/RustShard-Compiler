@@ -40,7 +40,7 @@ private:
   static std::string sprint(const BasicBlockPack& pack, const HintContext& ctx) {
     std::string res = pack.label.to_str() + ":";
     for(const auto& instr: pack.instructions)
-      res += "\n  " + sprint(instr.get(), ctx) + "\t #" + std::to_string(instr->instr_no);
+      res += "\n  " + sprint(instr.get(), ctx);
     return res;
   }
 

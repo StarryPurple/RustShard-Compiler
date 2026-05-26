@@ -206,6 +206,7 @@ void Canonicalization::optimize(FunctionPack& func) {
   while(eliminate_deadcode(func)) { /* loop */ }
   while(constant_fold(func)) { /* loop */ }
   func.reorder_reg_ids();
+  func.instr_renumbering();
 }
 
 std::unordered_map<reg_id_t, IrType> find_promotable_slots(FunctionPack& func) {
