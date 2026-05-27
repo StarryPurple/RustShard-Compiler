@@ -7,7 +7,7 @@
 namespace rshard::backend {
 namespace {
   /************************************* Helper functions **********************************************/
-  constexpr std::string kEpilogueLabel = "Epilogue";
+  constexpr std::string kEpilogueLabel = "epilogue";
 
   std::string mangle_label(const std::string& func_name, const std::string& label) {
     return func_name + "." + label;
@@ -19,6 +19,7 @@ namespace {
     return prime->size() <= 4;
   }
 
+  /*
   AsmOperand loc_to_oper(const Location& loc) {
     if(loc.is_reg()) return AsmOperand::reg(loc.as_reg());
     if(loc.is_spill()) return AsmOperand::mem(PhysReg::sp, loc.as_spill_offset());
@@ -29,6 +30,7 @@ namespace {
     if(op.is_imm()) return AsmOperand::imm(op.value);
     return loc_to_oper(alloc.mapping.at(op.value));
   }
+  */
 
   void try_sd(PhysReg reg, PhysReg base, int32_t offset, AsmBasicBlock& bb, PhysReg tmp = PhysReg::zero) {
     if(-2048 <= offset && offset <= 2047) {
@@ -62,6 +64,7 @@ namespace {
 
   void try_addi(PhysReg rd, PhysReg rs1, int32_t imm, AsmBasicBlock& bb, PhysReg tmp = PhysReg::zero) {
     if(imm >= -2048 && imm <= 2047) {
+      if(imm == 0 && rd == rs1) return;
       bb.instructions.push_back(RV64I::ADDI(rd, rs1, imm));
     } else if(rd == rs1) {
       if(tmp == PhysReg::zero) throw std::runtime_error("try_addi not assigned with helper");
@@ -94,6 +97,7 @@ namespace {
     const auto& loc = alloc.mapping.at(vreg);
     if(loc.is_reg()) return loc.as_reg();
     if(loc.is_addr()) {
+      bb.instructions.push_back(RV64I::LineComment(std::format("alloca %{}", vreg)));
       try_lea(kTmpRs2, loc.as_addr(), bb);
       return kTmpRs2;
     }
@@ -222,11 +226,21 @@ namespace {
   void generate_call(const ir::CallInst& call, const AllocationResult& alloc,
                      AsmBasicBlock& bb) {
     bb.instructions.push_back(RV64I::LineComment("Start call preparation"));
+
+    std::optional<PhysReg> caller_save_result;
+
     // caller-save spill
     auto it = alloc.caller_to_save.find(&call);
     if(it != alloc.caller_to_save.end()) {
+
+      if(call.dst.has_value()
+      && alloc.mapping.at(*call.dst).is_reg()
+      && it->second.contains(alloc.mapping.at(*call.dst).as_reg()))
+        caller_save_result = alloc.mapping.at(*call.dst).as_reg();
       int offset = alloc.caller_save_offset();
       for(auto pr: it->second) {
+        // This optimization is not reflected in AllocationResult calc. Tired to optimize...
+        if(caller_save_result.has_value() && *caller_save_result == pr) continue;
         bb.instructions.push_back(RV64I::SD(pr, PhysReg::sp, offset));
         offset += 8;
       }
@@ -234,7 +248,7 @@ namespace {
 
     // set args (8+)
     for(size_t i = 8; i < call.args.size(); ++i) {
-      int offset = static_cast<int>(alloc.func_args_offset() + (i - 8) * 8);
+      int offset = (i - call.args.size()) * 8;
       if(call.args[i].is_imm()) {
         bb.instructions.push_back(RV64I::LI(kTmpRs1, call.args[i].as_imm()));
         bb.instructions.push_back(RV64I::SD(kTmpRs1, PhysReg::sp, offset));
@@ -245,29 +259,72 @@ namespace {
     }
 
     // set args (8-)
+    std::unordered_map<Location, PhysReg, Location::Hash> src_of_dst;
     for(size_t i = 0; i < call.args.size() && i < 8; ++i) {
       auto dst = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + i);
       if(call.args[i].is_imm()) {
         bb.instructions.push_back(RV64I::LI(dst, call.args[i].as_imm()));
       } else {
-        PhysReg src = oper_phys_src_rs1(call.args[i].as_reg(), alloc, bb);
-        if(dst != src) {
-          bb.instructions.push_back(RV64I::MV(dst, src));
+        src_of_dst.emplace(alloc.mapping.at(call.args[i].as_reg()), dst);
+      }
+    }
+    // since all nodes have only one out-degree and one in-degree,
+    // the graph must only contain chains and loops.
+
+    // all chains.
+    while(!src_of_dst.empty()) {
+      bool removed = false;
+      for(auto it = src_of_dst.begin(); it != src_of_dst.end();) {
+        auto [src_loc, dst] = *it;
+        if(!src_of_dst.contains(Location::make_reg(dst))) {
+          // coverage is safe
+          if(src_loc.is_reg()) {
+            auto src = src_loc.as_reg();
+            bb.instructions.push_back(RV64I::MV(dst, src));
+          } else if(src_loc.is_spill()) {
+            try_ld(kTmpRs1, PhysReg::sp, src_loc.as_spill_offset(), bb);
+            bb.instructions.push_back(RV64I::MV(dst, kTmpRs1));
+          } else {
+            try_lea(kTmpRs1, src_loc.as_addr(), bb);
+            bb.instructions.push_back(RV64I::MV(dst, kTmpRs1));
+          }
+
+          // This operation is safe. see cppreference.
+          it = src_of_dst.erase(it);
+          removed = true;
+        } else {
+          ++it;
         }
       }
+      if(!removed) break;
+    }
+    // all loops.
+    while(!src_of_dst.empty()) {
+      Location src_loc = src_of_dst.begin()->first;
+      PhysReg dst = src_of_dst.begin()->second;
+      PhysReg backup = dst;
+      bb.instructions.push_back(RV64I::MV(kTmpRd, backup));
+      while(!src_loc.is_reg() || src_loc.as_reg() != backup) {
+        auto src = src_loc.as_reg();
+        bb.instructions.push_back(RV64I::MV(dst, src));
+        src_of_dst.erase(src_loc);
+        bool found = false;
+        for(const auto& [src_loc2, dst2]: src_of_dst) {
+          if(dst2 == src) {
+            src_loc = src_loc2;
+            dst = dst2;
+            found = true;
+            break;
+          }
+        }
+        if(!found) throw std::runtime_error("Unreachable: Func reg passing (8-)");
+      }
+      bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
+      src_of_dst.erase(src_loc);
     }
 
     // call. No mangle here
     bb.instructions.push_back(RV64I::CALL(call.func_name));
-
-    // caller-save restore
-    if(it != alloc.caller_to_save.end()) {
-      int offset = alloc.caller_save_offset();
-      for(auto pr: it->second) {
-        bb.instructions.push_back(RV64I::LD(pr, PhysReg::sp, offset));
-        offset += 8;
-      }
-    }
 
     // return value
     if(call.dst.has_value()) {
@@ -277,6 +334,17 @@ namespace {
       }
       emit_spill_store_if_needed(*call.dst, alloc, bb);
     }
+
+    // caller-save restore
+    if(it != alloc.caller_to_save.end()) {
+      int offset = alloc.caller_save_offset();
+      for(auto pr: it->second) {
+        if(caller_save_result.has_value() && *caller_save_result == pr) continue;
+        bb.instructions.push_back(RV64I::LD(pr, PhysReg::sp, offset));
+        offset += 8;
+      }
+    }
+
     bb.instructions.push_back(RV64I::LineComment("End call cleaning"));
   }
 
@@ -323,26 +391,33 @@ namespace {
     auto tp = gep.base_type.type();
 
     if(gep.indices.size() == 1) {
+      if(gep.indices[0].is_imm()) {
+        throw std::runtime_error("Uhh.. Not considered for 1-index gep with imm index yet");
+      }
       auto inner_size = tp->size();
       bb.instructions.push_back(RV64I::LI(kTmpRs1, inner_size));
       PhysReg idx = oper_phys_src_rs2(gep.indices[0].as_reg(), alloc, bb);
-      bb.instructions.push_back(RV64I::MUL(kTmpRs1, idx, kTmpRs1));
+      bb.instructions.push_back(RV64I::MUL(kTmpRs2, idx, kTmpRs1));
       PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
-      bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs1));
+      bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs2));
     } else if(gep.indices.size() == 2) {
-      auto idx = gep.indices[1];
-      if(idx.is_imm()) {
-        auto offset = static_cast<std::int64_t>(tp->offset_at(static_cast<int>(idx.as_imm())));
+      if(gep.indices[0].is_reg() || gep.indices[0].as_imm() != 0) {
+        throw std::runtime_error("Invalid GEP for 2 indices with the first not 0");
+      }
+      if(gep.indices[1].is_imm()) {
+        auto offset = static_cast<std::int64_t>(tp->offset_at(static_cast<int>(gep.indices[1].as_imm())));
         PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
         try_addi(dst, base, offset, bb, kTmpRs2);
       } else {
         auto inner_size = tp.get<stype::ArrayType>()->inner()->size();
         bb.instructions.push_back(RV64I::LI(kTmpRs1, inner_size));
-        PhysReg offset = oper_phys_src_rs2(idx.as_reg(), alloc, bb);
-        bb.instructions.push_back(RV64I::MUL(offset, offset, kTmpRs1));
+        PhysReg index = oper_phys_src_rs2(gep.indices[1].as_reg(), alloc, bb);
+        bb.instructions.push_back(RV64I::MUL(kTmpRs2, index, kTmpRs1));
         PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
-        bb.instructions.push_back(RV64I::ADD(dst, base, offset));
+        bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs2));
       }
+    } else {
+      throw std::runtime_error("Invalid GEP for not having 1 or 2 indices");
     }
 
     emit_spill_store_if_needed(gep.dst, alloc, bb);
@@ -445,15 +520,30 @@ void AsmGenerator::generate_prologue(const AllocationResult& alloc) {
   // Alloc data
 
   prologue.instructions.push_back(RV64I::LineComment(
-    std::format("spill area size: {}", alloc.spill_area_size)));
+    std::format("{:35} range: {:8}(sp) - {:8}(sp)",
+                std::format("spill func args num: {},", alloc.spill_args_num),
+                alloc.spill_args_offset(), alloc.spill_args_offset(),
+                alloc.spill_args_offset() + alloc.spill_args_num * 8)));
   prologue.instructions.push_back(RV64I::LineComment(
-    std::format("local var size: {}", alloc.local_var_size)));
+    std::format("{:35} range: {:8}(sp) - {:8}(sp)",
+                std::format("local var size: {},", alloc.local_var_size),
+                alloc.local_var_offset(), alloc.local_var_offset() + alloc.local_var_size)));
   prologue.instructions.push_back(RV64I::LineComment(
-    std::format("max caller save reg num: {} / {}", alloc.max_caller_save_num, kCallerSaveRegs.size())));
+    std::format("{:35} range: {:8}(sp) - {:8}(sp)",
+                std::format("return addr size: {},", alloc.ra_area_needed()),
+                alloc.return_addr_offset(), alloc.return_addr_offset() + alloc.ra_area_needed())));
   prologue.instructions.push_back(RV64I::LineComment(
-    std::format("callee save reg num: {} / {}", alloc.callee_saved_used.size(), kCalleeSaveRegs.size())));
+    std::format("{:35} range: {:8}(sp) - {:8}(sp)",
+                std::format("callee save reg num: {} / {},", alloc.callee_saved_used.size(), kCalleeSaveRegs.size()),
+                alloc.callee_save_offset(), alloc.callee_save_offset() + alloc.callee_saved_used.size() * 8)));
   prologue.instructions.push_back(RV64I::LineComment(
-    std::format("extra func args num: {}", alloc.spill_args_num)));
+    std::format("{:35} range: {:8}(sp) - {:8}(sp)",
+                std::format("max caller save reg num: {} / {},", alloc.max_caller_save_num, kCallerSaveRegs.size()),
+                alloc.caller_save_offset(), alloc.caller_save_offset() + alloc.max_caller_save_num * 8)));
+  prologue.instructions.push_back(RV64I::LineComment(
+    std::format("{:35} range: {:8}(sp) - {:8}(sp)",
+                std::format("spill area size: {},", alloc.spill_area_size),
+                alloc.spill_regs_offset(), alloc.spill_regs_offset() + alloc.spill_area_size)));
 
   if(frame > 0) {
     // sp -= frame_size
@@ -518,6 +608,7 @@ void AsmGenerator::generate_block(const ir::BasicBlockPack& bb, const Allocation
 void AsmGenerator::generate_instruction(const ir::Instruction* inst, AsmBasicBlock& bb,
                                         const AllocationResult& alloc) {
   // Alloca do not need handling; Phi is handled in handle_phi
+  // bb.instructions.push_back(RV64I::LineComment(std::format("Instr {}", inst->instr_no)));
   if(auto* bin = dynamic_cast<const ir::BinaryOpInst*>(inst)) {
     generate_binary_op(*bin, alloc, bb);
   } else if(auto* load = dynamic_cast<const ir::LoadInst*>(inst)) {

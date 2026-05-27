@@ -10,6 +10,7 @@ LivenessInfo compute_liveness(const ir::FunctionPack& func) {
     const_cast<ir::FunctionPack&>(func).construct_cfg();
   }
 
+  std::unordered_set<ir::reg_id_t> alloca_defs;
   for(const auto& bb: func.basic_block_packs) {
     auto block_id = bb.label.block_id;
     auto& def_set = info.def[block_id];
@@ -17,6 +18,12 @@ LivenessInfo compute_liveness(const ir::FunctionPack& func) {
     std::unordered_set<ir::reg_id_t> locally_defined;
 
     for(const auto& inst: bb.instructions) {
+      if(auto* alloc = dynamic_cast<const ir::AllocaInst*>(inst.get())) {
+        // alloca inst results do not need physical registers.
+        // They'll be calculated by immediate offset.
+        alloca_defs.insert(alloc->dst);
+        continue;
+      }
       if(auto* phi = dynamic_cast<const ir::PhiInst*>(inst.get())) {
         def_set.insert(phi->dst);
         locally_defined.insert(phi->dst);
@@ -24,9 +31,10 @@ LivenessInfo compute_liveness(const ir::FunctionPack& func) {
       }
 
       for(auto u: inst->get_uses()) {
-        if(!locally_defined.contains(u)) use_set.insert(u);
+        if(!locally_defined.contains(u) && !alloca_defs.contains(u)) {
+          use_set.insert(u);
+        }
       }
-
       if(auto dst = inst->get_dst()) {
         locally_defined.insert(*dst);
         def_set.insert(*dst);
@@ -88,16 +96,32 @@ std::vector<LiveInterval> build_intervals(const ir::FunctionPack& func) {
   }
   ir::instr_no_t cnt = 0;
   for(auto& bb: func.basic_block_packs) {
+    auto block_id = bb.label.block_id;
     for(auto& inst: bb.instructions) {
+      inst->instr_no = ++cnt;
       if(auto dst = inst->get_dst()) {
-        inst->instr_no = ++cnt;
-        if(!first_def_global.contains(*dst)) {
-          first_def_global[*dst] = inst->instr_no; // + (dynamic_cast<ir::CallInst*>(inst.get()) ? 1 : 0);
+        if(!dynamic_cast<ir::AllocaInst*>(inst.get())) {
+          // AllocaInst dst do not need a reg
+          if(!first_def_global.contains(*dst)) {
+            first_def_global[*dst] = inst->instr_no; // + (dynamic_cast<ir::CallInst*>(inst.get()) ? 1 : 0);
+          }
         }
       }
-      for(auto use: inst->get_uses()) {
-        last_use_global[use] = inst->instr_no;
+      if(!dynamic_cast<ir::PhiInst*>(inst.get())) {
+        // PhiInst incoming reg use do not reach this inst itself
+        for(auto use: inst->get_uses()) {
+          last_use_global[use] = inst->instr_no;
+        }
       }
+    }
+  }
+
+  auto liveness = compute_liveness(func);
+  for(const auto& bb: func.basic_block_packs) {
+    auto block_id = bb.label.block_id;
+    ir::instr_no_t last_instr = bb.instructions.back()->instr_no;
+    for(auto reg: liveness.live_out.at(block_id)) {
+      last_use_global[reg] = std::max(last_use_global[reg], last_instr);
     }
   }
 
@@ -179,7 +203,7 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
     auto spill_it = std::max_element(active.begin(), active.end(),
                                      [](const auto& a, const auto& b) { return a.second.end < b.second.end; });
 
-    if(spill_it->second.end > interval.end) {
+    if(spill_it != active.end() && spill_it->second.end > interval.end) {
       result.mapping[spill_it->second.reg] = Location::make_spill(spill_area_size);
       spill_area_size += 8;
       PhysReg freed_reg = spill_it->first;
@@ -192,6 +216,7 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
     }
   }
 
+  std::unordered_map<ir::reg_id_t, std::size_t> local_var_mapping;
   std::size_t local_var_size = 0;
   for(const auto& bb: func.basic_block_packs) {
     for(const auto& inst: bb.instructions) {
@@ -199,7 +224,9 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
         size_t size = alloca->type.size();
         size_t align = alloca->type.align();
         local_var_size = (local_var_size + align - 1) & ~(align - 1);
-        result.mapping[alloca->dst] = Location::make_addr(local_var_size);
+        // not here.
+        // result.mapping[alloca->dst] = Location::make_addr(local_var_size);
+        local_var_mapping.emplace(alloca->dst, local_var_size);
         local_var_size += size;
       }
     }
@@ -233,7 +260,7 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
         if(it != intervals.begin()) {
           --it;
           if(it->end >= call->instr_no) {
-            result.caller_to_save[call].push_back(pr);
+            result.caller_to_save[call].insert(pr);
           }
         }
       }
@@ -251,15 +278,15 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
   result.max_caller_save_num = caller_save_num;
   result.spill_args_num = std::max(0, arg_reg_idx - 8);
   result.total_frame_size
-    = spill_area_size                     // virtual reg spill
-    + local_var_size                      // local Alloca region
+    = spill_area_size // virtual reg spill
+    + local_var_size // local Alloca region
     + result.callee_saved_used.size() * 8 // call of self: saving some callee-saved regs
-    + caller_save_num * 8                 // call of other function: saving some caller-saved regs
-    + 8                                   // save ra
-    + result.spill_args_num * 8;   // args passed on stack
+    + caller_save_num * 8 // call of other function: saving some caller-saved regs
+    + (result.caller_to_save.empty() ? 0 : 8) // save ra
+    + result.spill_args_num * 8; // args passed on stack
   result.total_frame_size = (result.total_frame_size + 15) & ~15ul; // 16-byte alignment req of $sp
 
-  offset_t args_start = result.func_args_offset();
+  offset_t args_start = result.spill_args_offset();
   arg_reg_idx = 0;
   if(func.sret_param) arg_reg_idx++;
   for(const auto& param: func.params) {
@@ -268,6 +295,10 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
       result.mapping.emplace(param.value, Location::make_spill(args_start + 8 * (arg_reg_idx - 8)));
     }
     ++arg_reg_idx;
+  }
+
+  for(const auto& [vreg, offset]: local_var_mapping) {
+    result.mapping.emplace(vreg, Location::make_addr(result.local_var_offset() + offset));
   }
 
   return result;

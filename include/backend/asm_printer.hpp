@@ -7,7 +7,7 @@
 namespace rshard::backend {
 
 struct AsmPrinter {
-  static constexpr const char* INDENT = "\t";
+  static constexpr std::string INDENT = "\t";
 
   static std::string sprint(const AsmPack& pack);
 

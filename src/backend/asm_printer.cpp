@@ -51,7 +51,7 @@ std::string AsmPrinter::sprint(const AsmBasicBlock& block) {
 std::string AsmPrinter::sprint(const AsmInstruction& inst) {
   if(inst.opcode.empty()) {
     if(inst.comment.empty()) return "";
-    return "# " + inst.comment;
+    return INDENT + "# " + inst.comment;
   }
 
   std::string res = inst.opcode;

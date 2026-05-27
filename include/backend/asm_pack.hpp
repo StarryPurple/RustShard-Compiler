@@ -34,6 +34,24 @@ struct Location {
 
   bool operator==(const Location& other) const { return value == other.value; }
   bool operator!=(const Location& other) const { return !(*this == other); }
+
+  struct Hash {
+    std::size_t operator()(const Location& loc) const {
+      std::size_t seed = std::hash<int>{}(static_cast<int>(loc.value.index())) * 0x52a7c0b9;
+      return std::visit([&seed](const auto& v) -> std::size_t {
+        using T = std::decay_t<decltype(v)>;
+        std::size_t h = 0;
+        if constexpr(std::is_same_v<T, Register>) {
+          h = std::hash<int>{}(static_cast<int>(v.reg));
+        } else if constexpr(std::is_same_v<T, SpillSlot>) {
+          h = std::hash<int32_t>{}(v.offset);
+        } else {
+          h = std::hash<int64_t>{}(v.addr);
+        }
+        return seed ^ (h + 0x9e3779b9 + (seed << 6) + (seed >> 2));
+      }, loc.value);
+    }
+  };
 };
 
 struct AsmBasicBlock {

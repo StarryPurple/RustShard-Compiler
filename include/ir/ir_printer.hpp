@@ -2,6 +2,7 @@
 #define RUST_SHARD_PRINTER_H
 
 #include "ir_pack.hpp"
+#include <format>
 
 namespace rshard::ir {
 
@@ -39,8 +40,13 @@ private:
 
   static std::string sprint(const BasicBlockPack& pack, const HintContext& ctx) {
     std::string res = pack.label.to_str() + ":";
-    for(const auto& instr: pack.instructions)
-      res += "\n  " + sprint(instr.get(), ctx);
+    for(const auto& instr: pack.instructions) {
+      if(instr->instr_no == 0) {
+        res += std::format("\n  {}", sprint(instr.get(), ctx));
+      } else {
+        res += std::format("\n  {:80} ; inst {}", sprint(instr.get(), ctx), instr->instr_no);
+      }
+    }
     return res;
   }
 
