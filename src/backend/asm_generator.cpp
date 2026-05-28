@@ -255,11 +255,11 @@ namespace {
     } else if(op == "sdiv") {
       bb.instructions.push_back(RV64I::DIV(dst, lhs, rhs));
     } else if(op == "udiv") {
-      bb.instructions.push_back(RV64I::UDIV(dst, lhs, rhs));
+      bb.instructions.push_back(RV64I::DIVU(dst, lhs, rhs));
     } else if(op == "srem") {
       bb.instructions.push_back(RV64I::REM(dst, lhs, rhs));
     } else if(op == "urem") {
-      bb.instructions.push_back(RV64I::UREM(dst, lhs, rhs));
+      bb.instructions.push_back(RV64I::REMU(dst, lhs, rhs));
     } else if(op == "and") {
       bb.instructions.push_back(RV64I::AND(dst, lhs, rhs));
     } else if(op == "or") {

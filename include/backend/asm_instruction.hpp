@@ -126,16 +126,16 @@ namespace RV64I {
     return AsmInstruction::R("div", rd, rs1, rs2, c);
   }
 
-  inline AsmInstruction UDIV(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
-    return AsmInstruction::R("udiv", rd, rs1, rs2, c);
+  inline AsmInstruction DIVU(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
+    return AsmInstruction::R("divu", rd, rs1, rs2, c);
   }
 
   inline AsmInstruction REM(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
     return AsmInstruction::R("rem", rd, rs1, rs2, c);
   }
 
-  inline AsmInstruction UREM(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
-    return AsmInstruction::R("urem", rd, rs1, rs2, c);
+  inline AsmInstruction REMU(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
+    return AsmInstruction::R("remu", rd, rs1, rs2, c);
   }
 
   inline AsmInstruction AND(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {

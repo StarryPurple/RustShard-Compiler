@@ -94,3 +94,5 @@ Functions with only calls of no caller reg saving is still a call. Remember this
 
 Be careful in handling the position of func params, like their lifetimes and Locations.
 std::unordered_map::emplace do nothing when the key already exists, rather than operator[] overwrites.
+
+udiv/urem in LLVM IR shall be translated (lowered?) into divu/remu in RISCV64-M Assembly.
