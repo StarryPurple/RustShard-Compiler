@@ -307,8 +307,14 @@ struct SlotRenamer {
     : func(f), slot(s), next_version(next_ver) {}
 
   void push(const Operand& oper) { version_stack.push(oper); }
-  void pop() { version_stack.pop(); }
-  [[nodiscard]] Operand current() const { return version_stack.top(); }
+  void pop() {
+    if(version_stack.empty()) throw std::runtime_error("Unexpected behaviour");
+    version_stack.pop();
+  }
+  [[nodiscard]] Operand current() const {
+    if(version_stack.empty()) throw std::runtime_error("Unexpected behaviour");
+    return version_stack.top();
+  }
   reg_id_t new_version() { return next_version++; }
 
   void replace_all_uses(reg_id_t old_reg, Operand new_oper) {
@@ -446,7 +452,7 @@ void PromoteAlloca::optimize(FunctionPack& func) {
     SlotRenamer renamer(func, slot, next_ssa_reg);
 
     // (undefined and never used) initial value of the slot.
-    // renamer.push(Operand::make_reg(-3, {}));
+    renamer.push(Operand::make_reg(-3, {}));
 
     renamer.rename(0); // entry block
 
