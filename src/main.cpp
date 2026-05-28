@@ -13,11 +13,8 @@
 
 namespace fs = std::filesystem;
 
-#ifndef BUILTIN_LL_PATH
-#define BUILTIN_LL_PATH "builtin/builtin.ll"
-#endif
 #ifndef BUILTIN_ASM_PATH
-#define BUILTIN_ASM_PATH "builtin/builtin.s"
+#define BUILTIN_ASM_PATH "./builtin/builtin.s"
 #endif
 
 std::string read_file(const std::string &path) {
@@ -32,6 +29,7 @@ int main() {
   std::string src_code;
   std::string line;
   while(std::getline(std::cin, line)) {
+    // if(line == "EndOfFile") break;
     src_code += line + "\n";
   }
 
