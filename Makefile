@@ -5,7 +5,7 @@ OBJS = $(SRCS:.cpp=.o)
 BUILTIN_ASM_PATH = ./builtin/builtin.s
 INCLUDES_FLAGS = -I./include
 BUILTIN_FLAGS = -DBUILTIN_ASM_PATH=\"$(BUILTIN_ASM_PATH)\"
-CXXFLAGS = -std=c++20 -O0 -pipe -DNDEBUG $(INCLUDES_FLAGS) $(BUILTIN_FLAGS)# -g -Wall -Wextra
+CXXFLAGS = -std=c++20 -O1 -pipe -DNDEBUG $(INCLUDES_FLAGS) $(BUILTIN_FLAGS)# -g -Wall -Wextra
 
 .PHONY: all build run clean
 
@@ -20,7 +20,7 @@ $(TARGET): $(OBJS)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-run: build
+run:
 	@./$(TARGET)
 
 clean:

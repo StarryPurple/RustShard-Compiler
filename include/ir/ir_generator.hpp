@@ -8,8 +8,8 @@ namespace rshard::ir {
 // uses some stype TypePtr. Please ensure that the type pool is still valid.
 class IRGenerator: public ast::ScopedVisitor {
 public:
-  IRGenerator(stype::TypePool* type_pool): _type_pool(type_pool) {}
-  ~IRGenerator() = default;
+  explicit IRGenerator(stype::TypePool* type_pool): _type_pool(type_pool) {}
+  ~IRGenerator() override = default;
 
   IrPack release() { return std::move(_ir_pack); }
 
