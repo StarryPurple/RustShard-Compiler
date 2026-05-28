@@ -6,6 +6,7 @@ CXXFLAGS = -std=c++20 -O2 -g -Wall -Wextra $(INCLUDES_FLAGS) $(TEMPLATE_FLAGS) $
 TARGET = compiler
 SRCS = $(shell find src -name "*.cpp")
 OBJS = $(SRCS:.cpp=.o)
+BUILTIN_ASM = ./builtin/builtin.s
 BUILTIN_LL = ./builtin/builtin.ll
 BUILTIN_C = ./builtin/builtin.c
 

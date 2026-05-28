@@ -91,3 +91,6 @@ parallel_assignment: one node can only act as dst (not src) for one time.
 ra storage can be omitted if this is a leaf function (no func calls inside it).
 Omitted ra storage in not leaf functions may lead to infinite loop (stuck and not return).
 Functions with only calls of no caller reg saving is still a call. Remember this.
+
+Be careful in handling the position of func params, like their lifetimes and Locations.
+std::unordered_map::emplace do nothing when the key already exists, rather than operator[] overwrites.

@@ -153,24 +153,30 @@ std::vector<LiveInterval> build_intervals(const ir::FunctionPack& func) {
 
 
 AllocationResult allocate_registers(const ir::FunctionPack& func) {
+
+  std::vector<PhysReg> reg_pool(kAllocatableRegs.begin(), kAllocatableRegs.end());
+
   AllocationResult result;
 
   auto intervals = build_intervals(func);
   std::sort(intervals.begin(), intervals.end(), [](const LiveInterval& lhs, const LiveInterval& rhs) {
-    return lhs.start < rhs.start;
+    return lhs.reg < rhs.reg;
   });
 
-  std::vector<PhysReg> reg_pool(kAllocatableRegs.begin(), kAllocatableRegs.end());
-
+  std::unordered_map<PhysReg, LiveInterval> active;
   int arg_reg_idx = 0;
   if(func.sret_param) {
     result.mapping.emplace(func.sret_param->as_reg(), Location::make_reg(PhysReg::a0));
+    assert(intervals[arg_reg_idx].reg == arg_reg_idx);
+    active.emplace(PhysReg::a0, intervals[arg_reg_idx]);
     arg_reg_idx++;
   }
   for(const auto& param: func.params) {
     if(arg_reg_idx < 8) {
       auto pr = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + arg_reg_idx);
+      assert(intervals[arg_reg_idx].reg == arg_reg_idx);
       result.mapping.emplace(param.as_reg(), Location::make_reg(pr));
+      active.emplace(pr, intervals[arg_reg_idx]);
     } else {
       // not sure here.
       // result.mapping.emplace(param.as_reg(), Location::make_spill(xxx + 8 * (arg_reg_idx - 8)));
@@ -178,7 +184,9 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
     ++arg_reg_idx;
   }
 
-  std::unordered_map<PhysReg, LiveInterval> active;
+  std::sort(intervals.begin(), intervals.end(), [](const LiveInterval& lhs, const LiveInterval& rhs) {
+    return lhs.start < rhs.start;
+  });
   size_t spill_area_size = 0;
 
   for(const auto& interval: intervals) {

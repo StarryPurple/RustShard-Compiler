@@ -65,6 +65,7 @@ struct FunctionPack {
   CFGData cfg;
   DomTree dom_tree;
 
+  std::size_t param_num() const { return (sret_param ? 1 : 0) + params.size(); }
   // call at the final construction.
   void update_block_ids();
 

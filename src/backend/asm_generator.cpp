@@ -8,10 +8,20 @@ namespace rshard::backend {
 namespace {
   /************************************* Helper functions **********************************************/
   constexpr std::string kEpilogueLabel = "epilogue";
+  constexpr std::string kFuncPrefix = ".F.";
+
+  std::string mangle_func_name(const std::string& original) {
+    static const std::unordered_set<std::string> reserved = {
+      "printInt", "printlnInt", "getInt", "exit", "main", "memcpy"
+    };
+    if(reserved.contains(original)) return original;
+    return kFuncPrefix + original;
+  }
 
   std::string mangle_label(const std::string& func_name, const std::string& label) {
     return func_name + "." + label;
   }
+
 
   /*
   bool is_32bit(ir::IrType irtype) {
@@ -177,6 +187,7 @@ namespace {
         bool dst_safe = true;
         for(const auto& [dst_loc2, src_loc2]: dst_to_src) {
           if(src_loc2 == dst_loc) {
+            // dst value still needed
             dst_safe = false;
             break;
           }
@@ -300,10 +311,14 @@ namespace {
     PhysReg dst = oper_phys_dst(load.dst, alloc);
 
     switch(load.load_type.size()) {
-    case 1: bb.instructions.push_back(RV64I::LB(dst, ptr, 0)); break;
-    case 2: bb.instructions.push_back(RV64I::LH(dst, ptr, 0)); break;
-    case 4: bb.instructions.push_back(RV64I::LW(dst, ptr, 0)); break;
-    case 8: bb.instructions.push_back(RV64I::LD(dst, ptr, 0)); break;
+    case 1: bb.instructions.push_back(RV64I::LB(dst, ptr, 0));
+      break;
+    case 2: bb.instructions.push_back(RV64I::LH(dst, ptr, 0));
+      break;
+    case 4: bb.instructions.push_back(RV64I::LW(dst, ptr, 0));
+      break;
+    case 8: bb.instructions.push_back(RV64I::LD(dst, ptr, 0));
+      break;
     default: throw std::runtime_error("Impossible value size");
     }
 
@@ -320,10 +335,14 @@ namespace {
       val = kTmpRs1;
     }
     switch(store.value.type.size()) {
-    case 1: bb.instructions.push_back(RV64I::SB(val, ptr, 0)); break;
-    case 2: bb.instructions.push_back(RV64I::SH(val, ptr, 0)); break;
-    case 4: bb.instructions.push_back(RV64I::SW(val, ptr, 0)); break;
-    case 8: bb.instructions.push_back(RV64I::SD(val, ptr, 0)); break;
+    case 1: bb.instructions.push_back(RV64I::SB(val, ptr, 0));
+      break;
+    case 2: bb.instructions.push_back(RV64I::SH(val, ptr, 0));
+      break;
+    case 4: bb.instructions.push_back(RV64I::SW(val, ptr, 0));
+      break;
+    case 8: bb.instructions.push_back(RV64I::SD(val, ptr, 0));
+      break;
     default: throw std::runtime_error("Impossible value size");
     }
   }
@@ -365,18 +384,17 @@ namespace {
     // set args (8-)
     std::unordered_map<Location, Location, Location::Hash> dst_to_src;
     for(size_t i = 0; i < call.args.size() && i < 8; ++i) {
+      auto& arg = call.args[i];
       auto dst = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + i);
-      if(call.args[i].is_imm()) {
-        bb.instructions.push_back(RV64I::LI(dst, call.args[i].as_imm()));
-      } else {
-        dst_to_src.emplace(Location::make_reg(dst), alloc.mapping.at(call.args[i].as_reg()));
-      }
+      dst_to_src.emplace(
+        Location::make_reg(dst),
+        arg.is_imm() ? Location::make_imm(arg.as_imm()) : alloc.mapping.at(arg.as_reg()));
     }
 
     parallel_assignment(std::move(dst_to_src), bb);
 
     // call. No mangle here
-    bb.instructions.push_back(RV64I::CALL(call.func_name));
+    bb.instructions.push_back(RV64I::CALL(mangle_func_name(call.func_name)));
 
     // return value
     if(call.dst.has_value()) {
@@ -497,7 +515,7 @@ AsmFunction AsmGenerator::generate_func(const ir::FunctionPack& func) {
   auto alloc = allocate_registers(func);
 
   _asm_func = {};
-  _asm_func.name = func.ident;
+  _asm_func.name = mangle_func_name(func.ident);
 
   generate_prologue(alloc);
 
@@ -527,7 +545,7 @@ AsmFunction AsmGenerator::generate_func(const ir::FunctionPack& func) {
     auto& instrs = asm_bb->instructions;
     auto bj_inst = instrs.back();
     instrs.pop_back();
-    asm_bb->instructions.push_back(RV64I::LineComment("Now prepare for Phis:"));
+    asm_bb->instructions.push_back(RV64I::LineComment("Phi connections"));
     auto copy = dst_to_src;
     parallel_assignment(std::move(dst_to_src), *asm_bb);
     instrs.push_back(bj_inst);

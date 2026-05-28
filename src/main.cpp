@@ -5,14 +5,19 @@
 #include "frontend/lexer.hpp"
 #include "frontend/parser.hpp"
 #include "frontend/syntax_check.hpp"
-#include "../include/ir/ir_generator.hpp"
-#include "../include/ir/optimizer.hpp"
-#include "../include/ir/ir_printer.hpp"
+#include "ir/ir_generator.hpp"
+#include "ir/optimizer.hpp"
+#include "ir/ir_printer.hpp"
+#include "backend/asm_generator.hpp"
+#include "backend/asm_printer.hpp"
 
 namespace fs = std::filesystem;
 
 #ifndef BUILTIN_LL_PATH
 #define BUILTIN_LL_PATH "builtin/builtin.ll"
+#endif
+#ifndef BUILTIN_ASM_PATH
+#define BUILTIN_ASM_PATH "builtin/builtin.s"
 #endif
 
 std::string read_file(const std::string &path) {
@@ -77,17 +82,24 @@ int main() {
     return 1;
   }
 
-  // ir generation
+  // asm generation
   try {
     rshard::ir::IRGenerator ir_generator(type_pool.get());
     ast_tree.traverse(ir_generator);
 
     auto ir_pack = ir_generator.release();
 
-    std::cout << read_file(BUILTIN_LL_PATH);
-    std::cout << rshard::ir::IrPrinter::sprint(ir_pack);
+    rshard::ir::PromoteAlloca::optimize(ir_pack);
+    rshard::ir::Canonicalization::optimize(ir_pack);
+
+    rshard::backend::AsmGenerator asm_generator(ir_pack);
+    auto asm_pack = asm_generator.generate();
+
+    auto ASM = read_file(BUILTIN_ASM_PATH);
+    ASM += "\n\n" + rshard::backend::AsmPrinter::sprint(asm_pack);
+    std::cout << ASM;
   } catch(...) {
-    // ir generation error
+    // asm generation error
     // return 0 (since semantic check passed)
     return 0;
   }

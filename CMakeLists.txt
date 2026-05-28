@@ -36,6 +36,11 @@ string(REPLACE "\\" "\\\\" BUILTIN_LL_ESCAPED "${BUILTIN_LL_ABSPATH}")
 target_compile_definitions(compiler PRIVATE
     BUILTIN_LL_PATH="${BUILTIN_LL_ESCAPED}"
 )
+get_filename_component(BUILTIN_ASM_ABSPATH "${CMAKE_SOURCE_DIR}/builtin/builtin.s" ABSOLUTE)
+string(REPLACE "\\" "\\\\" BUILTIN_ASM_ESCAPED "${BUILTIN_ASM_ABSPATH}")
+target_compile_definitions(compiler PRIVATE
+    BUILTIN_ASM_PATH="${BUILTIN_ASM_ESCAPED}"
+)
 
 enable_testing()
 add_subdirectory(test)
