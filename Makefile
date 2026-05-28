@@ -2,10 +2,10 @@ CXX = g++
 TARGET = compiler
 SRCS = $(shell find src -name "*.cpp")
 OBJS = $(SRCS:.cpp=.o)
-# BUILTIN_ASM_PATH = "./builtin/builtin.s"
+BUILTIN_ASM_PATH = ./builtin/builtin.s
 INCLUDES_FLAGS = -I./include
-# BUILTIN_FLAGS = -DBUILTIN_ASM_PATH=$(BUILTIN_ASM_PATH)
-CXXFLAGS = -std=c++20 -O2 -g -Wall -Wextra $(INCLUDES_FLAGS)# $(BUILTIN_FLAGS)
+BUILTIN_FLAGS = -DBUILTIN_ASM_PATH=\"$(BUILTIN_ASM_PATH)\"
+CXXFLAGS = -std=c++20 -O0 $(INCLUDES_FLAGS) $(BUILTIN_FLAGS)# -g -Wall -Wextra
 
 .PHONY: all build run clean
 
