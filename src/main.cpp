@@ -95,9 +95,13 @@ int main() {
     auto ASM = read_file(BUILTIN_ASM_PATH);
     ASM += "\n\n" + rshard::backend::AsmPrinter::sprint(asm_pack);
     std::cout << ASM;
-  } catch(...) {
+  } catch(std::exception& e) {
     // asm generation error
+    std::cerr << "[exception] " << e.what() << std::endl;
     // return 0 (since semantic check passed)
+    return 0;
+  } catch(...) {
+    std::cerr << "[unknown exception] " << std::endl;
     return 0;
   }
 

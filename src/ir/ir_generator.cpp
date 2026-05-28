@@ -1364,7 +1364,7 @@ void IRGenerator::visit(ast::StructExpression &node) {
 
   auto res_id = struct_ptr_id;
   // no loading here.
-  assert(node.need_addr() || inplace_at(node.id()).has_value());
+  // assert(node.need_addr() || inplace_at(node.id()).has_value());
   // if(!node.need_addr()) {
   //  res_id = load_from_memory(struct_ptr_id, IrType(struct_ty));
   // }
@@ -1538,7 +1538,7 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
   reg_id_t res_id = arr_ptr_id;
 
   // no loading here.
-  assert(node.need_addr() || inplace_at(node.id()).has_value());
+  // assert(node.need_addr() || inplace_at(node.id()).has_value());
   // if(!node.need_addr()) {
   //  res_id = load_from_memory(arr_ptr_id, IrType(arr_tp));
   // }

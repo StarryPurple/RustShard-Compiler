@@ -1,6 +1,7 @@
 #include "backend/regalloc.hpp"
 
 #include <complex>
+#include <format>
 
 namespace rshard::backend {
 LivenessInfo compute_liveness(const ir::FunctionPack& func) {
@@ -167,14 +168,18 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
   int arg_reg_idx = 0;
   if(func.sret_param) {
     result.mapping.emplace(func.sret_param->as_reg(), Location::make_reg(PhysReg::a0));
-    assert(intervals[arg_reg_idx].reg == arg_reg_idx);
+    if(intervals[arg_reg_idx].reg != arg_reg_idx) {
+      throw std::runtime_error(std::format("Intervals arg_reg_idx different. {} - {}", intervals[arg_reg_idx].reg, arg_reg_idx));
+    }
     active.emplace(PhysReg::a0, intervals[arg_reg_idx]);
     arg_reg_idx++;
   }
   for(const auto& param: func.params) {
     if(arg_reg_idx < 8) {
       auto pr = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + arg_reg_idx);
-      assert(intervals[arg_reg_idx].reg == arg_reg_idx);
+      if(intervals[arg_reg_idx].reg != arg_reg_idx) {
+        throw std::runtime_error(std::format("Intervals arg_reg_idx different. {} - {}", intervals[arg_reg_idx].reg, arg_reg_idx));
+      }
       result.mapping.emplace(param.as_reg(), Location::make_reg(pr));
       active.emplace(pr, intervals[arg_reg_idx]);
     } else {

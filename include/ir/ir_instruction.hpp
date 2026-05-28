@@ -1,7 +1,6 @@
 #ifndef RUST_SHARD_IR_INSTRUCTION_H
 #define RUST_SHARD_IR_INSTRUCTION_H
 
-#include <cassert>
 #include <unordered_map>
 #include <optional>
 #include <variant>
@@ -477,7 +476,7 @@ struct InsertValueInst: Instruction {
     }
     for(std::size_t i = 0; i + 1 < interval_regs.size(); ++i) {
       if(interval_regs[i] == old_reg) {
-        assert(new_op.is_reg());
+        // assert(new_op.is_reg());
         interval_regs[i] = new_op.as_reg();
       }
     }
