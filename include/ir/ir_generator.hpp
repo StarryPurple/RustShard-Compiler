@@ -1,7 +1,7 @@
 #ifndef RUST_SHARD_IR_GENERATOR_H
 #define RUST_SHARD_IR_GENERATOR_H
 
-#include <filesystem>
+#include "frontend/syntax_check.hpp"
 #include "ir_pack.hpp"
 
 namespace rshard::ir {

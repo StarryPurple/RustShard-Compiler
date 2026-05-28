@@ -1,4 +1,5 @@
 #include "ir/ir_pack.hpp"
+#include <algorithm>
 
 namespace rshard::ir {
 void FunctionPack::update_block_ids() {

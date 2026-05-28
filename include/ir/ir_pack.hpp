@@ -4,7 +4,6 @@
 #include <vector>
 #include <cstring>
 
-#include "frontend/syntax_check.hpp"
 #include "ir_instruction.hpp"
 #include "common/common.hpp"
 

@@ -1,13 +1,12 @@
 #include <fstream>
 #include <iostream>
+#include <filesystem>
 
-#include "frontend/ast.hpp"
 #include "frontend/lexer.hpp"
 #include "frontend/parser.hpp"
 #include "frontend/syntax_check.hpp"
 #include "ir/ir_generator.hpp"
 #include "ir/optimizer.hpp"
-#include "ir/ir_printer.hpp"
 #include "backend/asm_generator.hpp"
 #include "backend/asm_printer.hpp"
 

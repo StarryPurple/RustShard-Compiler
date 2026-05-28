@@ -4,6 +4,7 @@
 #include <cassert>
 #include <unordered_map>
 #include <optional>
+#include <variant>
 
 #include "common/stype.hpp"
 

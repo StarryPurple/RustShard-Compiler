@@ -1,5 +1,6 @@
 #include "ir/optimizer.hpp"
 #include <stack>
+#include <algorithm>
 
 namespace rshard::ir {
 void eliminate_single_phi(FunctionPack& func) {
