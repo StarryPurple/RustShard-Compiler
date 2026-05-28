@@ -164,16 +164,16 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
 
   int arg_reg_idx = 0;
   if(func.sret_param) {
-    result.mapping.emplace(func.sret_param->value, Location::make_reg(PhysReg::a0));
+    result.mapping.emplace(func.sret_param->as_reg(), Location::make_reg(PhysReg::a0));
     arg_reg_idx++;
   }
   for(const auto& param: func.params) {
     if(arg_reg_idx < 8) {
       auto pr = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + arg_reg_idx);
-      result.mapping.emplace(param.value, Location::make_reg(pr));
+      result.mapping.emplace(param.as_reg(), Location::make_reg(pr));
     } else {
       // not sure here.
-      // result.mapping.emplace(param.value, Location::make_spill(xxx + 8 * (arg_reg_idx - 8)));
+      // result.mapping.emplace(param.as_reg(), Location::make_spill(xxx + 8 * (arg_reg_idx - 8)));
     }
     ++arg_reg_idx;
   }
@@ -182,6 +182,7 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
   size_t spill_area_size = 0;
 
   for(const auto& interval: intervals) {
+    if(interval.reg < arg_reg_idx) continue; // on-stack param
     if(result.mapping.contains(interval.reg)) continue;
 
     std::erase_if(active, [&](const auto& kv) {
@@ -251,6 +252,7 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
     for(auto& inst: bb.instructions) {
       const auto* call = dynamic_cast<ir::CallInst*>(inst.get());
       if(!call) continue;
+      result.caller_to_save.emplace(call, std::unordered_set<PhysReg>{});
       for(auto pr: kCallerSaveRegs) {
         auto& intervals = result.preg_interval[pr];
         auto it = std::upper_bound(intervals.begin(), intervals.end(), call->instr_no,
@@ -292,7 +294,7 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
   for(const auto& param: func.params) {
     if(arg_reg_idx >= 8) {
       // sure here.
-      result.mapping.emplace(param.value, Location::make_spill(args_start + 8 * (arg_reg_idx - 8)));
+      result.mapping.emplace(param.as_reg(), Location::make_spill(args_start + 8 * (arg_reg_idx - 8)));
     }
     ++arg_reg_idx;
   }

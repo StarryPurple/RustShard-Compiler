@@ -1851,7 +1851,7 @@ void IRGenerator::postVisit(ast::ReturnExpression &node) {
     IrType ret_type(node.expr_opt()->get_type());
 
     if(auto sret_opt = _contexts.back().function_pack.sret_param) {
-      reg_id_t sret_id = sret_opt->value;
+      reg_id_t sret_id = sret_opt->as_reg();
       deep_copy(sret_id, reg_id, ret_type);
       lineR.ret_val = std::nullopt;
     } else {

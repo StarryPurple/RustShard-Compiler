@@ -38,6 +38,8 @@ struct AllocationResult {
   std::unordered_set<PhysReg> caller_saved_used;
   std::unordered_set<PhysReg> callee_saved_used; // union of @caller_to_save
   std::unordered_map<PhysReg, std::vector<LiveInterval>> preg_interval;
+  // Calls are all here. Even those who have no caller-save reg to save has an entry here.
+  // To determine ra_area_needed().
   std::unordered_map<const ir::CallInst*, std::unordered_set<PhysReg>> caller_to_save;
   std::size_t total_frame_size;
   std::size_t spill_area_size;

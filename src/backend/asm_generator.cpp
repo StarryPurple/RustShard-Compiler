@@ -13,16 +13,16 @@ namespace {
     return func_name + "." + label;
   }
 
+  /*
   bool is_32bit(ir::IrType irtype) {
     auto prime = irtype.type().get_if<stype::PrimeType>();
     if(!prime) return false;
     return prime->size() <= 4;
   }
 
-  /*
   AsmOperand loc_to_oper(const Location& loc) {
     if(loc.is_reg()) return AsmOperand::reg(loc.as_reg());
-    if(loc.is_spill()) return AsmOperand::mem(PhysReg::sp, loc.as_spill_offset());
+    if(loc.is_spill()) return AsmOperand::mem(PhysReg::sp, loc.as_spill());
     throw std::runtime_error("Unreachable loc_to_oper end");
   }
 
@@ -88,8 +88,8 @@ namespace {
       try_lea(kTmpRs1, loc.as_addr(), bb);
       return kTmpRs1;
     }
-    // bb.instructions.push_back(RV64I::LD(kTmpRs1, PhysReg::sp, loc.as_spill_offset()));
-    try_ld(kTmpRs1, PhysReg::sp, loc.as_spill_offset(), bb);
+    // bb.instructions.push_back(RV64I::LD(kTmpRs1, PhysReg::sp, loc.as_spill()));
+    try_ld(kTmpRs1, PhysReg::sp, loc.as_spill(), bb);
     return kTmpRs1;
   }
 
@@ -101,8 +101,8 @@ namespace {
       try_lea(kTmpRs2, loc.as_addr(), bb);
       return kTmpRs2;
     }
-    // bb.instructions.push_back(RV64I::LD(kTmpRs2, PhysReg::sp, loc.as_spill_offset()));
-    try_ld(kTmpRs2, PhysReg::sp, loc.as_spill_offset(), bb);
+    // bb.instructions.push_back(RV64I::LD(kTmpRs2, PhysReg::sp, loc.as_spill()));
+    try_ld(kTmpRs2, PhysReg::sp, loc.as_spill(), bb);
     return kTmpRs2;
   }
 
@@ -111,8 +111,108 @@ namespace {
                                   PhysReg tmp = PhysReg::zero) {
     const auto& loc = alloc.mapping.at(vreg);
     if(loc.is_spill()) {
-      try_sd(kTmpRs1, PhysReg::sp, loc.as_spill_offset(), bb, tmp);
-      bb.instructions.push_back(RV64I::SD(kTmpRd, PhysReg::sp, loc.as_spill_offset()));
+      try_sd(kTmpRd, PhysReg::sp, loc.as_spill(), bb, tmp);
+      // bb.instructions.push_back(RV64I::SD(kTmpRd, PhysReg::sp, loc.as_spill()));
+    }
+  }
+
+  // kTmpRs1 and kTmpRs2 are used.
+  void location_assign(Location dst_loc, Location src_loc, AsmBasicBlock& bb) {
+    // dst shall be reg/spill; src can be imm/reg/addr/spill.
+    if(src_loc.is_imm()) {
+      auto imm = src_loc.as_imm();
+      if(dst_loc.is_reg()) {
+        bb.instructions.push_back(RV64I::LI(dst_loc.as_reg(), imm));
+      } else if(dst_loc.is_spill()) {
+        bb.instructions.push_back(RV64I::LI(kTmpRs2, imm));
+        try_sd(kTmpRs2, PhysReg::sp, dst_loc.as_spill(), bb, kTmpRs1);
+      } else {
+        throw std::runtime_error("location assign: invalid dst_loc type");
+      }
+    } else if(src_loc.is_reg()) {
+      auto preg = src_loc.as_reg();
+      if(dst_loc.is_reg()) {
+        if(dst_loc.as_reg() != preg)
+          bb.instructions.push_back(RV64I::MV(dst_loc.as_reg(), preg));
+      } else if(dst_loc.is_spill()) {
+        bb.instructions.push_back(RV64I::MV(kTmpRs2, preg));
+        try_sd(kTmpRs2, PhysReg::sp, dst_loc.as_spill(), bb, kTmpRs1);
+      } else {
+        throw std::runtime_error("location assign: invalid dst_loc type");
+      }
+    } else if(src_loc.is_addr()) {
+      try_lea(kTmpRs1, src_loc.as_addr(), bb);
+      if(dst_loc.is_reg()) {
+        bb.instructions.push_back(RV64I::MV(dst_loc.as_reg(), kTmpRs1));
+      } else if(dst_loc.is_spill()) {
+        bb.instructions.push_back(RV64I::MV(kTmpRs2, kTmpRs1));
+        try_sd(kTmpRs2, PhysReg::sp, dst_loc.as_spill(), bb, kTmpRs1);
+      } else {
+        throw std::runtime_error("location assign: invalid dst_loc type");
+      }
+    } else if(src_loc.is_spill()) {
+      try_ld(kTmpRs1, PhysReg::sp, src_loc.as_spill(), bb);
+      if(dst_loc.is_reg()) {
+        bb.instructions.push_back(RV64I::MV(dst_loc.as_reg(), kTmpRs1));
+      } else if(dst_loc.is_spill()) {
+        bb.instructions.push_back(RV64I::MV(kTmpRs2, kTmpRs1));
+        try_sd(kTmpRs2, PhysReg::sp, dst_loc.as_spill(), bb, kTmpRs1);
+      } else {
+        throw std::runtime_error("location assign: invalid dst_loc type");
+      }
+    }
+  }
+
+  void
+  parallel_assignment(std::unordered_map<Location, Location, Location::Hash>&& dst_to_src, AsmBasicBlock& bb) {
+    // dst shall be reg/spill; src can be imm/reg/addr/spill.
+    // All nodes have only one in-degree (only be dst for at most one time).
+    // That's why we use unordered_map to store them.
+    std::vector<AsmInstruction> instructions;
+    // remove all nodes without out-degree (only be dst, not src) recursively.
+    while(!dst_to_src.empty()) {
+      bool removed = false;
+      for(auto it = dst_to_src.begin(); it != dst_to_src.end();) {
+        auto [dst_loc, src_loc] = *it;
+        bool dst_safe = true;
+        for(const auto& [dst_loc2, src_loc2]: dst_to_src) {
+          if(src_loc2 == dst_loc) {
+            dst_safe = false;
+            break;
+          }
+        }
+        if(dst_safe) {
+          // safe assignment
+          // This is safe. See cppreference.
+          location_assign(dst_loc, src_loc, bb);
+          it = dst_to_src.erase(it);
+          removed = true;
+        } else {
+          ++it;
+        }
+      }
+      if(!removed) break;
+    }
+    // Then, what are left must be cycles only.
+    while(!dst_to_src.empty()) {
+      Location dst_loc = dst_to_src.begin()->first;
+      Location src_loc = dst_to_src.begin()->second;
+      if(src_loc == dst_loc) {
+        // self loop.
+        dst_to_src.erase(dst_loc);
+        continue;
+      }
+      Location backup = dst_loc;
+      // move backup into kTmpRd.
+      location_assign(Location::make_reg(kTmpRd), backup, bb);
+      while(src_loc != backup) {
+        location_assign(dst_loc, src_loc, bb);
+        dst_to_src.erase(dst_loc);
+        dst_loc = src_loc;
+        src_loc = dst_to_src.at(src_loc);
+      }
+      location_assign(dst_loc, Location::make_reg(kTmpRd), bb);
+      dst_to_src.erase(dst_loc);
     }
   }
 
@@ -199,10 +299,13 @@ namespace {
     PhysReg ptr = oper_phys_src_rs1(load.ptr.as_reg(), alloc, bb);
     PhysReg dst = oper_phys_dst(load.dst, alloc);
 
-    if(is_32bit(load.load_type))
-      bb.instructions.push_back(RV64I::LW(dst, ptr, 0));
-    else
-      bb.instructions.push_back(RV64I::LD(dst, ptr, 0));
+    switch(load.load_type.size()) {
+    case 1: bb.instructions.push_back(RV64I::LB(dst, ptr, 0)); break;
+    case 2: bb.instructions.push_back(RV64I::LH(dst, ptr, 0)); break;
+    case 4: bb.instructions.push_back(RV64I::LW(dst, ptr, 0)); break;
+    case 8: bb.instructions.push_back(RV64I::LD(dst, ptr, 0)); break;
+    default: throw std::runtime_error("Impossible value size");
+    }
 
     emit_spill_store_if_needed(load.dst, alloc, bb);
   }
@@ -216,11 +319,13 @@ namespace {
       bb.instructions.push_back(RV64I::LI(kTmpRs1, store.value.as_imm()));
       val = kTmpRs1;
     }
-
-    if(is_32bit(store.value.type))
-      bb.instructions.push_back(RV64I::SW(val, ptr, 0));
-    else
-      bb.instructions.push_back(RV64I::SD(val, ptr, 0));
+    switch(store.value.type.size()) {
+    case 1: bb.instructions.push_back(RV64I::SB(val, ptr, 0)); break;
+    case 2: bb.instructions.push_back(RV64I::SH(val, ptr, 0)); break;
+    case 4: bb.instructions.push_back(RV64I::SW(val, ptr, 0)); break;
+    case 8: bb.instructions.push_back(RV64I::SD(val, ptr, 0)); break;
+    default: throw std::runtime_error("Impossible value size");
+    }
   }
 
   void generate_call(const ir::CallInst& call, const AllocationResult& alloc,
@@ -232,10 +337,9 @@ namespace {
     // caller-save spill
     auto it = alloc.caller_to_save.find(&call);
     if(it != alloc.caller_to_save.end()) {
-
       if(call.dst.has_value()
-      && alloc.mapping.at(*call.dst).is_reg()
-      && it->second.contains(alloc.mapping.at(*call.dst).as_reg()))
+        && alloc.mapping.at(*call.dst).is_reg()
+        && it->second.contains(alloc.mapping.at(*call.dst).as_reg()))
         caller_save_result = alloc.mapping.at(*call.dst).as_reg();
       int offset = alloc.caller_save_offset();
       for(auto pr: it->second) {
@@ -259,69 +363,17 @@ namespace {
     }
 
     // set args (8-)
-    std::unordered_map<Location, PhysReg, Location::Hash> src_of_dst;
+    std::unordered_map<Location, Location, Location::Hash> dst_to_src;
     for(size_t i = 0; i < call.args.size() && i < 8; ++i) {
       auto dst = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + i);
       if(call.args[i].is_imm()) {
         bb.instructions.push_back(RV64I::LI(dst, call.args[i].as_imm()));
       } else {
-        src_of_dst.emplace(alloc.mapping.at(call.args[i].as_reg()), dst);
+        dst_to_src.emplace(Location::make_reg(dst), alloc.mapping.at(call.args[i].as_reg()));
       }
     }
-    // since all nodes have only one out-degree and one in-degree,
-    // the graph must only contain chains and loops.
 
-    // all chains.
-    while(!src_of_dst.empty()) {
-      bool removed = false;
-      for(auto it = src_of_dst.begin(); it != src_of_dst.end();) {
-        auto [src_loc, dst] = *it;
-        if(!src_of_dst.contains(Location::make_reg(dst))) {
-          // coverage is safe
-          if(src_loc.is_reg()) {
-            auto src = src_loc.as_reg();
-            bb.instructions.push_back(RV64I::MV(dst, src));
-          } else if(src_loc.is_spill()) {
-            try_ld(kTmpRs1, PhysReg::sp, src_loc.as_spill_offset(), bb);
-            bb.instructions.push_back(RV64I::MV(dst, kTmpRs1));
-          } else {
-            try_lea(kTmpRs1, src_loc.as_addr(), bb);
-            bb.instructions.push_back(RV64I::MV(dst, kTmpRs1));
-          }
-
-          // This operation is safe. see cppreference.
-          it = src_of_dst.erase(it);
-          removed = true;
-        } else {
-          ++it;
-        }
-      }
-      if(!removed) break;
-    }
-    // all loops.
-    while(!src_of_dst.empty()) {
-      Location src_loc = src_of_dst.begin()->first;
-      PhysReg dst = src_of_dst.begin()->second;
-      PhysReg backup = dst;
-      bb.instructions.push_back(RV64I::MV(kTmpRd, backup));
-      while(!src_loc.is_reg() || src_loc.as_reg() != backup) {
-        auto src = src_loc.as_reg();
-        bb.instructions.push_back(RV64I::MV(dst, src));
-        src_of_dst.erase(src_loc);
-        bool found = false;
-        for(const auto& [src_loc2, dst2]: src_of_dst) {
-          if(dst2 == src) {
-            src_loc = src_loc2;
-            dst = dst2;
-            found = true;
-            break;
-          }
-        }
-        if(!found) throw std::runtime_error("Unreachable: Func reg passing (8-)");
-      }
-      bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
-      src_of_dst.erase(src_loc);
-    }
+    parallel_assignment(std::move(dst_to_src), bb);
 
     // call. No mangle here
     bb.instructions.push_back(RV64I::CALL(call.func_name));
@@ -368,6 +420,11 @@ namespace {
 
   void generate_cond_br(const ir::CondBranchInst& cond, const AllocationResult& alloc,
                         AsmBasicBlock& bb, std::string func_name) {
+    if(cond.cond.is_imm()) {
+      bb.instructions.push_back(RV64I::J(
+        mangle_label(func_name, cond.cond.as_imm() ? cond.true_label.to_str() : cond.false_label.to_str())));
+      return;
+    }
     PhysReg c = oper_phys_src_rs1(cond.cond.as_reg(), alloc, bb);
     bb.instructions.push_back(RV64I::BNEZ(c, mangle_label(func_name, cond.true_label.to_str())));
     bb.instructions.push_back(RV64I::J(mangle_label(func_name, cond.false_label.to_str())));
@@ -422,58 +479,6 @@ namespace {
 
     emit_spill_store_if_needed(gep.dst, alloc, bb);
   }
-
-  void handle_phi(const ir::PhiInst& phi, AsmFunction& asm_func,
-                  const AllocationResult& alloc) {
-    const auto& dst_loc = alloc.mapping.at(phi.dst);
-
-    for(const auto& [op, label]: phi.incoming) {
-      if(op.is_imm()) {
-        std::string target_label = mangle_label(asm_func.name, label.to_str());
-        for(auto& asm_bb: asm_func.blocks) {
-          if(asm_bb.label != target_label) continue;
-          auto& instrs = asm_bb.instructions;
-          if(instrs.empty()) {
-            throw std::runtime_error("Empty basic block");
-          }
-          if(dst_loc.is_reg()) {
-            instrs.insert(--instrs.end(), RV64I::LI(dst_loc.as_reg(), op.as_imm()));
-          } else {
-            instrs.insert(--instrs.end(), RV64I::LI(kTmpRd, op.as_imm()));
-            instrs.insert(--instrs.end(), RV64I::SD(kTmpRd, PhysReg::sp, dst_loc.as_spill_offset()));
-          }
-          break;
-        }
-      } else {
-        const auto& src_loc = alloc.mapping.at(op.as_reg());
-        if(dst_loc == src_loc) continue;
-
-        std::string target_label = mangle_label(asm_func.name, label.to_str());
-        for(auto& asm_bb: asm_func.blocks) {
-          if(asm_bb.label != target_label) continue;
-
-          auto& instrs = asm_bb.instructions;
-          if(instrs.empty()) {
-            throw std::runtime_error("Empty basic block");
-          }
-
-          if(dst_loc.is_reg() && src_loc.is_reg()) {
-            asm_bb.instructions.insert(--instrs.end(), RV64I::MV(dst_loc.as_reg(), src_loc.as_reg()));
-          } else if(dst_loc.is_reg() && src_loc.is_spill()) {
-            asm_bb.instructions.insert(--instrs.end(),
-                                       RV64I::LD(dst_loc.as_reg(), PhysReg::sp, src_loc.as_spill_offset()));
-          } else if(dst_loc.is_spill() && src_loc.is_reg()) {
-            asm_bb.instructions.insert(--instrs.end(),
-                                       RV64I::SD(src_loc.as_reg(), PhysReg::sp, dst_loc.as_spill_offset()));
-          } else if(dst_loc.is_spill() && src_loc.is_spill()) {
-            asm_bb.instructions.insert(--instrs.end(), RV64I::LD(kTmpRd, PhysReg::sp, src_loc.as_spill_offset()));
-            asm_bb.instructions.insert(--instrs.end(), RV64I::SD(kTmpRd, PhysReg::sp, dst_loc.as_spill_offset()));
-          }
-          break;
-        }
-      }
-    }
-  }
 } // anonymous namespace
 
 /************************************* AsmGenerator **********************************************/
@@ -500,12 +505,32 @@ AsmFunction AsmGenerator::generate_func(const ir::FunctionPack& func) {
     generate_block(bb, alloc);
   }
 
+  std::unordered_map<AsmBasicBlock*, std::unordered_map<Location, Location, Location::Hash>>
+    dst_to_src_collection;
   for(const auto& bb: func.basic_block_packs) {
     for(const auto& inst: bb.instructions) {
       if(auto* phi = dynamic_cast<const ir::PhiInst*>(inst.get())) {
-        handle_phi(*phi, _asm_func, alloc);
+        for(const auto& [op, label]: phi->incoming) {
+          std::string target_label = mangle_label(_asm_func.name, label.to_str());
+          for(auto& asm_bb: _asm_func.blocks) {
+            if(asm_bb.label != target_label) continue;
+            dst_to_src_collection[&asm_bb].emplace(
+              alloc.mapping.at(phi->dst),
+              op.is_imm() ? Location::make_imm(op.as_imm()) : alloc.mapping.at(op.as_reg())
+            );
+          }
+        }
       } else break;
     }
+  }
+  for(auto& [asm_bb, dst_to_src]: dst_to_src_collection) {
+    auto& instrs = asm_bb->instructions;
+    auto bj_inst = instrs.back();
+    instrs.pop_back();
+    asm_bb->instructions.push_back(RV64I::LineComment("Now prepare for Phis:"));
+    auto copy = dst_to_src;
+    parallel_assignment(std::move(dst_to_src), *asm_bb);
+    instrs.push_back(bj_inst);
   }
 
   generate_epilogue(alloc);
@@ -607,8 +632,9 @@ void AsmGenerator::generate_block(const ir::BasicBlockPack& bb, const Allocation
 
 void AsmGenerator::generate_instruction(const ir::Instruction* inst, AsmBasicBlock& bb,
                                         const AllocationResult& alloc) {
-  // Alloca do not need handling; Phi is handled in handle_phi
+  // Alloca do not need handling; Phi is handled in the main process
   // bb.instructions.push_back(RV64I::LineComment(std::format("Instr {}", inst->instr_no)));
+  bool to_record = true;
   if(auto* bin = dynamic_cast<const ir::BinaryOpInst*>(inst)) {
     generate_binary_op(*bin, alloc, bb);
   } else if(auto* load = dynamic_cast<const ir::LoadInst*>(inst)) {
@@ -627,6 +653,10 @@ void AsmGenerator::generate_instruction(const ir::Instruction* inst, AsmBasicBlo
     generate_cast(*cast, alloc, bb);
   } else if(auto* gep = dynamic_cast<const ir::GEPInst*>(inst)) {
     generate_gep(*gep, alloc, bb);
+  } else {
+    to_record = false;
   }
+  if(to_record)
+    bb.instructions.back().comment = std::format("ir inst {} fin", inst->instr_no);
 }
 } // namespace rshard::backend

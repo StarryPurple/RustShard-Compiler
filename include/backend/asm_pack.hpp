@@ -16,20 +16,24 @@ namespace rshard::backend {
 struct Location {
   struct Register { PhysReg reg; bool operator==(const Register& o) const { return reg == o.reg; } };
   struct SpillSlot { int32_t offset; bool operator==(const SpillSlot& o) const { return offset == o.offset; } };
+  struct Immediate { int64_t imm; bool operator==(const Immediate& o) const { return imm == o.imm; } };
   struct StackAddr { int32_t addr; bool operator==(const StackAddr& o) const { return addr == o.addr; } };
 
-  std::variant<Register, SpillSlot, StackAddr> value;
+  std::variant<Register, SpillSlot, Immediate, StackAddr> value;
 
   static Location make_reg(PhysReg reg) { return {Register{reg}}; }
   static Location make_spill(int32_t offset) { return {SpillSlot{offset}}; }
+  static Location make_imm(int64_t imm) { return {Immediate{imm}}; }
   static Location make_addr(int32_t addr) { return {StackAddr{addr}}; }
 
   bool is_reg() const { return std::holds_alternative<Register>(value); }
   bool is_spill() const { return std::holds_alternative<SpillSlot>(value); }
+  bool is_imm() const { return std::holds_alternative<Immediate>(value); }
   bool is_addr() const { return std::holds_alternative<StackAddr>(value); }
 
   PhysReg as_reg() const { return std::get<Register>(value).reg; }
-  int32_t as_spill_offset() const { return std::get<SpillSlot>(value).offset; }
+  int32_t as_spill() const { return std::get<SpillSlot>(value).offset; }
+  int64_t as_imm() const { return std::get<Immediate>(value).imm; }
   int32_t as_addr() const { return std::get<StackAddr>(value).addr; }
 
   bool operator==(const Location& other) const { return value == other.value; }
@@ -45,8 +49,10 @@ struct Location {
           h = std::hash<int>{}(static_cast<int>(v.reg));
         } else if constexpr(std::is_same_v<T, SpillSlot>) {
           h = std::hash<int32_t>{}(v.offset);
-        } else {
-          h = std::hash<int64_t>{}(v.addr);
+        } else if constexpr(std::is_same_v<T, Immediate>) {
+          h = std::hash<int64_t>{}(v.imm);
+        } else if constexpr(std::is_same_v<T, StackAddr>) {
+          h = std::hash<int32_t>{}(v.addr);
         }
         return seed ^ (h + 0x9e3779b9 + (seed << 6) + (seed >> 2));
       }, loc.value);

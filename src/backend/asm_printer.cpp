@@ -1,5 +1,7 @@
 #include "backend/asm_printer.hpp"
 
+#include <format>
+
 namespace rshard::backend {
 std::string AsmPrinter::sprint(const AsmPack& pack) {
   std::string res;
@@ -42,7 +44,7 @@ std::string AsmPrinter::sprint(const AsmBasicBlock& block) {
   }
 
   for(const auto& inst: block.instructions) {
-    res += INDENT + sprint(inst) + "\n";
+    res += sprint(inst) + "\n";
   }
 
   return res;
@@ -51,10 +53,10 @@ std::string AsmPrinter::sprint(const AsmBasicBlock& block) {
 std::string AsmPrinter::sprint(const AsmInstruction& inst) {
   if(inst.opcode.empty()) {
     if(inst.comment.empty()) return "";
-    return INDENT + "# " + inst.comment;
+    return "# " + inst.comment;
   }
 
-  std::string res = inst.opcode;
+  std::string res = INDENT + inst.opcode;
 
   for(size_t i = 0; i < inst.operands.size(); ++i) {
     res += (i == 0 ? " " : ", ");
@@ -62,7 +64,7 @@ std::string AsmPrinter::sprint(const AsmInstruction& inst) {
   }
 
   if(!inst.comment.empty()) {
-    res += "  # " + inst.comment;
+    res = std::format("{:70}  # {}", res, inst.comment);
   }
 
   return res;

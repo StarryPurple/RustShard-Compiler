@@ -85,3 +85,9 @@ When you pass params indirectly by pointers, remember to deep copy those value-p
 Do not simply turn them to pointers. Clone the value.
 
 Be cautious as bitmap boundary.
+
+parallel_assignment: one node can only act as dst (not src) for one time.
+
+ra storage can be omitted if this is a leaf function (no func calls inside it).
+Omitted ra storage in not leaf functions may lead to infinite loop (stuck and not return).
+Functions with only calls of no caller reg saving is still a call. Remember this.

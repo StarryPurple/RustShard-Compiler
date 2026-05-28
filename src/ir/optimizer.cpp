@@ -2,7 +2,6 @@
 #include <stack>
 
 namespace rshard::ir {
-
 void eliminate_single_phi(FunctionPack& func) {
   std::vector<std::pair<reg_id_t, Operand>> use_map;
   for(auto& bb: func.basic_block_packs) {
@@ -105,25 +104,24 @@ bool constant_fold(FunctionPack& func) {
       Operand rhs = binop->rhs;
       StringT op = binop->op;
 
-      bool lhs_const = (lhs.kind == OperandKind::kImmediate);
-      bool rhs_const = (rhs.kind == OperandKind::kImmediate);
-
       std::optional<Operand> result;
 
       // 1: two imm: fold.
-      if(lhs_const && rhs_const) {
-        int64_t a = lhs.value, b = rhs.value;
+      if(lhs.is_imm() && rhs.is_imm()) {
+        int64_t a = lhs.as_imm(), b = rhs.as_imm();
         if(op == "add") result = Operand::make_imm(a + b, binop->type);
         else if(op == "sub") result = Operand::make_imm(a - b, binop->type);
         else if(op == "mul") result = Operand::make_imm(a * b, binop->type);
         else if(op == "sdiv" && b != 0)
           result = Operand::make_imm(a / b, binop->type);
         else if(op == "udiv" && b != 0)
-          result = Operand::make_imm(static_cast<int64_t>(static_cast<uint64_t>(a) / static_cast<uint64_t>(b)), binop->type);
+          result = Operand::make_imm(static_cast<int64_t>(static_cast<uint64_t>(a) / static_cast<uint64_t>(b)),
+                                     binop->type);
         else if(op == "srem" && b != 0)
           result = Operand::make_imm(a % b, binop->type);
         else if(op == "urem" && b != 0)
-          result = Operand::make_imm(static_cast<int64_t>(static_cast<uint64_t>(a) % static_cast<uint64_t>(b)), binop->type);
+          result = Operand::make_imm(static_cast<int64_t>(static_cast<uint64_t>(a) % static_cast<uint64_t>(b)),
+                                     binop->type);
         else if(op == "and") result = Operand::make_imm(a & b, binop->type);
         else if(op == "or") result = Operand::make_imm(a | b, binop->type);
         else if(op == "xor") result = Operand::make_imm(a ^ b, binop->type);
@@ -141,38 +139,37 @@ bool constant_fold(FunctionPack& func) {
       // 2: arithmetically simplifiable
       else if(op == "add" || op == "sub" || op == "or" || op == "xor") {
         // X + 0 = X, X - 0 = X, X | 0 = X, X ^ 0 = X
-        if(rhs_const && rhs.value == 0) {
+        if(rhs.is_imm() && rhs.as_imm() == 0) {
           result = lhs;
         }
         // 0 + X = X
-        if(op == "add" && lhs_const && lhs.value == 0) {
+        if(op == "add" && lhs.is_imm() && lhs.as_imm() == 0) {
           result = rhs;
         }
         // X - X = 0
-        if(op == "sub" && lhs.kind == OperandKind::kVirtualReg
-          && rhs.kind == OperandKind::kVirtualReg
-          && lhs.value == rhs.value) {
+        if(op == "sub" && lhs.is_reg() && rhs.is_reg()
+          && lhs.as_reg() == rhs.as_reg()) {
           result = Operand::make_imm(0, binop->type);
         }
       } else if(op == "mul") {
         // X * 1 = X
-        if(rhs_const && rhs.value == 1) result = lhs;
-        else if(lhs_const && lhs.value == 1) result = rhs;
+        if(rhs.is_imm() && rhs.as_imm() == 1) result = lhs;
+        else if(lhs.is_imm() && lhs.as_imm() == 1) result = rhs;
           // X * 0 = 0
-        else if((rhs_const && rhs.value == 0) || (lhs_const && lhs.value == 0)) {
+        else if((rhs.is_imm() && rhs.as_imm() == 0) || (lhs.is_imm() && lhs.as_imm() == 0)) {
           result = Operand::make_imm(0, binop->type);
         }
       } else if(op == "sdiv" || op == "udiv") {
         // X / 1 = X
-        if(rhs_const && rhs.value == 1) result = lhs;
+        if(rhs.is_imm() && rhs.as_imm() == 1) result = lhs;
       } else if(op == "and") {
         // X & 0 = 0
-        if((rhs_const && rhs.value == 0) || (lhs_const && lhs.value == 0)) {
+        if((rhs.is_imm() && rhs.as_imm() == 0) || (lhs.is_imm() && lhs.as_imm() == 0)) {
           result = Operand::make_imm(0, binop->type);
         }
         // X & -1 = X
-        else if(rhs_const && rhs.value == -1) result = lhs;
-        else if(lhs_const && lhs.value == -1) result = rhs;
+        else if(rhs.is_imm() && rhs.as_imm() == -1) result = lhs;
+        else if(lhs.is_imm() && lhs.as_imm() == -1) result = rhs;
       }
 
       if(result) {
@@ -203,8 +200,12 @@ bool constant_fold(FunctionPack& func) {
 
 void Canonicalization::optimize(FunctionPack& func) {
   eliminate_single_phi(func);
-  while(eliminate_deadcode(func)) { /* loop */ }
-  while(constant_fold(func)) { /* loop */ }
+  while(eliminate_deadcode(func)) {
+    /* loop */
+  }
+  while(constant_fold(func)) {
+    /* loop */
+  }
   func.reorder_reg_ids();
   func.instr_renumbering();
 }
@@ -243,7 +244,7 @@ std::vector<block_id_t> collect_def_blocks(FunctionPack& func, reg_id_t slot) {
   for(block_id_t i = 0; i < func.basic_block_packs.size(); ++i) {
     for(auto& inst: func.basic_block_packs[i].instructions) {
       if(auto* s = dynamic_cast<StoreInst*>(inst.get())) {
-        if(s->ptr.kind == OperandKind::kVirtualReg && s->ptr.value == slot) {
+        if(s->ptr.is_reg() && s->ptr.as_reg() == slot) {
           blocks.insert(i);
         }
       }
@@ -279,9 +280,9 @@ void insert_phi_for_slot(FunctionPack& func, reg_id_t slot, IrType slot_type) {
 
         auto& instrs = func.basic_block_packs[df_block].instructions;
         auto it = std::find_if(instrs.begin(), instrs.end(),
-          [](const std::unique_ptr<Instruction>& instr) {
-            return !dynamic_cast<PhiInst*>(instr.get());
-          });
+                               [](const std::unique_ptr<Instruction>& instr) {
+                                 return !dynamic_cast<PhiInst*>(instr.get());
+                               });
         instrs.insert(it, std::move(phi));
 
         if(visited.insert(df_block).second) {
@@ -310,8 +311,8 @@ struct SlotRenamer {
   reg_id_t new_version() { return next_version++; }
 
   void replace_all_uses(reg_id_t old_reg, Operand new_oper) {
-    for(auto& bb : func.basic_block_packs) {
-      for(auto& inst : bb.instructions) {
+    for(auto& bb: func.basic_block_packs) {
+      for(auto& inst: bb.instructions) {
         if(!inst) continue;
         inst->replace_use(old_reg, new_oper);
       }
@@ -339,7 +340,6 @@ struct SlotRenamer {
     std::vector<std::unique_ptr<Instruction>> new_instrs;
 
     for(auto& inst: block.instructions) {
-
       // PhiInst preserved.
       if(dynamic_cast<PhiInst*>(inst.get())) {
         new_instrs.push_back(std::move(inst));
@@ -347,8 +347,7 @@ struct SlotRenamer {
       }
 
       if(auto* store = dynamic_cast<StoreInst*>(inst.get())) {
-        if(store->ptr.kind == OperandKind::kVirtualReg
-          && store->ptr.value == slot) {
+        if(store->ptr.is_reg() && store->ptr.as_reg() == slot) {
           push(store->value);
           pushed_count++;
           // StoreInst erased.
@@ -358,8 +357,7 @@ struct SlotRenamer {
       }
 
       if(auto* load = dynamic_cast<LoadInst*>(inst.get())) {
-        if(load->ptr.kind == OperandKind::kVirtualReg
-          && load->ptr.value == slot) {
+        if(load->ptr.is_reg() && load->ptr.as_reg() == slot) {
           // totally spread substitution
           replace_all_uses(load->dst, current());
           // and in new_instrs
@@ -441,7 +439,7 @@ void PromoteAlloca::optimize(FunctionPack& func) {
   reg_id_t next_ssa_reg = max_reg + 1;
 
   // (SSA) PromoteAlloca process.
-  for(auto &[slot, slot_type]: promotable) {
+  for(auto& [slot, slot_type]: promotable) {
     insert_phi_for_slot(func, slot, slot_type);
 
     SlotRenamer renamer(func, slot, next_ssa_reg);
@@ -459,6 +457,4 @@ void PromoteAlloca::optimize(FunctionPack& func) {
   // single phi cannot pass LLVM check.
   // eliminate_single_phi(func);
 }
-
-
 }
