@@ -145,7 +145,7 @@ public:
     throw std::runtime_error("Invalid checking: ExprType::is_undetermined");
   }
   virtual bool need_indirect_pass() const {
-    throw std::runtime_error("Invalid checking: ExprType::nedd_indirect_pass");
+    throw std::runtime_error("Invalid checking: ExprType::need_indirect_pass");
   }
 
   // whether this is unit type.
@@ -343,6 +343,12 @@ public:
   void combine_hash(std::size_t &seed) const override;
   std::string to_string() const override;
   std::size_t size() const override;
+  bool is_undetermined() const override {
+    return false;
+  }
+  bool need_indirect_pass() const override {
+    return false;
+  }
 protected:
   bool equals_impl(const ExprType &other) const override;
   bool convertible_impl(const ExprType &other) const override;
