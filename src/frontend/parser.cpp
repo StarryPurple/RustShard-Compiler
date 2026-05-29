@@ -752,8 +752,10 @@ enum class Precedence {
   kRange,          // .., ..=
   kLogicalOr,      // ||
   kLogicalAnd,     // &&
-  kComparison ,    // ==, !=, >, <, >=, <=
-  kBitwise,        // &, |, ^
+  kBitwiseXor,     // ^
+  kBitwiseAndOr,   // &, |
+  kEquality,       // ==, !=
+  kComparison,     // >, <, >=, <=
   kShift,          // <<, >>
   kAdditive,       // +, -
   kMultiplicative, // *, /, %
@@ -799,13 +801,15 @@ std::map<TokenType, int> infix_precedence = {
     {TokenType::kShr,         static_cast<int>(Precedence::kShift)},
 
     // Bitwise
-    {TokenType::kAnd,         static_cast<int>(Precedence::kBitwise)},
-    {TokenType::kOr,          static_cast<int>(Precedence::kBitwise)},
-    {TokenType::kCaret,       static_cast<int>(Precedence::kBitwise)},
+    {TokenType::kAnd,         static_cast<int>(Precedence::kBitwiseAndOr)},
+    {TokenType::kOr,          static_cast<int>(Precedence::kBitwiseAndOr)},
+    {TokenType::kCaret,       static_cast<int>(Precedence::kBitwiseXor)},
+
+    // kEquality
+    {TokenType::kEqEq,        static_cast<int>(Precedence::kEquality)},
+    {TokenType::kNe,          static_cast<int>(Precedence::kEquality)},
 
     // Comparison
-    {TokenType::kEqEq,        static_cast<int>(Precedence::kComparison)},
-    {TokenType::kNe,          static_cast<int>(Precedence::kComparison)},
     {TokenType::kGt,          static_cast<int>(Precedence::kComparison)},
     {TokenType::kLt,          static_cast<int>(Precedence::kComparison)},
     {TokenType::kGe,          static_cast<int>(Precedence::kComparison)},
@@ -967,7 +971,6 @@ std::unique_ptr<Expression> Parser::parseInfixExpression(int precedence, TokenTy
       EXPECT_POINTER_NOT_EMPTY(lft);
     } break;
       // infix
-
     case TokenType::kPlus: case TokenType::kMinus: case TokenType::kStar:
     case TokenType::kSlash: case TokenType::kPercent:
     case TokenType::kAnd: case TokenType::kOr: case TokenType::kCaret:

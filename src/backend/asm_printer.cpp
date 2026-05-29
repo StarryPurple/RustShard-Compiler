@@ -82,6 +82,7 @@ std::string AsmPrinter::sprint(const AsmOperand& op) {
     } else if constexpr(std::is_same_v<T, AsmOperand::Mem>) {
       return std::to_string(v.offset) + "(" + sprint_reg(v.base) + ")";
     }
+    return "";
   }, op.value);
 }
 
