@@ -21,7 +21,7 @@ void IRGenerator::preVisit(ast::Function &node) {
   _contexts.back().variable_addr_reg_maps.emplace_back();
 
   // basic block entrance:
-  Label entry_label(LabelHint::kEntry, _contexts.back().new_label_hint_id());
+  Label entry_label(LabelHint::kEntry, 0);
   entry_label.block_id = 0;
   _contexts.back().basic_block_packs.push_back(BasicBlockPack{
     .label = entry_label
@@ -50,7 +50,7 @@ void IRGenerator::preVisit(ast::Function &node) {
   // But keeping them in good order in other circumstances are still good, in convenience of
   // manual review and debug.
   // so...
-  _contexts.back()._next_reg_id +=
+  _contexts.back().next_reg_id +=
     (func_tp->need_sret() ? 1 : 0) + (func_tp->self_type_opt() ? 1 : 0) + static_cast<int>(func_tp->params().size());
   auto next_param_reg_id = 0;
   auto sret_id = -1;
@@ -1444,7 +1444,7 @@ void IRGenerator::visit(ast::ArrayExpression &node) {
     // new.arr.exit:
     //   (%arr_val = load [T; N], [T; N]* %arr_ptr)
 
-    auto hint_tag_id = _contexts.back().new_label_hint_id();
+    auto hint_tag_id = _contexts.back().new_arr_hint_id();
     Label cond_label(LabelHint::kArrayCond, hint_tag_id);
     Label body_label(LabelHint::kArrayBody, hint_tag_id);
     Label exit_label(LabelHint::kArrayExit, hint_tag_id);
@@ -1610,7 +1610,7 @@ void IRGenerator::visit(ast::IfExpression &node) {
   //   %if_res = phi Ty [%then_res, %from_then], [%else_res, %from_else]
   //   (go on)
 
-  auto hint_tag_id = _contexts.back().new_label_hint_id();
+  auto hint_tag_id = _contexts.back().new_if_hint_id();
   Label then_label(LabelHint::kIfThen, hint_tag_id);
   Label else_label(LabelHint::kIfElse, hint_tag_id);
   Label exit_label(LabelHint::kIfExit, hint_tag_id);
@@ -1710,7 +1710,7 @@ void IRGenerator::visit(ast::PredicateLoopExpression &node) {
   //   (end of body) br label while.cond
   // while.exit:
   //   ...
-  auto hint_tag_id = _contexts.back().new_label_hint_id();
+  auto hint_tag_id = _contexts.back().new_while_hint_id();
   Label cond_label(LabelHint::kWhileCond, hint_tag_id);
   Label body_label(LabelHint::kWhileBody, hint_tag_id);
   Label exit_label(LabelHint::kWhileExit, hint_tag_id);
@@ -1762,7 +1762,7 @@ void IRGenerator::visit(ast::InfiniteLoopExpression &node) {
   // loop.exit:
   //   (if not_void) %res = load Ty, Ty* %res_ptr
 
-  auto hint_tag_id = _contexts.back().new_label_hint_id();
+  auto hint_tag_id = _contexts.back().new_loop_hint_id();
   Label body_label(LabelHint::kLoopBody, hint_tag_id);
   Label exit_label(LabelHint::kLoopExit, hint_tag_id);
 
@@ -1904,7 +1904,7 @@ void IRGenerator::visit(ast::LazyBooleanExpression &node) {
   auto lhs_id = _contexts.back().node_reg_map.at(node.expr1()->id());
   reg_id_t rhs_id = -1;
 
-  auto hint_tag_id = _contexts.back().new_label_hint_id();
+  auto hint_tag_id = _contexts.back().new_lazy_hint_id();
   Label then_label(LabelHint::kLazyThen, hint_tag_id);
   Label else_label(LabelHint::kLazyElse, hint_tag_id);
   Label exit_label(LabelHint::kLazyExit, hint_tag_id);

@@ -1,6 +1,8 @@
 #ifndef RUST_SHARD_IR_GENERATOR_H
 #define RUST_SHARD_IR_GENERATOR_H
 
+#include <array>
+
 #include "frontend/syntax_check.hpp"
 #include "ir_pack.hpp"
 
@@ -197,9 +199,9 @@ private:
 
   struct FunctionContext {
     bool is_unreachable = false;
-    reg_id_t _next_reg_id = 0;
-    block_id_t _next_label_hint_id = 0;
-    reg_id_t _static_alloc_count = 0;
+    reg_id_t next_reg_id = 0;
+    reg_id_t static_alloc_count = 0;
+    std::array<block_id_t, 5> next_hint_ids{};
     std::vector<BasicBlockPack> basic_block_packs;
     std::vector<std::unique_ptr<Instruction>> instructions;
     // result of node with this node id is in which register
@@ -222,8 +224,12 @@ private:
     // Now only urges arrays to construct in-place.
     std::unordered_map<ast::node_id_t, reg_id_t> inplace_node_ptr_map;
 
-    reg_id_t new_reg_id() { return _next_reg_id++; }
-    hint_id_t new_label_hint_id() { return _next_label_hint_id++; }
+    reg_id_t new_reg_id() { return next_reg_id++; }
+    reg_id_t new_arr_hint_id() { return next_hint_ids[0]++; }
+    reg_id_t new_if_hint_id() { return next_hint_ids[1]++; }
+    reg_id_t new_while_hint_id() { return next_hint_ids[2]++; }
+    reg_id_t new_loop_hint_id() { return next_hint_ids[3]++; }
+    reg_id_t new_lazy_hint_id() { return next_hint_ids[4]++; }
 
     // if not assigned, alloc one via @new_reg_id.
     // Must be an expression node. The irtype is the object type (not the pointer)
@@ -282,7 +288,7 @@ private:
          = (basic_block_packs.size() == 1)
          ? instructions : basic_block_packs.front().instructions;
       // For prettiness, put them at the beginning.
-      instrs.insert(instrs.begin() + (_static_alloc_count++), std::make_unique<AllocaInst>(std::move(lineA)));
+      instrs.insert(instrs.begin() + (static_alloc_count++), std::make_unique<AllocaInst>(std::move(lineA)));
 
       return addr_id;
     }
