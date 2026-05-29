@@ -541,10 +541,20 @@ AsmFunction AsmGenerator::generate_func(const ir::FunctionPack& func) {
       } else break;
     }
   }
+
+  // ir block must end with jump / br
+  // asm block must end with "j label" or "bnez %res label"
+  // warning: this property might be deprecated later.
+
   for(auto& [asm_bb, dst_to_src]: dst_to_src_collection) {
     auto& instrs = asm_bb->instructions;
-    auto bj_inst = instrs.back();
+
+    if(instrs.size() >= 2 && instrs[instrs.size() - 2].opcode == "bnez") {
+      throw std::runtime_error("Invalid circumstance: critical edge");
+    }
+    AsmInstruction bj_inst = instrs.back();
     instrs.pop_back();
+
     asm_bb->instructions.push_back(RV64I::LineComment("Phi connections"));
     auto copy = dst_to_src;
     parallel_assignment(std::move(dst_to_src), *asm_bb);

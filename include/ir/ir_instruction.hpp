@@ -384,6 +384,7 @@ enum class LabelHint {
   kLazyThen,
   kLazyElse,
   kLazyExit,
+  kCriticalEdge,
 };
 
 struct Label {
@@ -410,7 +411,7 @@ struct Label {
         {LabelHint::kWhileBody, "while.body"}, {LabelHint::kWhileExit, "while.exit"},
         {LabelHint::kLoopBody, "loop.body"}, {LabelHint::kLoopExit, "loop.exit"},
         {LabelHint::kLazyThen, "lazy.then"}, {LabelHint::kLazyElse, "lazy.else"},
-        {LabelHint::kLazyExit, "lazy.exit"},
+        {LabelHint::kLazyExit, "lazy.exit"}, {LabelHint::kCriticalEdge, "critical_edge"},
       };
     return "_" + std::to_string(block_id) + "." + map.at(hint) + "." + std::to_string(hint_id);
   }

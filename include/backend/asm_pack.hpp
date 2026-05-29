@@ -77,4 +77,4 @@ struct AsmPack {
 
 } // namespace rshard::backend
 
-#endif
+#endif // RUST_SHARD_ASM_PACK_HPP

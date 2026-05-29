@@ -199,8 +199,58 @@ bool constant_fold(FunctionPack& func) {
   return changed;
 }
 
+void eliminate_critical_edge(FunctionPack& func) {
+  func.construct_cfg();
+  auto &cfg = func.cfg;
+
+  std::vector<std::pair<block_id_t, block_id_t>> edges_to_split;
+  for(block_id_t from = 0; from < cfg.succ.size(); ++from) {
+    if(cfg.succ[from].size() <= 1) continue;
+    for(block_id_t to: cfg.succ[from]) {
+      if(cfg.pred[to].size() > 1) {
+        edges_to_split.push_back({from, to});
+      }
+    }
+  }
+  if(edges_to_split.empty()) return;
+
+  cfg.valid = false;
+
+  block_id_t next_hint_id = 0;
+
+  for(const auto& [from, to]: edges_to_split) {
+    BasicBlockPack bbp;
+    bbp.label = Label{LabelHint::kCriticalEdge, next_hint_id++};
+    BranchInst lineB;
+    lineB.label = func.basic_block_packs[to].label;
+    bbp.instructions.emplace_back(std::make_unique<BranchInst>(std::move(lineB)));
+    func.basic_block_packs.push_back(std::move(bbp));
+
+    for(auto& inst: func.basic_block_packs[from].instructions) {
+      if(auto* br = dynamic_cast<BranchInst*>(inst.get())) {
+        if(br->label == lineB.label) br->label = bbp.label;
+      } else if(auto* cond = dynamic_cast<CondBranchInst*>(inst.get())) {
+        if(cond->true_label == lineB.label) cond->true_label = bbp.label;
+        if(cond->false_label == lineB.label) cond->false_label = bbp.label;
+      }
+    }
+
+    for(auto& inst: func.basic_block_packs[to].instructions) {
+      if(auto* phi = dynamic_cast<PhiInst*>(inst.get())) {
+        for(auto &[op, label]: phi->incoming) {
+          if(label == func.basic_block_packs[from].label) {
+            label = bbp.label;
+          }
+        }
+      }
+    }
+  }
+  func.update_block_ids();
+}
+
 void Canonicalization::optimize(FunctionPack& func) {
   eliminate_single_phi(func);
+  eliminate_critical_edge(func);
   while(eliminate_deadcode(func)) {
     /* loop */
   }

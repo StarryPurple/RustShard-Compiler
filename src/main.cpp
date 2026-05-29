@@ -101,7 +101,7 @@ int main() {
     // return 0 (since semantic check passed)
     return 0;
   } catch(...) {
-    std::cerr << "[unknown exception] " << std::endl;
+    std::cerr << "[unknown exception]" << std::endl;
     return 0;
   }
 
