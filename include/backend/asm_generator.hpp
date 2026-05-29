@@ -15,7 +15,7 @@ public:
 private:
   AsmFunction generate_func(const ir::FunctionPack& func);
 
-  void generate_prologue(const AllocationResult& alloc);
+  void generate_prologue(const ir::FunctionPack& func, const AllocationResult& alloc);
   void generate_epilogue(const AllocationResult& alloc);
   void generate_block(const ir::BasicBlockPack& bb, const AllocationResult& alloc);
   void generate_instruction(const ir::Instruction* inst, AsmBasicBlock& bb,

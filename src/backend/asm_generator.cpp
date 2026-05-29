@@ -517,7 +517,8 @@ AsmFunction AsmGenerator::generate_func(const ir::FunctionPack& func) {
   _asm_func = {};
   _asm_func.name = mangle_func_name(func.ident);
 
-  generate_prologue(alloc);
+  generate_prologue(func, alloc);
+  alloc = allocate_registers(func);
 
   for(const auto& bb: func.basic_block_packs) {
     generate_block(bb, alloc);
@@ -566,7 +567,7 @@ AsmFunction AsmGenerator::generate_func(const ir::FunctionPack& func) {
   return std::move(_asm_func);
 }
 
-void AsmGenerator::generate_prologue(const AllocationResult& alloc) {
+void AsmGenerator::generate_prologue(const ir::FunctionPack& func, const AllocationResult& alloc) {
   AsmBasicBlock prologue;
   int frame = static_cast<int>(alloc.total_frame_size);
 
@@ -613,6 +614,17 @@ void AsmGenerator::generate_prologue(const AllocationResult& alloc) {
     bool is_leaf = alloc.caller_to_save.empty();
     if(!is_leaf) {
       prologue.instructions.push_back(RV64I::SD(PhysReg::ra, PhysReg::sp, alloc.return_addr_offset()));
+    }
+
+    // spill func param
+    for(int i = 0; i < 8 && i < func.param_num(); ++i) {
+      PhysReg pr = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + i);
+      Location loc = alloc.mapping.at(i);
+      if(loc.is_spill()) {
+        try_sd(pr, PhysReg::sp, loc.as_spill(), prologue);
+      } else if(!loc.is_reg()) {
+        throw std::runtime_error("Invalid circumstance: func param (8-) not spill no reg");
+      }
     }
   }
 

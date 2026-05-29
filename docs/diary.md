@@ -96,3 +96,5 @@ Be careful in handling the position of func params, like their lifetimes and Loc
 std::unordered_map::emplace do nothing when the key already exists, rather than operator[] overwrites.
 
 udiv/urem in LLVM IR shall be translated (lowered?) into divu/remu in RISCV64-M Assembly.
+
+If you spill 8- func args on stack, remember to save them on stack in prologue.
