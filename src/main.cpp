@@ -41,11 +41,13 @@ int main() {
   try {
     rshard::Lexer lexer(src_code);
     if(!lexer) {
+      std::cout << "Lexer failed\n";
       return 1;
     }
 
     rshard::ast::Parser parser(lexer);
     if(!parser) {
+      std::cout << "Parser Failed\n";
       return 1;
     }
 
@@ -54,28 +56,33 @@ int main() {
     rshard::ast::SymbolCollector symbol_collector(error_recorder.get());
     ast_tree.traverse(symbol_collector);
     if(error_recorder->has_error()) {
+      std::cout << "Symbol collector failed\n";
       return 1;
     }
 
     rshard::ast::TypeDeclarator type_declarator(error_recorder.get(), type_pool.get());
     ast_tree.traverse(type_declarator);
     if(error_recorder->has_error()) {
+      std::cout << "Type Declarator failed\n";
       return 1;
     }
 
     rshard::ast::PreTypeFiller pre_type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
     ast_tree.traverse(pre_type_filler);
     if(error_recorder->has_error()) {
+      std::cout << "Pre type filler failed\n";
       return 1;
     }
 
     rshard::ast::TypeFiller type_filler(error_recorder.get(), type_pool.get(), const_pool.get());
     ast_tree.traverse(type_filler);
     if(error_recorder->has_error()) {
+      std::cout << "Type filler failed\n";
       return 1;
     }
   } catch(...) {
     // failure in semantic check
+    std::cout << "Semantic check failed due to unrecognized reason\n";
     return 1;
   }
 
