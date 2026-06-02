@@ -44,7 +44,16 @@ public:
 
   // uses static_pointer_cast. use it only when you have confirmed its inner type.
   template <class T> requires std::derived_from<T, ExprType>
-  std::shared_ptr<T> get() const { return std::static_pointer_cast<T>(_ptr); }
+  std::shared_ptr<T> get() const {
+    auto ptr = std::dynamic_pointer_cast<T>(_ptr);
+    if (!ptr) {
+      throw std::runtime_error(
+          "Type mismatch in get(): expected " + std::string(typeid(T).name()) +
+          ", but stored " + std::string(typeid(*_ptr).name())
+      );
+    }
+    return ptr;
+  }
 
   // uses dynamic_pointer_cast.
   template <class T> requires std::derived_from<T, ExprType>
