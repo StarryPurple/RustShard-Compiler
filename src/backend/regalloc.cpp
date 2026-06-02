@@ -1,7 +1,7 @@
 #include "backend/regalloc.hpp"
 
-#include <complex>
 #include <format>
+#include <stack>
 
 namespace rshard::backend {
 LivenessInfo compute_liveness(const ir::FunctionPack& func) {
@@ -149,53 +149,33 @@ std::vector<LiveInterval> build_intervals(const ir::FunctionPack& func) {
     intervals.push_back(LiveInterval{reg, start, end});
   }
 
+  std::ranges::sort(intervals, [](const LiveInterval& lhs, const LiveInterval& rhs) {
+    return lhs.start < rhs.start;
+  });
+
   return intervals;
 }
 
+void linear_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval>& intervals, AllocationResult& result) {
+  std::vector reg_pool(kAllocatableRegs.begin(), kAllocatableRegs.end());
 
-AllocationResult allocate_registers(const ir::FunctionPack& func) {
-
-  std::vector<PhysReg> reg_pool(kAllocatableRegs.begin(), kAllocatableRegs.end());
-
-  AllocationResult result;
-
-  auto intervals = build_intervals(func);
-  std::sort(intervals.begin(), intervals.end(), [](const LiveInterval& lhs, const LiveInterval& rhs) {
-    return lhs.reg < rhs.reg;
-  });
+  std::unordered_map<ir::reg_id_t, LiveInterval> ints_map;
+  for(auto& interval: intervals) ints_map.emplace(interval.reg, interval);
 
   std::unordered_map<PhysReg, LiveInterval> active;
-  int arg_reg_idx = 0;
-  if(func.sret_param) {
-    result.mapping.emplace(func.sret_param->as_reg(), Location::make_reg(PhysReg::a0));
-    if(intervals[arg_reg_idx].reg != arg_reg_idx) {
-      throw std::runtime_error(std::format("Intervals arg_reg_idx different. {} - {}", intervals[arg_reg_idx].reg, arg_reg_idx));
-    }
-    active.emplace(PhysReg::a0, intervals[arg_reg_idx]);
-    arg_reg_idx++;
-  }
-  for(const auto& param: func.params) {
-    if(arg_reg_idx < 8) {
-      auto pr = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + arg_reg_idx);
-      if(intervals[arg_reg_idx].reg != arg_reg_idx) {
-        throw std::runtime_error(std::format("Intervals arg_reg_idx different. {} - {}", intervals[arg_reg_idx].reg, arg_reg_idx));
-      }
-      result.mapping.emplace(param.as_reg(), Location::make_reg(pr));
-      active.emplace(pr, intervals[arg_reg_idx]);
-    } else {
-      // not sure here.
-      // result.mapping.emplace(param.as_reg(), Location::make_spill(xxx + 8 * (arg_reg_idx - 8)));
-    }
-    ++arg_reg_idx;
+
+  // function params 8- cannot be spilled (otherwise to be dealt outside this function)
+  for(int i = 0; i < func.param_num() && i < 8; ++i) {
+    auto pr = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + i);
+    result.mapping.emplace(func.param_at(i).as_reg(), Location::make_reg(pr));
+    active.emplace(pr, ints_map.at(i));
   }
 
-  std::sort(intervals.begin(), intervals.end(), [](const LiveInterval& lhs, const LiveInterval& rhs) {
-    return lhs.start < rhs.start;
-  });
   size_t spill_area_size = 0;
 
+  // Linear coloring
   for(const auto& interval: intervals) {
-    if(interval.reg < arg_reg_idx) continue; // on-stack param
+    if(interval.reg < func.param_num()) continue;
     if(result.mapping.contains(interval.reg)) continue;
 
     std::erase_if(active, [&](const auto& kv) {
@@ -229,7 +209,10 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
       spill_area_size += 8;
     }
   }
+  result.spill_area_size = spill_area_size;
+}
 
+std::unordered_map<ir::reg_id_t, std::size_t> local_var_alloc(const ir::FunctionPack& func, AllocationResult& result) {
   std::unordered_map<ir::reg_id_t, std::size_t> local_var_mapping;
   std::size_t local_var_size = 0;
   for(const auto& bb: func.basic_block_packs) {
@@ -245,7 +228,11 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
       }
     }
   }
+  result.local_var_size = local_var_size;
+  return local_var_mapping;
+}
 
+void calc_caller_callee_save(const ir::FunctionPack& func, AllocationResult& result, const std::vector<LiveInterval>& intervals) {
   for(auto& [vreg, loc]: result.mapping) {
     if(loc.is_reg() && kCalleeSaveRegs.contains(loc.as_reg())) {
       result.callee_saved_used.insert(loc.as_reg());
@@ -258,7 +245,12 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
   for(const auto& interval: intervals) {
     auto it = result.mapping.find(interval.reg);
     if(it == result.mapping.end() || !it->second.is_reg()) continue;
-    result.preg_interval[it->second.as_reg()].push_back(interval); // already sorted by start.
+    result.preg_interval[it->second.as_reg()].push_back(interval);
+  }
+  for(auto& [vreg, ints]: result.preg_interval) {
+    std::ranges::sort(ints, [](const LiveInterval& lhs, const LiveInterval& rhs) {
+    return lhs.start < rhs.start;
+  });
   }
 
   for(auto& bb: func.basic_block_packs) {
@@ -267,12 +259,12 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
       if(!call) continue;
       result.caller_to_save.emplace(call, std::unordered_set<PhysReg>{});
       for(auto pr: kCallerSaveRegs) {
-        auto& intervals = result.preg_interval[pr];
-        auto it = std::upper_bound(intervals.begin(), intervals.end(), call->instr_no,
+        auto& ints = result.preg_interval[pr];
+        auto it = std::upper_bound(ints.begin(), ints.end(), call->instr_no,
                                    [](ir::instr_no_t instr_no, const LiveInterval& interval) {
                                      return instr_no < interval.start;
                                    });
-        if(it != intervals.begin()) {
+        if(it != ints.begin()) {
           --it;
           if(it->end >= call->instr_no) {
             result.caller_to_save[call].insert(pr);
@@ -286,30 +278,33 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
   for(auto& [call_inst, saves]: result.caller_to_save) {
     caller_save_num = std::max(caller_save_num, saves.size());
   }
-
-
-  result.spill_area_size = spill_area_size;
-  result.local_var_size = local_var_size;
   result.max_caller_save_num = caller_save_num;
-  result.spill_args_num = std::max(0, arg_reg_idx - 8);
+}
+
+AllocationResult allocate_registers(const ir::FunctionPack& func) {
+  AllocationResult result;
+
+  auto intervals = build_intervals(func);
+  linear_coloring(func, intervals, result);
+  // graph_coloring(func, intervals, result);
+  auto local_var_mapping = local_var_alloc(func, result);
+  calc_caller_callee_save(func, result, intervals);
+
+  result.spill_args_num = (func.param_num() > 8) ? (func.param_num() - 8) : 0;
   result.total_frame_size
-    = spill_area_size // virtual reg spill
-    + local_var_size // local Alloca region
+    = result.spill_area_size // virtual reg spill
+    + result.local_var_size // local Alloca region
     + result.callee_saved_used.size() * 8 // call of self: saving some callee-saved regs
-    + caller_save_num * 8 // call of other function: saving some caller-saved regs
+    + result.max_caller_save_num * 8 // call of other function: saving some caller-saved regs
     + (result.caller_to_save.empty() ? 0 : 8) // save ra
     + result.spill_args_num * 8; // args passed on stack
   result.total_frame_size = (result.total_frame_size + 15) & ~15ul; // 16-byte alignment req of $sp
 
+  // function param spill
+
   offset_t args_start = result.spill_args_offset();
-  arg_reg_idx = 0;
-  if(func.sret_param) arg_reg_idx++;
-  for(const auto& param: func.params) {
-    if(arg_reg_idx >= 8) {
-      // sure here.
-      result.mapping.emplace(param.as_reg(), Location::make_spill(args_start + 8 * (arg_reg_idx - 8)));
-    }
-    ++arg_reg_idx;
+  for(int i = 8; i < func.param_num(); ++i) {
+    result.mapping.emplace(func.param_at(i).as_reg(), Location::make_spill(args_start + 8 * (i - 8)));
   }
 
   for(const auto& [vreg, offset]: local_var_mapping) {

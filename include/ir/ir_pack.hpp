@@ -65,6 +65,9 @@ struct FunctionPack {
   DomTree dom_tree;
 
   std::size_t param_num() const { return (sret_param ? 1 : 0) + params.size(); }
+  Operand param_at(std::size_t param_idx) const {
+    return sret_param ? (param_idx == 0 ? *sret_param : params[param_idx - 1]) : params[param_idx];
+  }
 
   void update_block_ids();
 
