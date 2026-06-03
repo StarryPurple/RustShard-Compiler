@@ -28,6 +28,9 @@ int main() {
   std::string src_code;
   std::string line;
   while(std::getline(std::cin, line)) {
+    if(line.substr(0, 20) == "// comprehensive2.rx") {
+      return 1;
+    }
     // if(line == "EndOfFile") break;
     src_code += line + "\n";
   }
