@@ -364,14 +364,15 @@ namespace {
       for(auto pr: it->second) {
         // This optimization is not reflected in AllocationResult calc. Tired to optimize...
         if(caller_save_result.has_value() && *caller_save_result == pr) continue;
-        bb.instructions.push_back(RV64I::SD(pr, PhysReg::sp, offset));
+        try_sd(pr, PhysReg::sp, offset, bb, kTmpRd);
+        // bb.instructions.push_back(RV64I::SD(pr, PhysReg::sp, offset));
         offset += 8;
       }
     }
 
     // set args (8+)
     for(size_t i = 8; i < call.args.size(); ++i) {
-      int offset = (i - call.args.size()) * 8;
+      int offset = (i - call.args.size()) * 8; // absolutely not need try_sd
       if(call.args[i].is_imm()) {
         bb.instructions.push_back(RV64I::LI(kTmpRs1, call.args[i].as_imm()));
         bb.instructions.push_back(RV64I::SD(kTmpRs1, PhysReg::sp, offset));
@@ -410,7 +411,8 @@ namespace {
       int offset = alloc.caller_save_offset();
       for(auto pr: it->second) {
         if(caller_save_result.has_value() && *caller_save_result == pr) continue;
-        bb.instructions.push_back(RV64I::LD(pr, PhysReg::sp, offset));
+        try_ld(pr, PhysReg::sp, offset, bb);
+        // bb.instructions.push_back(RV64I::LD(pr, PhysReg::sp, offset));
         offset += 8;
       }
     }
@@ -518,7 +520,6 @@ AsmFunction AsmGenerator::generate_func(const ir::FunctionPack& func) {
   _asm_func.name = mangle_func_name(func.ident);
 
   generate_prologue(func, alloc);
-  alloc = allocate_registers(func);
 
   for(const auto& bb: func.basic_block_packs) {
     generate_block(bb, alloc);
@@ -606,14 +607,16 @@ void AsmGenerator::generate_prologue(const ir::FunctionPack& func, const Allocat
     // callee-saved
     int offset = alloc.callee_save_offset();
     for(auto reg: alloc.callee_saved_used) {
-      prologue.instructions.push_back(RV64I::SD(reg, PhysReg::sp, offset));
+      try_sd(reg, PhysReg::sp, offset, prologue, kTmpRd);
+      // prologue.instructions.push_back(RV64I::SD(reg, PhysReg::sp, offset));
       offset += 8;
     }
 
     // ra
     bool is_leaf = alloc.caller_to_save.empty();
     if(!is_leaf) {
-      prologue.instructions.push_back(RV64I::SD(PhysReg::ra, PhysReg::sp, alloc.return_addr_offset()));
+      try_sd(PhysReg::ra, PhysReg::sp, alloc.return_addr_offset(), prologue, kTmpRd);
+      // prologue.instructions.push_back(RV64I::SD(PhysReg::ra, PhysReg::sp, alloc.return_addr_offset()));
     }
 
     // spill func param
@@ -623,7 +626,7 @@ void AsmGenerator::generate_prologue(const ir::FunctionPack& func, const Allocat
       if(loc.is_spill()) {
         try_sd(pr, PhysReg::sp, loc.as_spill(), prologue);
       } else if(!loc.is_reg()) {
-        throw std::runtime_error("Invalid circumstance: func param (8-) not spill no reg");
+        throw std::runtime_error("Invalid circumstance: func param (8-) not spill or reg");
       }
     }
   }
@@ -640,13 +643,15 @@ void AsmGenerator::generate_epilogue(const AllocationResult& alloc) {
     // ra
     bool is_leaf = alloc.caller_to_save.empty();
     if(!is_leaf) {
-      epilogue.instructions.push_back(RV64I::LD(PhysReg::ra, PhysReg::sp, alloc.return_addr_offset()));
+      try_ld(PhysReg::ra, PhysReg::sp, alloc.return_addr_offset(), epilogue);
+      // epilogue.instructions.push_back(RV64I::LD(PhysReg::ra, PhysReg::sp, alloc.return_addr_offset()));
     }
 
     // callee-saved
     int offset = alloc.callee_save_offset();
     for(auto reg: alloc.callee_saved_used) {
-      epilogue.instructions.push_back(RV64I::LD(reg, PhysReg::sp, offset));
+      try_ld(reg, PhysReg::sp, offset, epilogue);
+      // epilogue.instructions.push_back(RV64I::LD(reg, PhysReg::sp, offset));
       offset += 8;
     }
 

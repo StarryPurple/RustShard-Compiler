@@ -13,6 +13,7 @@ namespace rshard {
 using StringT = std::string;
 
 static constexpr bool kEnableVarHints = false;
+static constexpr bool kEnableAsmCommand = false;
 
 namespace ast {
   using node_id_t = int;
