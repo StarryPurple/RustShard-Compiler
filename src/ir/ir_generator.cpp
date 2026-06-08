@@ -672,12 +672,16 @@ void IRGenerator::visit(ast::LetStatement &node) {
   lineA.dst = ptr_id;
   lineA.type = ty;
   _contexts.back().push_instruction(std::move(lineA));
-  _contexts.back().add_reg_hint(ptr_id, ip->ident() + ".uninitialized-addr");
+  // _contexts.back().add_reg_hint(ptr_id, ip->ident() + ".uninitialized-addr");
   if(node.expr_opt()) {
     _contexts.back().inplace_node_ptr_map.emplace(node.expr_opt()->id(), ptr_id);
     node.expr_opt()->accept(*this);
   } else {
      // Warning: Variable uninitialized
+  }
+  if(ip->is_ref()) {
+    ty = wrap_ref(ty);
+    ptr_id = store_into_memory(ptr_id, ty, node.id()); // node id do not matter
   }
 
   if(auto it = _contexts.back().variable_addr_reg_maps.back().find(ip->ident());

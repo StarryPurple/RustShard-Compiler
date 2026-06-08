@@ -1960,6 +1960,10 @@ void TypeFiller::postVisit(GroupedExpression &node) {
     _recorder->tagged_report(kErrTypeNotResolved, "Type not got in GroupedExpression");
     return;
   }
+  if(node.expr()->is_place_mut())
+    node.set_place_mut();
+  if(node.expr()->is_lside())
+    node.set_lside();
   node.set_type(type);
 }
 
