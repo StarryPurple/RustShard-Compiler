@@ -116,9 +116,8 @@ namespace {
     return kTmpRs2;
   }
 
-  // You can pass no tmp in.
-  void emit_spill_store_if_needed(ir::reg_id_t vreg, const AllocationResult& alloc, AsmBasicBlock& bb,
-                                  PhysReg tmp = PhysReg::zero) {
+  // since kTmpRd is still in use, you shall only pass kTmpRs1/kTmpRs2
+  void emit_spill_store_if_needed(ir::reg_id_t vreg, const AllocationResult& alloc, AsmBasicBlock& bb, PhysReg tmp) {
     const auto& loc = alloc.mapping.at(vreg);
     if(loc.is_spill()) {
       try_sd(kTmpRd, PhysReg::sp, loc.as_spill(), bb, tmp);
@@ -302,7 +301,7 @@ namespace {
       throw std::runtime_error("Unrecognized binary operator" + op);
     }
 
-    emit_spill_store_if_needed(bin.dst, alloc, bb);
+    emit_spill_store_if_needed(bin.dst, alloc, bb, kTmpRs2);
   }
 
   void generate_load(const ir::LoadInst& load, const AllocationResult& alloc,
@@ -322,7 +321,7 @@ namespace {
     default: throw std::runtime_error("Impossible value size");
     }
 
-    emit_spill_store_if_needed(load.dst, alloc, bb);
+    emit_spill_store_if_needed(load.dst, alloc, bb, kTmpRs2);
   }
 
   void generate_store(const ir::StoreInst& store, const AllocationResult& alloc,
@@ -403,7 +402,7 @@ namespace {
       if(dst != PhysReg::a0) {
         bb.instructions.push_back(RV64I::MV(dst, PhysReg::a0));
       }
-      emit_spill_store_if_needed(*call.dst, alloc, bb);
+      emit_spill_store_if_needed(*call.dst, alloc, bb, kTmpRs2);
     }
 
     // caller-save restore
@@ -459,7 +458,7 @@ namespace {
     }
     PhysReg dst = oper_phys_dst(cast.dst, alloc);
     if(dst != src) bb.instructions.push_back(RV64I::MV(dst, src));
-    emit_spill_store_if_needed(cast.dst, alloc, bb);
+    emit_spill_store_if_needed(cast.dst, alloc, bb, kTmpRs2);
   }
 
   void generate_gep(const ir::GEPInst& gep, const AllocationResult& alloc,
@@ -497,7 +496,7 @@ namespace {
       throw std::runtime_error("Invalid GEP for not having 1 or 2 indices");
     }
 
-    emit_spill_store_if_needed(gep.dst, alloc, bb);
+    emit_spill_store_if_needed(gep.dst, alloc, bb, kTmpRs2);
   }
 } // anonymous namespace
 
