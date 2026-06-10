@@ -353,24 +353,24 @@ Operand check_use(Operand use, const std::unordered_map<reg_id_t, Operand>& use_
 
 struct SlotRenamer {
   FunctionPack& func;
-  const reg_id_t slot;
   std::unordered_map<reg_id_t, Operand>& use_replacement;
+  std::unordered_map<reg_id_t, std::stack<Operand>> version_stacks;
+  reg_id_t next_version; // next SSA reg.
 
-  std::stack<Operand> version_stack; // oper type is not important.
-  // next SSA reg.
-  reg_id_t next_version;
-
-  SlotRenamer(FunctionPack& f, reg_id_t s, reg_id_t next_ver, std::unordered_map<reg_id_t, Operand>& replacement)
-    : func(f), slot(s), next_version(next_ver), use_replacement(replacement) {}
-
-  void push(const Operand& oper) { version_stack.push(oper); }
-  void pop() {
-    if(version_stack.empty()) throw std::runtime_error("Unexpected behaviour");
-    version_stack.pop();
+  SlotRenamer(FunctionPack& f, const std::unordered_map<reg_id_t, IrType>& promotable,
+    reg_id_t next_ver, std::unordered_map<reg_id_t, Operand>& replacement)
+    : func(f), use_replacement(replacement), next_version(next_ver) {
+    for(auto& [slot, _tp]: promotable) version_stacks.emplace(slot, std::stack<Operand>{});
   }
-  [[nodiscard]] Operand current() const {
-    if(version_stack.empty()) throw std::runtime_error("Unexpected behaviour");
-    return version_stack.top();
+
+  void push(reg_id_t slot, const Operand& oper) { version_stacks.at(slot).push(oper); }
+  void pop(reg_id_t slot) {
+    if(version_stacks.at(slot).empty()) throw std::runtime_error("Unexpected behaviour");
+    version_stacks.at(slot).pop();
+  }
+  [[nodiscard]] Operand current(reg_id_t slot) const {
+    if(version_stacks.at(slot).empty()) throw std::runtime_error("Unexpected behaviour");
+    return version_stacks.at(slot).top();
   }
   reg_id_t new_version() { return next_version++; }
 
@@ -378,17 +378,17 @@ struct SlotRenamer {
     auto& block = func.basic_block_packs[block_id];
 
     // number of versions recorded in this block
-    int pushed_count = 0;
+    std::unordered_map<reg_id_t, int> push_counts; // initially zero
 
     // PhiInst need new names
     for(auto& inst: block.instructions) {
       if(auto* phi = dynamic_cast<PhiInst*>(inst.get())) {
-        if(phi->original_slot != slot) continue;
+        if(!version_stacks.contains(phi->original_slot)) continue;
 
         reg_id_t ver = new_version();
         phi->dst = ver;
-        push(Operand::make_reg(ver, {}));
-        pushed_count++;
+        push(phi->original_slot, Operand::make_reg(ver, {}));
+        push_counts[phi->original_slot]++;
       } else break; // no need to check others.
     }
 
@@ -399,9 +399,9 @@ struct SlotRenamer {
       }
 
       if(auto* store = dynamic_cast<StoreInst*>(inst.get())) {
-        if(store->ptr.is_reg() && store->ptr.as_reg() == slot) {
-          push(check_use(store->value, use_replacement));
-          pushed_count++;
+        if(store->ptr.is_reg() && version_stacks.contains(store->ptr.as_reg())) {
+          push(store->ptr.as_reg(), check_use(store->value, use_replacement));
+          push_counts[store->ptr.as_reg()]++;
           // StoreInst erased.
           inst.reset();
           continue;
@@ -409,8 +409,8 @@ struct SlotRenamer {
       }
 
       if(auto* load = dynamic_cast<LoadInst*>(inst.get())) {
-        if(load->ptr.is_reg() && load->ptr.as_reg() == slot) {
-          use_replacement.emplace(load->dst, current());
+        if(load->ptr.is_reg() && version_stacks.contains(load->ptr.as_reg())) {
+          use_replacement.emplace(load->dst, current(load->ptr.as_reg()));
           // LoadInst erased.
           inst.reset();
           continue;
@@ -424,8 +424,8 @@ struct SlotRenamer {
         auto* phi = dynamic_cast<PhiInst*>(inst.get());
         if(!phi) break;
 
-        if(phi->original_slot != slot) continue;
-        if(version_stack.empty()) continue; // not defined yet
+        if(!version_stacks.contains(phi->original_slot)) continue;
+        if(version_stacks.at(phi->original_slot).empty()) continue; // not defined yet
 
         bool found = false;
         for(auto& [_op, label]: phi->incoming) {
@@ -436,7 +436,7 @@ struct SlotRenamer {
         }
         if(!found) {
           // Add incoming using current version
-          phi->incoming.emplace_back(current(), block.label);
+          phi->incoming.emplace_back(current(phi->original_slot), block.label);
         }
       }
     }
@@ -446,7 +446,9 @@ struct SlotRenamer {
     }
 
     // rollback
-    while(pushed_count--) pop();
+    for(auto& [slot, cnt]: push_counts) {
+      while(cnt--) pop(slot);
+    }
   }
 };
 
@@ -467,22 +469,14 @@ void PromoteAlloca::optimize(FunctionPack& func) {
       }
     }
   }
-  reg_id_t next_ssa_reg = max_reg + 1;
+
   std::unordered_map<reg_id_t, Operand> use_replacement;
 
   // (SSA) PromoteAlloca process.
   for(auto& [slot, slot_type]: promotable) {
     insert_phi_for_slot(func, slot, slot_type);
-
-    SlotRenamer renamer(func, slot, next_ssa_reg, use_replacement);
-
-    // (undefined and never used) initial value of the slot.
-    renamer.push(Operand::make_reg(-3, {}));
-
-    renamer.rename(0); // entry block
-
-    next_ssa_reg = renamer.next_version;
   }
+  SlotRenamer{func, promotable, max_reg + 1, use_replacement}.rename(0);
 
   for(auto& bb: func.basic_block_packs) {
     for(auto& inst: bb.instructions) {
