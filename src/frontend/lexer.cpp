@@ -97,18 +97,22 @@ bool Lexer::advance() {
 
 
 bool Lexer::tokenize_number_literal() {
+  static constexpr int kMaxLiteralLength = 64;
   static const std::regex hex_pattern(R"(^0x[\da-fA-F_]*[\da-fA-F][\da-fA-F_]*)");
   static const std::regex oct_pattern("^0o[0-7_]*[0-7][0-7_]*");
   static const std::regex bin_pattern("^0b[0-1_]*[0-1][0-1_]*");
   static const std::regex dec_pattern(R"(^[\d][\d_]*)");
   static const std::regex integer_suffix_pattern("^(u|i)(8|16|32|64|size)");
   static const std::regex float_pattern(R"(^[\d][\d_]*(\.[^\w\.]|\.[\d][\d_]*|(\.[\d][\d_]*)?(f32|f64)))");
-  StringT str = _src_code.substr(_pos);
+  StringT str = _src_code.substr(_pos, kMaxLiteralLength); // I hope not a so-long literal.
   std::smatch match;
   if(std::regex_search(str, match, hex_pattern) ||
     std::regex_search(str, match, oct_pattern) ||
     std::regex_search(str, match, bin_pattern) ||
     std::regex_search(str, match, dec_pattern)) {
+    if(match.length() >= kMaxLiteralLength) {
+      return false; // Too long!
+    }
     // number matched. now match suffix
     StringT matched = str.substr(0, match.length());
     auto nxt_pos = _pos + match.length();
