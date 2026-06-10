@@ -374,10 +374,12 @@ namespace {
       int offset = (i - call.args.size()) * 8; // absolutely not need try_sd
       if(call.args[i].is_imm()) {
         bb.instructions.push_back(RV64I::LI(kTmpRs1, call.args[i].as_imm()));
-        bb.instructions.push_back(RV64I::SD(kTmpRs1, PhysReg::sp, offset));
+        try_sd(kTmpRs1, PhysReg::sp, offset, bb, kTmpRd);
+        // bb.instructions.push_back(RV64I::SD(kTmpRs1, PhysReg::sp, offset));
       } else {
         PhysReg src = oper_phys_src_rs1(call.args[i].as_reg(), alloc, bb);
-        bb.instructions.push_back(RV64I::SD(src, PhysReg::sp, offset));
+        try_sd(src, PhysReg::sp, offset, bb, kTmpRd);
+        // bb.instructions.push_back(RV64I::SD(src, PhysReg::sp, offset));
       }
     }
 

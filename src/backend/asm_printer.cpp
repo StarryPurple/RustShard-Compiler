@@ -55,7 +55,7 @@ std::string AsmPrinter::sprint(const AsmBasicBlock& block) {
 
 std::string AsmPrinter::sprint(const AsmInstruction& inst) {
   if(inst.opcode.empty()) {
-    if(!kEnableAsmCommand || inst.comment.empty()) return "";
+    if(!kEnableAsmComment || inst.comment.empty()) return "";
     return "# " + inst.comment;
   }
 
@@ -66,7 +66,7 @@ std::string AsmPrinter::sprint(const AsmInstruction& inst) {
     res += sprint(inst.operands[i]);
   }
 
-  if(kEnableAsmCommand && !inst.comment.empty()) {
+  if(kEnableAsmComment && !inst.comment.empty()) {
     res = std::format("{:70}  # {}", res, inst.comment);
   }
 
