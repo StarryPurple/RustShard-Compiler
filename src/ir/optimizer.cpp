@@ -344,17 +344,24 @@ void insert_phi_for_slot(FunctionPack& func, reg_id_t slot, IrType slot_type) {
   }
 }
 
+Operand check_use(Operand use, const std::unordered_map<reg_id_t, Operand>& use_replacement) {
+  while(use.is_reg() && use_replacement.contains(use.as_reg())) {
+    use = use_replacement.at(use.as_reg());
+  }
+  return use;
+}
+
 struct SlotRenamer {
   FunctionPack& func;
   const reg_id_t slot;
-
+  std::unordered_map<reg_id_t, Operand>& use_replacement;
 
   std::stack<Operand> version_stack; // oper type is not important.
   // next SSA reg.
   reg_id_t next_version;
 
-  SlotRenamer(FunctionPack& f, reg_id_t s, reg_id_t next_ver)
-    : func(f), slot(s), next_version(next_ver) {}
+  SlotRenamer(FunctionPack& f, reg_id_t s, reg_id_t next_ver, std::unordered_map<reg_id_t, Operand>& replacement)
+    : func(f), slot(s), next_version(next_ver), use_replacement(replacement) {}
 
   void push(const Operand& oper) { version_stack.push(oper); }
   void pop() {
@@ -366,15 +373,6 @@ struct SlotRenamer {
     return version_stack.top();
   }
   reg_id_t new_version() { return next_version++; }
-
-  void replace_all_uses(reg_id_t old_reg, Operand new_oper) {
-    for(auto& bb: func.basic_block_packs) {
-      for(auto& inst: bb.instructions) {
-        if(!inst) continue;
-        inst->replace_use(old_reg, new_oper);
-      }
-    }
-  }
 
   void rename(int block_id) {
     auto& block = func.basic_block_packs[block_id];
@@ -394,18 +392,15 @@ struct SlotRenamer {
       } else break; // no need to check others.
     }
 
-    std::vector<std::unique_ptr<Instruction>> new_instrs;
-
     for(auto& inst: block.instructions) {
       // PhiInst preserved.
       if(dynamic_cast<PhiInst*>(inst.get())) {
-        new_instrs.push_back(std::move(inst));
         continue;
       }
 
       if(auto* store = dynamic_cast<StoreInst*>(inst.get())) {
         if(store->ptr.is_reg() && store->ptr.as_reg() == slot) {
-          push(store->value);
+          push(check_use(store->value, use_replacement));
           pushed_count++;
           // StoreInst erased.
           inst.reset();
@@ -415,22 +410,13 @@ struct SlotRenamer {
 
       if(auto* load = dynamic_cast<LoadInst*>(inst.get())) {
         if(load->ptr.is_reg() && load->ptr.as_reg() == slot) {
-          // totally spread substitution
-          replace_all_uses(load->dst, current());
-          // and in new_instrs
-          for(auto& inst2: new_instrs) {
-            inst2->replace_use(load->dst, current());
-          }
+          use_replacement.emplace(load->dst, current());
           // LoadInst erased.
           inst.reset();
           continue;
         }
       }
-
-      new_instrs.push_back(std::move(inst));
     }
-
-    block.instructions = std::move(new_instrs);
 
     // add PhiInst for successor blocks.
     for(int succ: func.cfg.succ[block_id]) {
@@ -464,18 +450,6 @@ struct SlotRenamer {
   }
 };
 
-void remove_alloca_for_slot(FunctionPack& func, reg_id_t slot) {
-  for(auto& bb: func.basic_block_packs) {
-    auto empty_checker = [slot](auto& inst) {
-      if(auto* a = dynamic_cast<AllocaInst*>(inst.get())) {
-        return a->dst == slot;
-      }
-      return false;
-    };
-    std::erase_if(bb.instructions, empty_checker);
-  }
-}
-
 void PromoteAlloca::optimize(FunctionPack& func) {
   func.construct_domtree();
 
@@ -494,12 +468,13 @@ void PromoteAlloca::optimize(FunctionPack& func) {
     }
   }
   reg_id_t next_ssa_reg = max_reg + 1;
+  std::unordered_map<reg_id_t, Operand> use_replacement;
 
   // (SSA) PromoteAlloca process.
   for(auto& [slot, slot_type]: promotable) {
     insert_phi_for_slot(func, slot, slot_type);
 
-    SlotRenamer renamer(func, slot, next_ssa_reg);
+    SlotRenamer renamer(func, slot, next_ssa_reg, use_replacement);
 
     // (undefined and never used) initial value of the slot.
     renamer.push(Operand::make_reg(-3, {}));
@@ -507,11 +482,28 @@ void PromoteAlloca::optimize(FunctionPack& func) {
     renamer.rename(0); // entry block
 
     next_ssa_reg = renamer.next_version;
-
-    remove_alloca_for_slot(func, slot);
   }
 
-  // single phi cannot pass LLVM check.
-  // eliminate_single_phi(func);
+  for(auto& bb: func.basic_block_packs) {
+    for(auto& inst: bb.instructions) {
+      if(!inst) continue;
+      for(auto& use: inst->get_uses()) {
+        if(use_replacement.contains(use)) {
+          inst->replace_use(use, check_use(use_replacement.at(use), use_replacement));
+        }
+      }
+    }
+  }
+
+  for(auto& bb: func.basic_block_packs) {
+    auto empty_checker = [&promotable](const std::unique_ptr<Instruction>& inst) {
+      if(!inst) return true;
+      if(auto* a = dynamic_cast<AllocaInst*>(inst.get())) {
+        return promotable.contains(a->dst);
+      }
+      return false;
+    };
+    std::erase_if(bb.instructions, empty_checker);
+  }
 }
 }
