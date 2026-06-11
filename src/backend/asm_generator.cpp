@@ -12,8 +12,8 @@ namespace {
 
   std::string mangle_func_name(const std::string& original) {
     static const std::unordered_set<std::string> reserved = {
-      "printInt", "printlnInt", "getInt", "exit", "main", "memcpy"
-    };
+        "printInt", "printlnInt", "getInt", "exit", "main", "memcpy"
+      };
     if(reserved.contains(original)) return original;
     return kFuncPrefix + original;
   }
@@ -21,6 +21,9 @@ namespace {
   std::string mangle_label(const std::string& func_name, const std::string& label) {
     return func_name + "." + label;
   }
+
+  bool is_i12(int32_t offset) { return -2048 <= offset && offset <= 2047; }
+  bool is_i12(int64_t offset) { return -2048 <= offset && offset <= 2047; }
 
 
   /*
@@ -43,7 +46,7 @@ namespace {
   */
 
   void try_sd(PhysReg reg, PhysReg base, int32_t offset, AsmBasicBlock& bb, PhysReg tmp = PhysReg::zero) {
-    if(-2048 <= offset && offset <= 2047) {
+    if(is_i12(offset)) {
       bb.instructions.push_back(RV64I::SD(reg, base, offset));
     } else {
       if(tmp == PhysReg::zero) throw std::runtime_error("try_sd not assigned with helper");
@@ -54,7 +57,7 @@ namespace {
   }
 
   void try_ld(PhysReg reg, PhysReg base, int32_t offset, AsmBasicBlock& bb) {
-    if(-2048 <= offset && offset <= 2047) {
+    if(is_i12(offset)) {
       bb.instructions.push_back(RV64I::LD(reg, base, offset));
     } else {
       bb.instructions.push_back(RV64I::LI(reg, offset));
@@ -64,7 +67,7 @@ namespace {
   }
 
   void try_lea(PhysReg reg, int32_t offset, AsmBasicBlock& bb) {
-    if(-2048 <= offset && offset <= 2047) {
+    if(is_i12(offset)) {
       bb.instructions.push_back(RV64I::ADDI(reg, PhysReg::sp, offset));
     } else {
       bb.instructions.push_back(RV64I::LI(reg, offset));
@@ -246,11 +249,27 @@ namespace {
     const std::string& op = bin.op;
 
     if(op == "add") {
-      bb.instructions.push_back(RV64I::ADD(dst, lhs, rhs));
+      if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
+        bb.instructions.back() = RV64I::ADDI(dst, rhs, bin.lhs.as_imm());
+      } else if(bin.rhs.is_imm() && !bin.lhs.is_imm() && is_i12(bin.rhs.as_imm())) {
+        bb.instructions.back() = RV64I::ADDI(dst, lhs, bin.rhs.as_imm());
+      } else {
+        bb.instructions.push_back(RV64I::ADD(dst, lhs, rhs));
+      }
     } else if(op == "sub") {
-      bb.instructions.push_back(RV64I::SUB(dst, lhs, rhs));
+      if(bin.rhs.is_imm() && !bin.lhs.is_imm() && is_i12(-bin.rhs.as_imm())) {
+        bb.instructions.back() = RV64I::ADDI(dst, lhs, -bin.rhs.as_imm());
+      } else {
+        bb.instructions.push_back(RV64I::SUB(dst, lhs, rhs));
+      }
     } else if(op == "mul") {
-      bb.instructions.push_back(RV64I::MUL(dst, lhs, rhs));
+      if(bin.lhs.is_imm() && !bin.rhs.is_imm() && bin.lhs.as_imm() > 0 && (bin.lhs.as_imm() & (bin.lhs.as_imm() - 1)) == 0) {
+        bb.instructions.back() = RV64I::SLLI(dst, rhs, __builtin_ctzll(bin.lhs.as_imm()));
+      } else if(bin.rhs.is_imm() && !bin.lhs.is_imm() && bin.rhs.as_imm() > 0 && (bin.rhs.as_imm() & (bin.rhs.as_imm() - 1)) == 0) {
+        bb.instructions.back() = RV64I::SLLI(dst, lhs, __builtin_ctzll(bin.rhs.as_imm()));
+      } else {
+        bb.instructions.push_back(RV64I::MUL(dst, lhs, rhs));
+      }
     } else if(op == "sdiv") {
       bb.instructions.push_back(RV64I::DIV(dst, lhs, rhs));
     } else if(op == "udiv") {
@@ -260,17 +279,53 @@ namespace {
     } else if(op == "urem") {
       bb.instructions.push_back(RV64I::REMU(dst, lhs, rhs));
     } else if(op == "and") {
-      bb.instructions.push_back(RV64I::AND(dst, lhs, rhs));
+      if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
+        bb.instructions.back() = RV64I::ANDI(dst, rhs, bin.lhs.as_imm());
+      } else if(bin.rhs.is_imm() && !bin.lhs.is_imm() && is_i12(bin.rhs.as_imm())) {
+        bb.instructions.back() = RV64I::ANDI(dst, lhs, bin.rhs.as_imm());
+      } else {
+        bb.instructions.push_back(RV64I::AND(dst, lhs, rhs));
+      }
     } else if(op == "or") {
-      bb.instructions.push_back(RV64I::OR(dst, lhs, rhs));
+      if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
+        bb.instructions.back() = RV64I::ORI(dst, rhs, bin.lhs.as_imm());
+      } else if(bin.rhs.is_imm() && !bin.lhs.is_imm() && is_i12(bin.rhs.as_imm())) {
+        bb.instructions.back() = RV64I::ORI(dst, lhs, bin.rhs.as_imm());
+      } else {
+        bb.instructions.push_back(RV64I::OR(dst, lhs, rhs));
+      }
     } else if(op == "xor") {
-      bb.instructions.push_back(RV64I::XOR(dst, lhs, rhs));
+      if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
+        bb.instructions.back() = RV64I::XORI(dst, rhs, bin.lhs.as_imm());
+      } else if(bin.rhs.is_imm() && !bin.lhs.is_imm() && is_i12(bin.rhs.as_imm())) {
+        bb.instructions.back() = RV64I::XORI(dst, lhs, bin.rhs.as_imm());
+      } else {
+        bb.instructions.push_back(RV64I::XOR(dst, lhs, rhs));
+      }
     } else if(op == "shl") {
-      bb.instructions.push_back(RV64I::SLL(dst, lhs, rhs));
+      if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
+        bb.instructions.back() = RV64I::SLLI(dst, rhs, bin.lhs.as_imm());
+      } else if(bin.rhs.is_imm() && !bin.lhs.is_imm() && is_i12(bin.rhs.as_imm())) {
+        bb.instructions.back() = RV64I::SLLI(dst, lhs, bin.rhs.as_imm());
+      } else {
+        bb.instructions.push_back(RV64I::SLL(dst, lhs, rhs));
+      }
     } else if(op == "ashr") {
-      bb.instructions.push_back(RV64I::SRA(dst, lhs, rhs));
+      if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
+        bb.instructions.back() = RV64I::SRAI(dst, rhs, bin.lhs.as_imm());
+      } else if(bin.rhs.is_imm() && !bin.lhs.is_imm() && is_i12(bin.rhs.as_imm())) {
+        bb.instructions.back() = RV64I::SRAI(dst, lhs, bin.rhs.as_imm());
+      } else {
+        bb.instructions.push_back(RV64I::SRA(dst, lhs, rhs));
+      }
     } else if(op == "lshr") {
-      bb.instructions.push_back(RV64I::SRL(dst, lhs, rhs));
+      if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
+        bb.instructions.back() = RV64I::SRLI(dst, rhs, bin.lhs.as_imm());
+      } else if(bin.rhs.is_imm() && !bin.lhs.is_imm() && is_i12(bin.rhs.as_imm())) {
+        bb.instructions.back() = RV64I::SRLI(dst, lhs, bin.rhs.as_imm());
+      } else {
+        bb.instructions.push_back(RV64I::SRL(dst, lhs, rhs));
+      }
     } else if(op == "icmp eq") {
       bb.instructions.push_back(RV64I::XOR(kTmpRd, lhs, rhs));
       bb.instructions.push_back(RV64I::SLTIU(dst, kTmpRd, 1));

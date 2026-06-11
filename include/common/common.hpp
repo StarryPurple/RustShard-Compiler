@@ -27,6 +27,9 @@ namespace ir {
 
 using imm_val_t = std::int64_t;
 using offset_t = std::int32_t;
+
+static_assert(std::is_signed_v<imm_val_t>);
+static_assert(std::is_signed_v<offset_t>);
 }
 
 #endif // RUST_SHARD_COMMON_H
