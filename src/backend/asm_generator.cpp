@@ -528,11 +528,25 @@ namespace {
         throw std::runtime_error("Uhh.. Not considered for 1-index gep with imm index yet");
       }
       auto inner_size = tp->size();
-      bb.instructions.push_back(RV64I::LI(kTmpRs1, inner_size));
-      PhysReg idx = oper_phys_src_rs2(gep.indices[0].as_reg(), alloc, bb);
-      bb.instructions.push_back(RV64I::MUL(kTmpRs2, idx, kTmpRs1));
-      PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
-      bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs2));
+      if((inner_size & (inner_size - 1)) == 0) {
+        auto shift = __builtin_ctzll(inner_size);
+        if(shift == 0) {
+          PhysReg index = oper_phys_src_rs2(gep.indices[0].as_reg(), alloc, bb);
+          PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
+          bb.instructions.push_back(RV64I::ADD(dst, base, index));
+        } else {
+          PhysReg index = oper_phys_src_rs2(gep.indices[0].as_reg(), alloc, bb);
+          bb.instructions.push_back(RV64I::SLLI(kTmpRs2, index, shift));
+          PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
+          bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs2));
+        }
+      } else {
+        bb.instructions.push_back(RV64I::LI(kTmpRs1, inner_size));
+        PhysReg index = oper_phys_src_rs2(gep.indices[0].as_reg(), alloc, bb);
+        bb.instructions.push_back(RV64I::MUL(kTmpRs2, index, kTmpRs1));
+        PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
+        bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs2));
+      }
     } else if(gep.indices.size() == 2) {
       if(gep.indices[0].is_reg() || gep.indices[0].as_imm() != 0) {
         throw std::runtime_error("Invalid GEP for 2 indices with the first not 0");
@@ -543,11 +557,25 @@ namespace {
         try_addi(dst, base, offset, bb, kTmpRs2);
       } else {
         auto inner_size = tp.get<stype::ArrayType>()->inner()->size();
-        bb.instructions.push_back(RV64I::LI(kTmpRs1, inner_size));
-        PhysReg index = oper_phys_src_rs2(gep.indices[1].as_reg(), alloc, bb);
-        bb.instructions.push_back(RV64I::MUL(kTmpRs2, index, kTmpRs1));
-        PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
-        bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs2));
+        if((inner_size & (inner_size - 1)) == 0) {
+          auto shift = __builtin_ctzll(inner_size);
+          if(shift == 0) {
+            PhysReg index = oper_phys_src_rs2(gep.indices[1].as_reg(), alloc, bb);
+            PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
+            bb.instructions.push_back(RV64I::ADD(dst, base, index));
+          } else {
+            PhysReg index = oper_phys_src_rs2(gep.indices[1].as_reg(), alloc, bb);
+            bb.instructions.push_back(RV64I::SLLI(kTmpRs2, index, shift));
+            PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
+            bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs2));
+          }
+        } else {
+          bb.instructions.push_back(RV64I::LI(kTmpRs1, inner_size));
+          PhysReg index = oper_phys_src_rs2(gep.indices[1].as_reg(), alloc, bb);
+          bb.instructions.push_back(RV64I::MUL(kTmpRs2, index, kTmpRs1));
+          PhysReg base = oper_phys_src_rs1(gep.ptr.as_reg(), alloc, bb);
+          bb.instructions.push_back(RV64I::ADD(dst, base, kTmpRs2));
+        }
       }
     } else {
       throw std::runtime_error("Invalid GEP for not having 1 or 2 indices");
