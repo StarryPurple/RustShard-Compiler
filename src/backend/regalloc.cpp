@@ -1,5 +1,6 @@
 #include "backend/regalloc.hpp"
 
+#include <algorithm>
 #include <format>
 #include <stack>
 
@@ -86,6 +87,7 @@ LivenessInfo compute_liveness(const ir::FunctionPack& func) {
 std::vector<LiveInterval> build_intervals(const ir::FunctionPack& func) {
   std::unordered_map<ir::reg_id_t, ir::instr_no_t> first_def_global;
   std::unordered_map<ir::reg_id_t, ir::instr_no_t> last_use_global;
+  std::unordered_map<ir::reg_id_t, std::size_t> use_counts;
 
   // An instr_renumbering is conducted here, by the way.
 
@@ -112,6 +114,7 @@ std::vector<LiveInterval> build_intervals(const ir::FunctionPack& func) {
         // PhiInst incoming reg use do not reach this inst itself
         for(auto use: inst->get_uses()) {
           last_use_global[use] = inst->instr_no;
+          use_counts[use]++;
         }
       }
     }
@@ -146,17 +149,18 @@ std::vector<LiveInterval> build_intervals(const ir::FunctionPack& func) {
   for(auto reg: all_regs) {
     ir::instr_no_t start = first_def_global.at(reg);
     ir::instr_no_t end = last_use_global.count(reg) ? last_use_global.at(reg) : start;
-    intervals.push_back(LiveInterval{reg, start, end});
+    intervals.push_back(LiveInterval{reg, start, end, use_counts[reg]});
   }
 
   std::ranges::sort(intervals, [](const LiveInterval& lhs, const LiveInterval& rhs) {
-    return lhs.start < rhs.start;
+    return lhs.start == rhs.start ? lhs.end < rhs.end : lhs.start < rhs.start;
   });
 
   return intervals;
 }
 
-void linear_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval>& intervals, AllocationResult& result) {
+void linear_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval>& intervals,
+                     AllocationResult& result) {
   std::vector reg_pool(kAllocatableRegs.begin(), kAllocatableRegs.end());
 
   std::unordered_map<ir::reg_id_t, LiveInterval> ints_map;
@@ -194,10 +198,10 @@ void linear_coloring(const ir::FunctionPack& func, const std::vector<LiveInterva
 
     if(allocated) continue;
 
-    auto spill_it = std::max_element(active.begin(), active.end(),
-                                     [](const auto& a, const auto& b) { return a.second.end < b.second.end; });
+    auto spill_it = std::ranges::min_element(
+      active, [](const auto& a, const auto& b) { return a.second.weight() < b.second.weight(); });
 
-    if(spill_it != active.end() && spill_it->second.end > interval.end) {
+    if(spill_it != active.end() && spill_it->second.weight() < interval.weight()) {
       result.mapping[spill_it->second.reg] = Location::make_spill(spill_area_size);
       spill_area_size += 8;
       PhysReg freed_reg = spill_it->first;
@@ -232,7 +236,8 @@ std::unordered_map<ir::reg_id_t, std::size_t> local_var_alloc(const ir::Function
   return local_var_mapping;
 }
 
-void calc_caller_callee_save(const ir::FunctionPack& func, AllocationResult& result, const std::vector<LiveInterval>& intervals) {
+void calc_caller_callee_save(const ir::FunctionPack& func, AllocationResult& result,
+                             const std::vector<LiveInterval>& intervals) {
   for(auto& [vreg, loc]: result.mapping) {
     if(loc.is_reg() && kCalleeSaveRegs.contains(loc.as_reg())) {
       result.callee_saved_used.insert(loc.as_reg());
@@ -249,8 +254,8 @@ void calc_caller_callee_save(const ir::FunctionPack& func, AllocationResult& res
   }
   for(auto& [vreg, ints]: result.preg_interval) {
     std::ranges::sort(ints, [](const LiveInterval& lhs, const LiveInterval& rhs) {
-    return lhs.start < rhs.start;
-  });
+      return lhs.start < rhs.start;
+    });
   }
 
   for(auto& bb: func.basic_block_packs) {

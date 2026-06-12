@@ -4,7 +4,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <algorithm>
 #include "ir/ir_pack.hpp"
 #include "backend/asm_pack.hpp"
 
@@ -20,7 +19,9 @@ struct LiveInterval {
   ir::reg_id_t reg;
   ir::instr_no_t start;
   ir::instr_no_t end;
-  bool operator<(const LiveInterval& other) const { return start < other.start; }
+  std::int32_t use_count;
+  // the larger weight is, the more likely it will stay in phys reg.
+  std::int32_t weight() const { return 3 * use_count - static_cast<std::int32_t>(end - start); }
 };
 
 // Stack:
