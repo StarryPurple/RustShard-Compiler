@@ -2,6 +2,7 @@
 #include "backend/asm_instruction.hpp"
 #include <deque>
 #include <algorithm>
+#include <cstdint>
 #include <format>
 
 namespace rshard::backend {
@@ -229,6 +230,112 @@ namespace {
     }
   }
 
+  /************************************* Magic Number Div/Rem **********************************************/
+
+  // Compute magic number for unsigned 64-bit division by constant d (d >= 2, not power of 2).
+  // Returns (magic, shift) such that x/d = mulhu(x, magic) >> shift for all x in [0, 2^64-1].
+  struct MagicU64 { uint64_t magic; int shift; };
+  MagicU64 compute_magic_u64(uint64_t d) {
+    for(int p = 0; p < 64; ++p) {
+      __uint128_t pow = (__uint128_t)1 << (64 + p);
+      __uint128_t M_128 = pow / d + 1;
+      if(M_128 >= (__uint128_t)1 << 64) continue;
+      uint64_t M = (uint64_t)M_128;
+      // Condition: (2^(64+p) mod d) <= 2^p ensures the magic number is exact
+      if((uint64_t)(pow % d) <= (1ULL << p))
+        return {M, p};
+    }
+    return {0, 0};  // unreachable for valid d >= 2
+  }
+
+  // Emit magic-number sequence for udiv/urem by constant.
+  // For udiv: replaces DIVU with mulhu + shift.
+  // For urem: computes remainder via optimized div + mul + sub.
+  // Returns true if optimization was applied.
+  bool try_const_udiv_urem(const std::string& op, uint64_t divisor,
+                            PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
+    // Power of 2 cases handled by IR pass
+    if(divisor <= 1 || (divisor & (divisor - 1)) == 0) return false;
+
+    auto [M, s] = compute_magic_u64(divisor);
+    if(M == 0) return false;
+
+    // Emit sharing sequence: x / d = mulhu(x, M) >> s
+    bb.instructions.push_back(RV64I::LI(kTmpRs2, (int64_t)M));
+    bb.instructions.push_back(RV64I::MULHU(kTmpRd, src, kTmpRs2));
+
+    if(op == "urem") {
+      // r = x - (x / d) * d = x - (q * d)
+      // q already in kTmpRd (might need shift first)
+      if(s > 0) {
+        bb.instructions.push_back(RV64I::SRLI(kTmpRd, kTmpRd, s));
+      }
+      // q * d
+      bb.instructions.push_back(RV64I::LI(kTmpRs2, (int64_t)divisor));
+      bb.instructions.push_back(RV64I::MUL(kTmpRs1, kTmpRd, kTmpRs2));
+      // x - q*d
+      bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRs1));
+    } else {
+      // udiv
+      if(s > 0) {
+        bb.instructions.push_back(RV64I::SRLI(dst, kTmpRd, s));
+      } else if(dst != kTmpRd) {
+        bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
+      }
+    }
+    return true;
+  }
+
+  // Optimize signed div/rem by constant (power-of-2 case).
+  // Returns true if optimization was applied.
+  bool try_const_sdiv_srem(const std::string& op, int64_t divisor,
+                            PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
+    if(divisor == 0 || divisor == 1 || divisor == -1) return false;
+
+    uint64_t d_abs = divisor < 0 ? -(uint64_t)divisor : (uint64_t)divisor;
+
+    if((d_abs & (d_abs - 1)) != 0) return false;  // not a power of 2
+
+    int n = __builtin_ctzll(d_abs);
+    if(n == 0) return false;  // |divisor| = 1, already handled
+
+    // x / 2^n (signed):
+    //   srai t0, x, 63           # sign bit (-1 or 0)
+    //   srli t0, t0, 64-n        # correction mask
+    //   add t1, x, t0            # adjusted dividend
+    //   srai dst, t1, n          # signed divide
+    // If d < 0: neg dst, dst
+    if(op == "sdiv") {
+      bb.instructions.push_back(RV64I::SRAI(kTmpRs1, src, 63));
+      if(n < 64) {
+        bb.instructions.push_back(RV64I::SRLI(kTmpRs1, kTmpRs1, 64 - n));
+      }
+      bb.instructions.push_back(RV64I::ADD(kTmpRd, src, kTmpRs1));
+      bb.instructions.push_back(RV64I::SRAI(dst, kTmpRd, n));
+
+      if(divisor < 0 && dst != PhysReg::zero) {
+        bb.instructions.push_back(RV64I::NEG(dst, dst));
+      }
+      return true;
+    }
+
+    if(op == "srem") {
+      // x % 2^n = x - sdiv(x, 2^n) * 2^n
+      // = x - (q << n)
+      bb.instructions.push_back(RV64I::SRAI(kTmpRs1, src, 63));
+      if(n < 64) {
+        bb.instructions.push_back(RV64I::SRLI(kTmpRs1, kTmpRs1, 64 - n));
+      }
+      bb.instructions.push_back(RV64I::ADD(kTmpRd, src, kTmpRs1));
+      bb.instructions.push_back(RV64I::SRAI(kTmpRd, kTmpRd, n));  // q
+      bb.instructions.push_back(RV64I::SLLI(kTmpRd, kTmpRd, n));  // q * 2^n
+      bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRd));
+      return true;
+    }
+
+    return false;
+  }
+
   /************************************* IrInstr -> AsmInstr **********************************************/
 
   void generate_binary_op(const ir::BinaryOpInst& bin, const AllocationResult& alloc,
@@ -270,14 +377,22 @@ namespace {
       } else {
         bb.instructions.push_back(RV64I::MUL(dst, lhs, rhs));
       }
-    } else if(op == "sdiv") {
-      bb.instructions.push_back(RV64I::DIV(dst, lhs, rhs));
     } else if(op == "udiv") {
-      bb.instructions.push_back(RV64I::DIVU(dst, lhs, rhs));
-    } else if(op == "srem") {
-      bb.instructions.push_back(RV64I::REM(dst, lhs, rhs));
+      if(!bin.rhs.is_imm() || !try_const_udiv_urem("udiv", bin.rhs.as_imm(), dst, lhs, bb)) {
+        bb.instructions.push_back(RV64I::DIVU(dst, lhs, rhs));
+      }
     } else if(op == "urem") {
-      bb.instructions.push_back(RV64I::REMU(dst, lhs, rhs));
+      if(!bin.rhs.is_imm() || !try_const_udiv_urem("urem", bin.rhs.as_imm(), dst, lhs, bb)) {
+        bb.instructions.push_back(RV64I::REMU(dst, lhs, rhs));
+      }
+    } else if(op == "sdiv") {
+      if(!bin.rhs.is_imm() || !try_const_sdiv_srem("sdiv", bin.rhs.as_imm(), dst, lhs, bb)) {
+        bb.instructions.push_back(RV64I::DIV(dst, lhs, rhs));
+      }
+    } else if(op == "srem") {
+      if(!bin.rhs.is_imm() || !try_const_sdiv_srem("srem", bin.rhs.as_imm(), dst, lhs, bb)) {
+        bb.instructions.push_back(RV64I::REM(dst, lhs, rhs));
+      }
     } else if(op == "and") {
       if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
         bb.instructions.back() = RV64I::ANDI(dst, rhs, bin.lhs.as_imm());
@@ -598,7 +713,7 @@ AsmPack AsmGenerator::generate() {
 }
 
 AsmFunction AsmGenerator::generate_func(const ir::FunctionPack& func) {
-  auto alloc = allocate_registers(func);
+  auto alloc = allocate_onstack(func);
 
   _asm_func = {};
   _asm_func.name = mangle_func_name(func.ident);

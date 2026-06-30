@@ -7,6 +7,7 @@
 #include "frontend/syntax_check.hpp"
 #include "ir/ir_generator.hpp"
 #include "ir/optimizer.hpp"
+#include "ir/strength_reduction.hpp"
 #include "backend/asm_generator.hpp"
 #include "backend/asm_printer.hpp"
 
@@ -95,6 +96,7 @@ int main() {
 
     rshard::ir::PromoteAlloca::optimize(ir_pack);
     rshard::ir::Canonicalization::optimize(ir_pack);
+    rshard::ir::StrengthReduction::optimize(ir_pack);
 
     rshard::backend::AsmGenerator asm_generator(ir_pack);
     auto asm_pack = asm_generator.generate();

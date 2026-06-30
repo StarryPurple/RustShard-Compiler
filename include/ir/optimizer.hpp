@@ -34,6 +34,18 @@ public:
   static void optimize(FunctionPack& func);
 };
 
+// Strength reduction pass:
+//   mul by power of 2  → shl
+//   mul by small const → shift + add/sub chain
+//   udiv by power of 2  → lshr
+//   urem by power of 2  → and
+class StrengthReduction {
+public:
+  static void optimize(IrPack& ir) {
+    for(auto& func: ir.function_packs) optimize(func);
+  }
+  static void optimize(FunctionPack& func);
+};
 
 }
 

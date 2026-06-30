@@ -87,7 +87,7 @@ LivenessInfo compute_liveness(const ir::FunctionPack& func) {
 std::vector<LiveInterval> build_intervals(const ir::FunctionPack& func) {
   std::unordered_map<ir::reg_id_t, ir::instr_no_t> first_def_global;
   std::unordered_map<ir::reg_id_t, ir::instr_no_t> last_use_global;
-  std::unordered_map<ir::reg_id_t, std::size_t> use_counts;
+  std::unordered_map<ir::reg_id_t, std::int32_t> use_counts;
 
   // An instr_renumbering is conducted here, by the way.
 
@@ -286,7 +286,7 @@ void calc_caller_callee_save(const ir::FunctionPack& func, AllocationResult& res
   result.max_caller_save_num = caller_save_num;
 }
 
-AllocationResult allocate_registers(const ir::FunctionPack& func) {
+AllocationResult allocate_onstack(const ir::FunctionPack& func) {
   AllocationResult result;
 
   auto intervals = build_intervals(func);

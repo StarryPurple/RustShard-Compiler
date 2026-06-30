@@ -201,7 +201,7 @@ bool constant_fold(FunctionPack& func) {
 
 void eliminate_critical_edge(FunctionPack& func) {
   func.construct_cfg();
-  auto &cfg = func.cfg;
+  auto& cfg = func.cfg;
 
   std::vector<std::pair<block_id_t, block_id_t>> edges_to_split;
   for(block_id_t from = 0; from < cfg.succ.size(); ++from) {
@@ -237,7 +237,7 @@ void eliminate_critical_edge(FunctionPack& func) {
 
     for(auto& inst: func.basic_block_packs[to].instructions) {
       if(auto* phi = dynamic_cast<PhiInst*>(inst.get())) {
-        for(auto &[op, label]: phi->incoming) {
+        for(auto& [op, label]: phi->incoming) {
           if(label == func.basic_block_packs[from].label) {
             label = bbp.label;
           }
@@ -249,10 +249,6 @@ void eliminate_critical_edge(FunctionPack& func) {
 }
 
 void Canonicalization::optimize(FunctionPack& func) {
-  func.update_block_ids();
-  func.reorder_reg_ids();
-  func.instr_renumbering();
-
   eliminate_single_phi(func);
   eliminate_critical_edge(func);
   while(eliminate_deadcode(func)) {
@@ -261,6 +257,8 @@ void Canonicalization::optimize(FunctionPack& func) {
   while(constant_fold(func)) {
     /* loop */
   }
+
+  func.update_block_ids();
   func.reorder_reg_ids();
   func.instr_renumbering();
 }
@@ -330,8 +328,8 @@ std::optional<std::int32_t> instr_cost(const Instruction* inst, const StringT& f
 
 std::optional<std::int32_t> func_cost(const FunctionPack& func) {
   std::int32_t res = 0;
-  for(const auto &block: func.basic_block_packs) {
-    for(const auto &inst: block.instructions) {
+  for(const auto& block: func.basic_block_packs) {
+    for(const auto& inst: block.instructions) {
       auto cost = instr_cost(inst.get(), func.ident);
       if(!cost) return std::nullopt;
       res += *cost;
@@ -399,7 +397,7 @@ void inline_func(IrPack& ir, FunctionPack&& cheap_func) {
               if(auto dst = ninst->get_dst()) {
                 ninst->set_dst(*dst + reg_id_offset);
               }
-              for(auto *use: ninst->get_uses_oper()) {
+              for(auto* use: ninst->get_uses_oper()) {
                 if(use->is_reg()) {
                   if(param_reg_map.contains(use->as_reg())) {
                     *use = param_reg_map.at(use->as_reg());
@@ -409,12 +407,12 @@ void inline_func(IrPack& ir, FunctionPack&& cheap_func) {
                 }
               }
 
-              if(auto *br = dynamic_cast<BranchInst*>(ninst.get())) {
+              if(auto* br = dynamic_cast<BranchInst*>(ninst.get())) {
                 br->label.appendix.emplace_back(cheap_name, hint_id);
-              } else if(auto *cbr = dynamic_cast<CondBranchInst*>(ninst.get())) {
+              } else if(auto* cbr = dynamic_cast<CondBranchInst*>(ninst.get())) {
                 cbr->true_label.appendix.emplace_back(cheap_name, hint_id);
                 cbr->false_label.appendix.emplace_back(cheap_name, hint_id);
-              } else if(auto *phi = dynamic_cast<PhiInst*>(ninst.get())) {
+              } else if(auto* phi = dynamic_cast<PhiInst*>(ninst.get())) {
                 for(auto& income: phi->incoming) {
                   income.label.appendix.emplace_back(cheap_name, hint_id);
                 }
@@ -450,10 +448,10 @@ void inline_func(IrPack& ir, FunctionPack&& cheap_func) {
 
           // replace the phi incoming labels.
           // Those who comes from the starting label (original one) shall be redirected to ending label.
-          for(auto &bb: func.basic_block_packs) {
-            for(auto &inst: bb.instructions) {
-              if(auto *phi = dynamic_cast<PhiInst*>(inst.get())) {
-                for(auto &income: phi->incoming) {
+          for(auto& bb: func.basic_block_packs) {
+            for(auto& inst: bb.instructions) {
+              if(auto* phi = dynamic_cast<PhiInst*>(inst.get())) {
+                for(auto& income: phi->incoming) {
                   if(income.label == starting_label)
                     income.label = ending_label;
                 }
@@ -461,7 +459,8 @@ void inline_func(IrPack& ir, FunctionPack&& cheap_func) {
             }
           }
 
-          idx_bb -= 2; break; // go to the `right` bb defined above and start from the first instruction
+          idx_bb -= 2;
+          break; // go to the `right` bb defined above and start from the first instruction
         }
       }
     }
@@ -579,20 +578,23 @@ struct SlotRenamer {
   reg_id_t next_version; // next SSA reg.
 
   SlotRenamer(FunctionPack& f, const std::unordered_map<reg_id_t, IrType>& promotable,
-    reg_id_t next_ver, std::unordered_map<reg_id_t, Operand>& replacement)
+              reg_id_t next_ver, std::unordered_map<reg_id_t, Operand>& replacement)
     : func(f), use_replacement(replacement), next_version(next_ver) {
     for(auto& [slot, _tp]: promotable) version_stacks.emplace(slot, std::stack<Operand>{});
   }
 
   void push(reg_id_t slot, const Operand& oper) { version_stacks.at(slot).push(oper); }
+
   void pop(reg_id_t slot) {
     if(version_stacks.at(slot).empty()) throw std::runtime_error("Unexpected behaviour");
     version_stacks.at(slot).pop();
   }
+
   [[nodiscard]] Operand current(reg_id_t slot) const {
     if(version_stacks.at(slot).empty()) throw std::runtime_error("Unexpected behaviour");
     return version_stacks.at(slot).top();
   }
+
   reg_id_t new_version() { return next_version++; }
 
   void rename(int block_id) {
@@ -719,6 +721,338 @@ void PromoteAlloca::optimize(FunctionPack& func) {
       return false;
     };
     std::erase_if(bb.instructions, empty_checker);
+  }
+}
+
+namespace {
+  bool is_power_of_two(int64_t x) {
+    return x > 0 && (x & (x - 1)) == 0;
+  }
+
+  int shift_amount(int64_t x) {
+    int n = 0;
+    while(x > 1) {
+      x >>= 1;
+      ++n;
+    }
+    return n;
+  }
+
+  reg_id_t next_reg(reg_id_t& counter) {
+    return counter++;
+  }
+
+  // Try to transform multiplication by constant into shift/add/sub sequence.
+  // Returns true if the transformation was applied.
+  bool try_mul_strength_reduce(BinaryOpInst& binop, IrType type,
+                               reg_id_t& next_id,
+                               std::vector<std::unique_ptr<Instruction>>& new_instrs) {
+    // Determine which operand is the immediate constant
+    Operand var_op;
+    int64_t const_val;
+
+    if(binop.lhs.is_imm() && !binop.rhs.is_imm()) {
+      const_val = binop.lhs.as_imm();
+      var_op = binop.rhs;
+    } else if(binop.rhs.is_imm() && !binop.lhs.is_imm()) {
+      const_val = binop.rhs.as_imm();
+      var_op = binop.lhs;
+    } else {
+      return false;
+    }
+
+    // Don't optimize 0, 1, -1 (already handled by constant folding, or not worth it)
+    if(const_val == 0 || const_val == 1 || const_val == -1) return false;
+
+    reg_id_t dst = binop.dst;
+
+    // Handle negative constants: x * (-c) = -(x * c) = 0 - (x * c)
+    if(const_val < 0) {
+      // Special case: if const_val is a power of -2 (e.g., -8 = -2^3)
+      if(is_power_of_two(-const_val)) {
+        // x * (-2^k) = -(x << k)
+        int sh = shift_amount(-const_val);
+        auto tmp = next_reg(next_id);
+
+        auto shl = std::make_unique<BinaryOpInst>();
+        shl->dst = tmp;
+        shl->op = "shl";
+        shl->type = type;
+        shl->lhs = var_op;
+        shl->rhs = Operand::make_imm(sh, type);
+
+        auto sub = std::make_unique<BinaryOpInst>();
+        sub->dst = dst;
+        sub->op = "sub";
+        sub->type = type;
+        sub->lhs = Operand::make_imm(0, type);
+        sub->rhs = Operand::make_reg(tmp, type);
+
+        new_instrs.push_back(std::move(shl));
+        new_instrs.push_back(std::move(sub));
+        return true;
+      }
+
+      // General negative: x * (-c) = 0 - x * c
+      // First transform to positive and negate
+      // Recurse on positive, then negate the result
+      auto sub = std::make_unique<BinaryOpInst>();
+      sub->dst = dst;
+      sub->op = "sub";
+      sub->type = type;
+      sub->lhs = Operand::make_imm(0, type);
+      // rhs will be filled after we handle the positive case
+
+      // Temporarily change const_val and create the positive multiply
+      // We need a temp reg for the positive result
+      reg_id_t tmp = next_reg(next_id);
+      int64_t pos_val = -const_val;
+
+      if(is_power_of_two(pos_val)) {
+        auto shl = std::make_unique<BinaryOpInst>();
+        shl->dst = tmp;
+        shl->op = "shl";
+        shl->type = type;
+        shl->lhs = var_op;
+        shl->rhs = Operand::make_imm(shift_amount(pos_val), type);
+        new_instrs.push_back(std::move(shl));
+      } else {
+        // Just keep the mul for the positive part; constant folding can't hurt
+        auto mul = std::make_unique<BinaryOpInst>();
+        mul->dst = tmp;
+        mul->op = "mul";
+        mul->type = type;
+        mul->lhs = var_op;
+        mul->rhs = Operand::make_imm(pos_val, type);
+        new_instrs.push_back(std::move(mul));
+      }
+
+      sub->lhs = Operand::make_imm(0, type);
+      sub->rhs = Operand::make_reg(tmp, type);
+      new_instrs.push_back(std::move(sub));
+      return true;
+    }
+
+    // Handle positive constants
+    if(!is_power_of_two(const_val)) {
+      int highest = 63 - __builtin_clzll(static_cast<uint64_t>(const_val));
+      int64_t pow2_hi = 1LL << highest;
+      int64_t rem = const_val - pow2_hi;
+
+      // Pattern: c = 2^k + 1  => (x << k) + x
+      if(rem == 1) {
+        auto tmp = next_reg(next_id);
+
+        auto shl = std::make_unique<BinaryOpInst>();
+        shl->dst = tmp;
+        shl->op = "shl";
+        shl->type = type;
+        shl->lhs = var_op;
+        shl->rhs = Operand::make_imm(highest, type);
+
+        auto add = std::make_unique<BinaryOpInst>();
+        add->dst = dst;
+        add->op = "add";
+        add->type = type;
+        add->lhs = Operand::make_reg(tmp, type);
+        add->rhs = var_op;
+
+        new_instrs.push_back(std::move(shl));
+        new_instrs.push_back(std::move(add));
+        return true;
+      }
+
+      // Pattern: c = 2^(k+1) - 1  => (x << (k+1)) - x
+      int64_t pow2_hi_plus = 1LL << (highest + 1);
+      if(pow2_hi_plus - const_val == 1) {
+        auto tmp = next_reg(next_id);
+
+        auto shl = std::make_unique<BinaryOpInst>();
+        shl->dst = tmp;
+        shl->op = "shl";
+        shl->type = type;
+        shl->lhs = var_op;
+        shl->rhs = Operand::make_imm(highest + 1, type);
+
+        auto sub = std::make_unique<BinaryOpInst>();
+        sub->dst = dst;
+        sub->op = "sub";
+        sub->type = type;
+        sub->lhs = Operand::make_reg(tmp, type);
+        sub->rhs = var_op;
+
+        new_instrs.push_back(std::move(shl));
+        new_instrs.push_back(std::move(sub));
+        return true;
+      }
+
+      // Pattern: c = 2^k + 2^j  => (x << k) + (x << j)
+      if(rem > 0 && is_power_of_two(static_cast<int64_t>(rem))) {
+        int lowest = shift_amount(static_cast<int64_t>(rem));
+        auto tmp1 = next_reg(next_id);
+        auto tmp2 = next_reg(next_id);
+
+        auto shl1 = std::make_unique<BinaryOpInst>();
+        shl1->dst = tmp1;
+        shl1->op = "shl";
+        shl1->type = type;
+        shl1->lhs = var_op;
+        shl1->rhs = Operand::make_imm(highest, type);
+
+        auto shl2 = std::make_unique<BinaryOpInst>();
+        shl2->dst = tmp2;
+        shl2->op = "shl";
+        shl2->type = type;
+        shl2->lhs = var_op;
+        shl2->rhs = Operand::make_imm(lowest, type);
+
+        auto add = std::make_unique<BinaryOpInst>();
+        add->dst = dst;
+        add->op = "add";
+        add->type = type;
+        add->lhs = Operand::make_reg(tmp1, type);
+        add->rhs = Operand::make_reg(tmp2, type);
+
+        new_instrs.push_back(std::move(shl1));
+        new_instrs.push_back(std::move(shl2));
+        new_instrs.push_back(std::move(add));
+        return true;
+      }
+
+      // Pattern: c = 2^(k+1) - 2^j  => (x << (k+1)) - (x << j)
+      int64_t inv_rem = pow2_hi_plus - const_val;
+      if(inv_rem > 0 && is_power_of_two(static_cast<int64_t>(inv_rem))) {
+        int lowest = shift_amount(static_cast<int64_t>(inv_rem));
+        auto tmp1 = next_reg(next_id);
+        auto tmp2 = next_reg(next_id);
+
+        auto shl1 = std::make_unique<BinaryOpInst>();
+        shl1->dst = tmp1;
+        shl1->op = "shl";
+        shl1->type = type;
+        shl1->lhs = var_op;
+        shl1->rhs = Operand::make_imm(highest + 1, type);
+
+        auto shl2 = std::make_unique<BinaryOpInst>();
+        shl2->dst = tmp2;
+        shl2->op = "shl";
+        shl2->type = type;
+        shl2->lhs = var_op;
+        shl2->rhs = Operand::make_imm(lowest, type);
+
+        auto sub = std::make_unique<BinaryOpInst>();
+        sub->dst = dst;
+        sub->op = "sub";
+        sub->type = type;
+        sub->lhs = Operand::make_reg(tmp1, type);
+        sub->rhs = Operand::make_reg(tmp2, type);
+
+        new_instrs.push_back(std::move(shl1));
+        new_instrs.push_back(std::move(shl2));
+        new_instrs.push_back(std::move(sub));
+        return true;
+      }
+
+      return false; // Not a pattern we handle
+    }
+
+    // Power of 2 multiplication: x * 2^k = x << k
+    int sh = shift_amount(const_val);
+    auto new_inst = std::make_unique<BinaryOpInst>();
+    new_inst->dst = dst;
+    new_inst->op = "shl";
+    new_inst->type = type;
+    new_inst->lhs = var_op;
+    new_inst->rhs = Operand::make_imm(sh, type);
+    new_instrs.push_back(std::move(new_inst));
+    return true;
+  }
+
+  // Transform udiv by power of 2 to lshr, urem by power of 2 to and.
+  // sdiv/srem by constant is handled by asm-level magic number optimization.
+  bool try_div_strength_reduce(BinaryOpInst& binop, IrType type,
+                               std::vector<std::unique_ptr<Instruction>>& new_instrs) {
+    const std::string& op = binop.op;
+    reg_id_t dst = binop.dst;
+
+    // For division/remainder, only the RHS operand matters as the divisor
+    if(!binop.rhs.is_imm()) return false;
+
+    int64_t divisor = binop.rhs.as_imm();
+    if(divisor <= 0) return false;
+
+    if(!is_power_of_two(divisor)) return false;
+
+    int sh = shift_amount(divisor);
+
+    if(op == "udiv") {
+      // x / 2^k = x >> k (logical)
+      auto new_inst = std::make_unique<BinaryOpInst>();
+      new_inst->dst = dst;
+      new_inst->op = "lshr";
+      new_inst->type = type;
+      new_inst->lhs = binop.lhs;
+      new_inst->rhs = Operand::make_imm(sh, type);
+      new_instrs.push_back(std::move(new_inst));
+      return true;
+    }
+
+    if(op == "urem") {
+      // x % 2^k = x & (2^k - 1)
+      auto new_inst = std::make_unique<BinaryOpInst>();
+      new_inst->dst = dst;
+      new_inst->op = "and";
+      new_inst->type = type;
+      new_inst->lhs = binop.lhs;
+      new_inst->rhs = Operand::make_imm(divisor - 1, type);
+      new_instrs.push_back(std::move(new_inst));
+      return true;
+    }
+
+    return false;
+  }
+} // anonymous namespace
+
+void StrengthReduction::optimize(FunctionPack& func) {
+  // Find max register ID to allocate new temps
+  reg_id_t max_reg = 0;
+  for(const auto& bb: func.basic_block_packs) {
+    for(const auto& inst: bb.instructions) {
+      if(auto dst = inst->get_dst()) {
+        max_reg = std::max(max_reg, *dst);
+      }
+      for(auto use: inst->get_uses()) {
+        max_reg = std::max(max_reg, use);
+      }
+    }
+  }
+
+  reg_id_t next_id = max_reg + 1;
+
+  for(auto& bb: func.basic_block_packs) {
+    std::vector<std::unique_ptr<Instruction>> new_instrs;
+
+    for(auto& inst: bb.instructions) {
+      auto* binop = dynamic_cast<BinaryOpInst*>(inst.get());
+      if(!binop) {
+        new_instrs.push_back(std::move(inst));
+        continue;
+      }
+
+      bool transformed = false;
+
+      if(binop->op == "mul") {
+        transformed = try_mul_strength_reduce(*binop, binop->type, next_id, new_instrs);
+      } else if(binop->op == "udiv" || binop->op == "urem") {
+        transformed = try_div_strength_reduce(*binop, binop->type, new_instrs);
+      }
+
+      if(!transformed) {
+        new_instrs.push_back(std::move(inst));
+      }
+    }
+
+    bb.instructions = std::move(new_instrs);
   }
 }
 }

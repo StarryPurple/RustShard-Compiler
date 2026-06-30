@@ -60,7 +60,7 @@ struct AllocationResult {
 };
 
 LivenessInfo compute_liveness(const ir::FunctionPack& func);
-AllocationResult allocate_registers(const ir::FunctionPack& func);
+AllocationResult allocate_onstack(const ir::FunctionPack& func);
 } // namespace rshard::backend
 
 #endif
