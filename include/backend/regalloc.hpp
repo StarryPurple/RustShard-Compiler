@@ -16,6 +16,7 @@ struct LivenessInfo {
 };
 
 struct LiveInterval {
+  
   ir::reg_id_t reg;
   ir::instr_no_t start;
   ir::instr_no_t end;

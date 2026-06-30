@@ -249,6 +249,10 @@ void eliminate_critical_edge(FunctionPack& func) {
 }
 
 void Canonicalization::optimize(FunctionPack& func) {
+  func.update_block_ids();
+  func.reorder_reg_ids();
+  func.instr_renumbering();
+
   eliminate_single_phi(func);
   eliminate_critical_edge(func);
   while(eliminate_deadcode(func)) {
@@ -259,6 +263,223 @@ void Canonicalization::optimize(FunctionPack& func) {
   }
   func.reorder_reg_ids();
   func.instr_renumbering();
+}
+
+std::optional<std::int32_t> instr_cost(const Instruction* inst, const StringT& func_name) {
+  static constexpr std::int32_t COST_ALLOC = 1;
+  static constexpr std::int32_t COST_BASIC_BINOP = 1;
+  static constexpr std::int32_t COST_MUL = 2;
+  static constexpr std::int32_t COST_DIV = 10;
+  static constexpr std::int32_t COST_REM = 10;
+  static constexpr std::int32_t COST_LOAD_STORE = 3;
+  static constexpr std::int32_t COST_BRANCH = 1;
+  static constexpr std::int32_t COST_CALL = 20;
+  static constexpr std::int32_t COST_INSERT_VALUE = 3;
+  static constexpr std::int32_t COST_GEP = 3;
+  static constexpr std::int32_t COST_CAST = 1;
+  static constexpr std::int32_t COST_PHI = 1;
+  static constexpr std::int32_t COST_RETURN = 1;
+  static constexpr std::int32_t COST_UNREACHABLE = 0;
+
+  if(auto a = dynamic_cast<const AllocaInst*>(inst)) {
+    return COST_ALLOC;
+  }
+  if(const auto s = dynamic_cast<const StoreInst*>(inst)) {
+    return COST_LOAD_STORE;
+  }
+  if(const auto l = dynamic_cast<const LoadInst*>(inst)) {
+    return COST_LOAD_STORE;
+  }
+  if(const auto bi = dynamic_cast<const BinaryOpInst*>(inst)) {
+    if(bi->op == "mul") return COST_MUL;
+    if(bi->op == "sdiv" || bi->op == "udiv") return COST_DIV;
+    if(bi->op == "srem" || bi->op == "urem") return COST_REM;
+    return COST_BASIC_BINOP;
+  }
+  if(const auto call = dynamic_cast<const CallInst*>(inst)) {
+    if(call->func_name == func_name) return std::nullopt;
+    return COST_CALL;
+  }
+  if(const auto r = dynamic_cast<const ReturnInst*>(inst)) {
+    return COST_RETURN;
+  }
+  if(const auto g = dynamic_cast<const GEPInst*>(inst)) {
+    return COST_GEP;
+  }
+  if(const auto cast = dynamic_cast<const CastInst*>(inst)) {
+    return COST_CAST;
+  }
+  if(const auto br = dynamic_cast<const BranchInst*>(inst)) {
+    return COST_BRANCH;
+  }
+  if(const auto cond = dynamic_cast<const CondBranchInst*>(inst)) {
+    return COST_BRANCH;
+  }
+  if(const auto u = dynamic_cast<const UnreachableInst*>(inst)) {
+    return COST_UNREACHABLE;
+  }
+  if(const auto i = dynamic_cast<const InsertValueInst*>(inst)) {
+    return COST_INSERT_VALUE;
+  }
+  if(const auto p = dynamic_cast<const PhiInst*>(inst)) {
+    return COST_PHI;
+  }
+
+  throw std::runtime_error("Unknown instruction");
+}
+
+std::optional<std::int32_t> func_cost(const FunctionPack& func) {
+  std::int32_t res = 0;
+  for(const auto &block: func.basic_block_packs) {
+    for(const auto &inst: block.instructions) {
+      auto cost = instr_cost(inst.get(), func.ident);
+      if(!cost) return std::nullopt;
+      res += *cost;
+    }
+  }
+  return {res};
+}
+
+std::optional<FunctionPack> extract_cheap_func(IrPack& ir) {
+  static constexpr std::int32_t THRESHOLD = 40;
+  for(auto it = ir.function_packs.begin(); it != ir.function_packs.end(); ++it) {
+    auto cost = func_cost(*it);
+    if(cost && *cost <= THRESHOLD) {
+      std::optional res = std::move(*it);
+      ir.function_packs.erase(it);
+      return res;
+    }
+  }
+  return std::nullopt;
+}
+
+void inline_func(IrPack& ir, FunctionPack&& cheap_func) {
+  auto cheap_name = cheap_func.ident;
+  for(auto& func: ir.function_packs) {
+    hint_id_t hint_id = -1;
+    for(int idx_bb = 0; idx_bb < func.basic_block_packs.size(); ++idx_bb) {
+      for(auto idx_inst = 0; idx_inst < func.basic_block_packs[idx_bb].instructions.size(); ++idx_inst) {
+        auto it_inst = func.basic_block_packs[idx_bb].instructions.begin() + idx_inst;
+        if(auto call = dynamic_cast<CallInst*>(it_inst->get()); call && call->func_name == cheap_name) {
+          const reg_id_t reg_id_offset = func.largest_reg_id() + 1;
+          auto it_bb = func.basic_block_packs.begin() + idx_bb;
+          std::vector<PhiInst::Income> incomes;
+          Label starting_label = it_bb->label;
+          Label ending_label{LabelHint::kInlineExit, ++hint_id};
+          ending_label.appendix.emplace_back(cheap_name, hint_id);
+          BasicBlockPack left;
+          left.label = it_bb->label;
+          for(int i = 0; i < idx_inst; ++i) {
+            left.instructions.push_back(std::move(it_bb->instructions[i]));
+          }
+          BasicBlockPack right;
+          right.label = ending_label;
+          for(int i = idx_inst + 1; i < it_bb->instructions.size(); ++i) {
+            right.instructions.push_back(std::move(it_bb->instructions[i]));
+          }
+          std::unordered_map<reg_id_t, Operand> param_reg_map;
+          for(int i = 0; i < call->args.size(); ++i) {
+            param_reg_map.emplace(cheap_func.param_at(i).as_reg(), call->args[i]);
+          }
+          std::vector<BasicBlockPack> new_packs;
+          // deep copy
+          for(auto& bb: cheap_func.basic_block_packs) {
+            BasicBlockPack new_bb;
+            new_bb.label = bb.label;
+            for(auto& inst: bb.instructions) {
+              new_bb.instructions.emplace_back(inst->clone()); // no moving!
+            }
+            new_packs.push_back(std::move(new_bb));
+          }
+          BasicBlockPack term_block;
+          // rename all blocks + regs
+          for(auto& nbb: new_packs) {
+            nbb.label.appendix.emplace_back(cheap_name, hint_id);
+            for(auto& ninst: nbb.instructions) {
+              if(auto dst = ninst->get_dst()) {
+                ninst->set_dst(*dst + reg_id_offset);
+              }
+              for(auto *use: ninst->get_uses_oper()) {
+                if(use->is_reg()) {
+                  if(param_reg_map.contains(use->as_reg())) {
+                    *use = param_reg_map.at(use->as_reg());
+                  } else {
+                    use->value = Operand::VRegister{use->as_reg() + reg_id_offset};
+                  }
+                }
+              }
+
+              if(auto *br = dynamic_cast<BranchInst*>(ninst.get())) {
+                br->label.appendix.emplace_back(cheap_name, hint_id);
+              } else if(auto *cbr = dynamic_cast<CondBranchInst*>(ninst.get())) {
+                cbr->true_label.appendix.emplace_back(cheap_name, hint_id);
+                cbr->false_label.appendix.emplace_back(cheap_name, hint_id);
+              } else if(auto *phi = dynamic_cast<PhiInst*>(ninst.get())) {
+                for(auto& income: phi->incoming) {
+                  income.label.appendix.emplace_back(cheap_name, hint_id);
+                }
+              }
+
+              if(auto* ret = dynamic_cast<ReturnInst*>(ninst.get())) {
+                if(ret->ret_val) incomes.emplace_back(*ret->ret_val, nbb.label);
+                BranchInst lineB;
+                lineB.label = ending_label;
+                ninst = std::make_unique<BranchInst>(std::move(lineB));
+              }
+            }
+          }
+
+          BranchInst lineB;
+          lineB.label = new_packs.front().label;
+          left.instructions.push_back(std::make_unique<BranchInst>(std::move(lineB)));
+          if(call->dst) {
+            PhiInst lineP;
+            lineP.dst = *call->dst;
+            lineP.type = call->ret_type;
+            lineP.incoming = std::move(incomes);
+            right.instructions.insert(right.instructions.begin(), std::make_unique<PhiInst>(std::move(lineP)));
+          }
+          new_packs.insert(new_packs.begin(), std::move(left));
+          new_packs.push_back(std::move(right));
+
+          // it_bb and &bb not used here. might become invalid
+          func.basic_block_packs.erase(func.basic_block_packs.begin() + idx_bb);
+          for(auto& pack: new_packs) {
+            func.basic_block_packs.insert(func.basic_block_packs.begin() + (idx_bb++), std::move(pack));
+          }
+
+          // replace the phi incoming labels.
+          // Those who comes from the starting label (original one) shall be redirected to ending label.
+          for(auto &bb: func.basic_block_packs) {
+            for(auto &inst: bb.instructions) {
+              if(auto *phi = dynamic_cast<PhiInst*>(inst.get())) {
+                for(auto &income: phi->incoming) {
+                  if(income.label == starting_label)
+                    income.label = ending_label;
+                }
+              }
+            }
+          }
+
+          idx_bb -= 2; break; // go to the `right` bb defined above and start from the first instruction
+        }
+      }
+    }
+    if(hint_id >= 0) {
+      func.update_block_ids();
+      func.cfg.valid = false;
+    }
+  }
+}
+
+void FunctionInline::optimize(IrPack& ir) {
+  while(auto cheap_func = extract_cheap_func(ir)) {
+    inline_func(ir, std::move(*cheap_func));
+    // for(auto& func: ir.function_packs) {
+    //   while(constant_fold(func)) { /* */ }
+    // }
+  }
+  Canonicalization::optimize(ir);
 }
 
 std::unordered_map<reg_id_t, IrType> find_promotable_slots(FunctionPack& func) {
@@ -301,7 +522,7 @@ std::vector<block_id_t> collect_def_blocks(FunctionPack& func, reg_id_t slot) {
       }
     }
   }
-  return std::vector<block_id_t>(blocks.begin(), blocks.end());
+  return {blocks.begin(), blocks.end()};
 }
 
 bool has_phi_for_slot(FunctionPack& func, int block_id, reg_id_t slot) {

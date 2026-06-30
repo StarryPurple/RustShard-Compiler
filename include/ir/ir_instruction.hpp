@@ -80,6 +80,12 @@ struct Operand {
     }
   }
 
+  void replace_reg_reg(reg_id_t old_reg, reg_id_t new_reg) {
+    if(is_reg() && as_reg() == old_reg) {
+      value = VRegister{new_reg};
+    }
+  }
+
   void rename_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) {
     if(is_reg() && reorder_map.contains(as_reg())) {
       value = VRegister{reorder_map.at(as_reg())};
@@ -123,6 +129,7 @@ struct Instruction {
 
   Instruction() = default;
   virtual ~Instruction() = default;
+  virtual std::unique_ptr<Instruction> clone() = 0;
 
   // the reg defined by this instruction
   virtual std::optional<reg_id_t> get_dst() const { return std::nullopt; }
@@ -135,6 +142,9 @@ struct Instruction {
 
   // replace all reg usages
   virtual void replace_use(reg_id_t old_reg, Operand new_op) {}
+  virtual void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) {}
+
+  virtual std::vector<Operand*> get_uses_oper() { return {}; }
 
   virtual void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) {}
 };
@@ -145,6 +155,8 @@ struct AllocaInst: Instruction {
   reg_id_t dst;
   IrType type;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<AllocaInst>(*this); }
+
   std::optional<reg_id_t> get_dst() const override { return dst; }
   void set_dst(reg_id_t id) override { dst = id; }
 };
@@ -154,16 +166,28 @@ struct AllocaInst: Instruction {
 struct StoreInst: Instruction {
   Operand value, ptr;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<StoreInst>(*this); }
+
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
     if(value.is_reg()) uses.push_back(value.as_reg());
     if(ptr.is_reg()) uses.push_back(ptr.as_reg());
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    if(value.is_reg()) uses.push_back(&value);
+    if(ptr.is_reg()) uses.push_back(&ptr);
+    return uses;
+  }
 
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     value.replace_reg(old_reg, new_op);
     ptr.replace_reg(old_reg, new_op);
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    value.replace_reg_reg(old_reg, new_reg);
+    ptr.replace_reg_reg(old_reg, new_reg);
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
     value.rename_reg(reorder_map);
@@ -178,6 +202,8 @@ struct LoadInst: Instruction {
   IrType load_type;
   Operand ptr;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<LoadInst>(*this); }
+
   std::optional<reg_id_t> get_dst() const override { return dst; }
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
@@ -185,8 +211,16 @@ struct LoadInst: Instruction {
     if(ptr.is_reg()) uses.push_back(ptr.as_reg());
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    if(ptr.is_reg()) uses.push_back(&ptr);
+    return uses;
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     ptr.replace_reg(old_reg, new_op);
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    ptr.replace_reg_reg(old_reg, new_reg);
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
     ptr.rename_reg(reorder_map);
@@ -205,6 +239,8 @@ struct BinaryOpInst: Instruction {
   IrType type;
   Operand lhs, rhs;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<BinaryOpInst>(*this); }
+
   std::optional<reg_id_t> get_dst() const override { return dst; }
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
@@ -213,9 +249,19 @@ struct BinaryOpInst: Instruction {
     if(rhs.is_reg()) uses.push_back(rhs.as_reg());
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    if(lhs.is_reg()) uses.push_back(&lhs);
+    if(rhs.is_reg()) uses.push_back(&rhs);
+    return uses;
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     lhs.replace_reg(old_reg, new_op);
     rhs.replace_reg(old_reg, new_op);
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    lhs.replace_reg_reg(old_reg, new_reg);
+    rhs.replace_reg_reg(old_reg, new_reg);
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
     lhs.rename_reg(reorder_map);
@@ -232,6 +278,8 @@ struct CallInst: Instruction {
   StringT func_name;
   std::vector<Operand> args; // type and reg name
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<CallInst>(*this); }
+
   std::optional<reg_id_t> get_dst() const override {
     return dst;
   }
@@ -243,9 +291,21 @@ struct CallInst: Instruction {
     }
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    for(auto& arg: args) {
+      if(arg.is_reg()) uses.push_back(&arg);
+    }
+    return uses;
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     for(auto& arg: args) {
       arg.replace_reg(old_reg, new_op);
+    }
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    for(auto& arg: args) {
+      arg.replace_reg_reg(old_reg, new_reg);
     }
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
@@ -260,15 +320,27 @@ struct CallInst: Instruction {
 struct ReturnInst: Instruction {
   std::optional<Operand> ret_val;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<ReturnInst>(*this); }
+
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
     if(ret_val && ret_val->is_reg())
       uses.push_back(ret_val->as_reg());
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    if(ret_val && ret_val->is_reg())
+      uses.push_back(&ret_val.value());
+    return uses;
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     if(ret_val)
       ret_val->replace_reg(old_reg, new_op);
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    if(ret_val)
+      ret_val->replace_reg_reg(old_reg, new_reg);
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
     if(ret_val)
@@ -285,6 +357,8 @@ struct GEPInst: Instruction {
   Operand ptr;
   std::vector<Operand> indices;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<GEPInst>(*this); }
+
   std::optional<reg_id_t> get_dst() const override { return dst; }
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
@@ -295,10 +369,24 @@ struct GEPInst: Instruction {
     }
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    if(ptr.is_reg()) uses.push_back(&ptr);
+    for(auto& idx: indices) {
+      if(idx.is_reg()) uses.push_back(&idx);
+    }
+    return uses;
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     ptr.replace_reg(old_reg, new_op);
     for(auto& idx: indices) {
       idx.replace_reg(old_reg, new_op);
+    }
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    ptr.replace_reg_reg(old_reg, new_reg);
+    for(auto& idx: indices) {
+      idx.replace_reg_reg(old_reg, new_reg);
     }
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
@@ -317,6 +405,8 @@ struct CastInst: Instruction {
   IrType dst_type;
   Operand src;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<CastInst>(*this); }
+
   std::optional<reg_id_t> get_dst() const override { return dst; }
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
@@ -324,8 +414,16 @@ struct CastInst: Instruction {
     if(src.is_reg()) uses.push_back(src.as_reg());
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    if(src.is_reg()) uses.push_back(&src);
+    return uses;
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     src.replace_reg(old_reg, new_op);
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    src.replace_reg_reg(old_reg, new_reg);
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
     src.rename_reg(reorder_map);
@@ -385,12 +483,19 @@ enum class LabelHint {
   kLazyElse,
   kLazyExit,
   kCriticalEdge,
+  kInlineExit,
 };
 
 struct Label {
   block_id_t block_id;
   LabelHint hint;
   hint_id_t hint_id;
+  struct InlineAppendix {
+    std::string name;
+    hint_id_t hint_id;
+    auto operator<=>(const InlineAppendix&) const = default;
+  };
+  std::vector<InlineAppendix> appendix;
 
   Label() = default;
 
@@ -412,8 +517,11 @@ struct Label {
         {LabelHint::kLoopBody, "loop.body"}, {LabelHint::kLoopExit, "loop.exit"},
         {LabelHint::kLazyThen, "lazy.then"}, {LabelHint::kLazyElse, "lazy.else"},
         {LabelHint::kLazyExit, "lazy.exit"}, {LabelHint::kCriticalEdge, "critical_edge"},
+        {LabelHint::kInlineExit, "inline.exit"},
       };
-    return "_" + std::to_string(block_id) + "." + map.at(hint) + "." + std::to_string(hint_id);
+    auto res = "_" + std::to_string(block_id) + "." + map.at(hint) + "." + std::to_string(hint_id);
+    for(auto& a: appendix) res += "." + a.name + "." + std::to_string(a.hint_id);
+    return res;
   }
 };
 
@@ -421,6 +529,8 @@ struct Label {
 // if, loop, block (end)
 struct BranchInst: Instruction {
   Label label;
+
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<BranchInst>(*this); }
 };
 
 // br i1 %cond, label %then, label %else
@@ -429,13 +539,23 @@ struct CondBranchInst: Instruction {
   Operand cond;
   Label true_label, false_label;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<CondBranchInst>(*this); }
+
   std::vector<reg_id_t> get_uses() const override {
     std::vector<reg_id_t> uses;
     if(cond.is_reg()) uses.push_back(cond.as_reg());
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    if(cond.is_reg()) uses.push_back(&cond);
+    return uses;
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     cond.replace_reg(old_reg, new_op);
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    cond.replace_reg_reg(old_reg, new_reg);
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {
     cond.rename_reg(reorder_map);
@@ -444,7 +564,11 @@ struct CondBranchInst: Instruction {
 
 // unreachable
 // exit, break, continue
-struct UnreachableInst: Instruction {};
+struct UnreachableInst: Instruction {
+
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<UnreachableInst>(*this); }
+};
+
 
 // %0 = insertvalue %Struct/Array undef, Ty val/%reg, 0
 // ...
@@ -454,6 +578,8 @@ struct InsertValueInst: Instruction {
   IrType type;                    // %Struct/Array
   std::vector<int> interval_regs; // "0", ... "n"
   std::vector<Operand> operands;
+
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<InsertValueInst>(*this); }
 
   std::optional<reg_id_t> get_dst() const override {
     return interval_regs.back();
@@ -471,6 +597,19 @@ struct InsertValueInst: Instruction {
     }
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    throw std::runtime_error("Using Insert Value Inst getting oper");
+    /*
+    std::vector<Operand*> uses;
+    for(auto& op: operands) {
+      if(op.is_reg()) uses.push_back(&op);
+    }
+    for(std::size_t i = 0; i + 1 < interval_regs.size(); ++i) {
+      uses.push_back(&interval_regs[i]);
+    }
+    return uses;
+    */
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     for(auto& op: operands) {
       op.replace_reg(old_reg, new_op);
@@ -479,6 +618,17 @@ struct InsertValueInst: Instruction {
       if(interval_regs[i] == old_reg) {
         // assert(new_op.is_reg());
         interval_regs[i] = new_op.as_reg();
+      }
+    }
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    for(auto& op: operands) {
+      op.replace_reg_reg(old_reg, new_reg);
+    }
+    for(std::size_t i = 0; i + 1 < interval_regs.size(); ++i) {
+      if(interval_regs[i] == old_reg) {
+        // assert(new_op.is_reg());
+        interval_regs[i] = new_reg;
       }
     }
   }
@@ -505,6 +655,8 @@ struct PhiInst: Instruction {
   IrType type;
   std::vector<Income> incoming;
 
+  std::unique_ptr<Instruction> clone() override { return std::make_unique<PhiInst>(*this); }
+
   std::optional<reg_id_t> get_dst() const override { return dst; }
   void set_dst(reg_id_t id) override { dst = id; }
   std::vector<reg_id_t> get_uses() const override {
@@ -514,9 +666,21 @@ struct PhiInst: Instruction {
     }
     return uses;
   }
+  std::vector<Operand*> get_uses_oper() override {
+    std::vector<Operand*> uses;
+    for(auto& [op, _label]: incoming) {
+      if(op.is_reg()) uses.push_back(&op);
+    }
+    return uses;
+  }
   void replace_use(reg_id_t old_reg, Operand new_op) override {
     for(auto& [op, _label]: incoming) {
       op.replace_reg(old_reg, new_op);
+    }
+  }
+  void replace_use_reg(reg_id_t old_reg, reg_id_t new_reg) override {
+    for(auto& [op, _label]: incoming) {
+      op.replace_reg_reg(old_reg, new_reg);
     }
   }
   void rename_use_reg(const std::unordered_map<reg_id_t, reg_id_t>& reorder_map) override {

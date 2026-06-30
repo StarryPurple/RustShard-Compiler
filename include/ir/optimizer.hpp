@@ -19,11 +19,17 @@ public:
   static void optimize(FunctionPack& func);
 };
 
+class FunctionInline {
+public:
+  static void optimize(IrPack& ir);
+};
+
 // Or you can call it Mem2Reg.
 class PromoteAlloca {
 public:
   static void optimize(IrPack& ir) {
     for(auto &func: ir.function_packs) optimize(func);
+    Canonicalization::optimize(ir);
   }
   static void optimize(FunctionPack& func);
 };

@@ -3,29 +3,43 @@
 
 namespace rshard::ir {
 void FunctionPack::update_block_ids() {
-  struct PairHash {
-    std::size_t operator()(const std::pair<LabelHint, int>& pair) const {
-      std::size_t h1 = std::hash<int>{}(static_cast<int>(pair.first));
-      std::size_t h2 = std::hash<int>{}(pair.second);
-      return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+  struct LabelInfo {
+    LabelHint hint;
+    hint_id_t hint_id;
+    std::vector<Label::InlineAppendix> appendix;
+
+    auto operator<=>(const LabelInfo&) const = default;
+  };
+  struct LabelHash {
+    std::size_t operator()(const LabelInfo& info) const {
+      std::size_t h1 = std::hash<int>{}(static_cast<int>(info.hint));
+      std::size_t h2 = std::hash<int>{}(info.hint_id);
+      std::size_t hash = h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+      for(auto& a: info.appendix) {
+        std::size_t hA = std::hash<int>{}(a.hint_id);
+        std::size_t hB = std::hash<std::string>{}(a.name);
+        hash ^= hA + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+        hash ^= hB + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+      }
+      return hash;
     }
   };
-  std::unordered_map<std::pair<LabelHint, int>, int, PairHash> umap;
+  std::unordered_map<LabelInfo, block_id_t, LabelHash> umap;
   for(int i = 0; i < basic_block_packs.size(); ++i) {
     auto& label = basic_block_packs[i].label;
     label.block_id = i;
-    umap.emplace(std::pair{label.hint, label.hint_id}, i);
+    umap.emplace(LabelInfo{label.hint, label.hint_id, label.appendix}, i);
   }
   for(auto& basic_block: basic_block_packs) {
     for(auto& instr: basic_block.instructions) {
       if(auto b = dynamic_cast<BranchInst*>(instr.get())) {
-        b->label.block_id = umap.at(std::pair{b->label.hint, b->label.hint_id});
+        b->label.block_id = umap.at(LabelInfo{b->label.hint, b->label.hint_id, b->label.appendix});
       } else if(auto c = dynamic_cast<CondBranchInst*>(instr.get())) {
-        c->true_label.block_id = umap.at(std::pair{c->true_label.hint, c->true_label.hint_id});
-        c->false_label.block_id = umap.at(std::pair{c->false_label.hint, c->false_label.hint_id});
+        c->true_label.block_id = umap.at(LabelInfo{c->true_label.hint, c->true_label.hint_id, c->true_label.appendix});
+        c->false_label.block_id = umap.at(LabelInfo{c->false_label.hint, c->false_label.hint_id, c->false_label.appendix});
       } else if(auto p = dynamic_cast<PhiInst*>(instr.get())) {
         for(auto& [oper, label]: p->incoming) {
-          label.block_id = umap.at(std::pair{label.hint, label.hint_id});
+          label.block_id = umap.at(LabelInfo{label.hint, label.hint_id, label.appendix});
         }
       }
     }

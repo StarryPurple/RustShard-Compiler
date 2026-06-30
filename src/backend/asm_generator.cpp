@@ -785,7 +785,7 @@ void AsmGenerator::generate_instruction(const ir::Instruction* inst, AsmBasicBlo
   } else {
     to_record = false;
   }
-  if(to_record)
+  if(to_record && !bb.instructions.empty())
     bb.instructions.back().comment = std::format("ir inst {} fin", inst->instr_no);
 }
 } // namespace rshard::backend

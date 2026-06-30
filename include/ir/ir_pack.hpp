@@ -69,6 +69,21 @@ struct FunctionPack {
     return sret_param ? (param_idx == 0 ? *sret_param : params[param_idx - 1]) : params[param_idx];
   }
 
+  reg_id_t largest_reg_id() const {
+    reg_id_t res = 0;
+    for(const auto& bb: basic_block_packs) {
+      for(const auto& inst: bb.instructions) {
+        for(const auto& use: inst->get_uses()) {
+          res = std::max(res, use);
+        }
+        if(const auto dst = inst->get_dst()) {
+          res = std::max(res, *dst);
+        }
+      }
+    }
+    return res;
+  }
+
   void update_block_ids();
 
   void construct_cfg();
