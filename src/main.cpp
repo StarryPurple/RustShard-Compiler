@@ -7,7 +7,6 @@
 #include "frontend/syntax_check.hpp"
 #include "ir/ir_generator.hpp"
 #include "ir/optimizer.hpp"
-#include "ir/strength_reduction.hpp"
 #include "backend/asm_generator.hpp"
 #include "backend/asm_printer.hpp"
 
