@@ -400,8 +400,8 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
   AllocationResult result;
 
   auto intervals = build_intervals(func);
-  // linear_coloring(func, intervals, result);
-  graph_coloring(func, intervals, result);
+  linear_coloring(func, intervals, result);
+  // graph_coloring(func, intervals, result);
   auto local_var_mapping = local_var_alloc(func, result);
   calc_caller_callee_save(func, result, intervals);
 
