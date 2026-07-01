@@ -267,12 +267,12 @@ namespace {
   struct MagicS64 { int64_t multiplier; int shift; };
   MagicS64 compute_magic_s64(int64_t d) {
     uint64_t abs_d = d < 0 ? -static_cast<uint64_t>(d) : static_cast<uint64_t>(d);
-    uint64_t two_63 = (uint64_t)1 << 63;
-    uint64_t tmp = two_63 + (d < 0 ? 1 : 0);
-    uint64_t anc = tmp - 1 - tmp % abs_d;
-    uint64_t p = 63;
-    uint64_t q1 = two_63 / anc, r1 = two_63 % anc;
-    uint64_t q2 = two_63 / abs_d, r2 = two_63 % abs_d;
+    __uint128_t two_63 = (__uint128_t)1 << 63;
+    __uint128_t tmp = two_63 + (d < 0 ? 1 : 0);
+    __uint128_t anc = tmp - 1 - tmp % abs_d;
+    __uint128_t p = 63;
+    __uint128_t q1 = two_63 / anc, r1 = two_63 % anc;
+    __uint128_t q2 = two_63 / abs_d, r2 = two_63 % abs_d;
     do {
       p++;
       q1 <<= 1; r1 <<= 1;
@@ -318,36 +318,35 @@ namespace {
     }
 
     // General signed division by constant: magic number (Granlund-Montgomery)
+    // Reference: LLVM lib/Support/DivisionByConstantInfo.cpp, TargetLowering.cpp BuildSDIV.
+    // Sequence: mulh → add/sub numerator → sra → srli correction → add correction
     auto magic = compute_magic_s64(divisor);
     bb.instructions.push_back(RV64I::LI(kTmpRs2, magic.multiplier));
     bb.instructions.push_back(RV64I::MULH(kTmpRd, src, kTmpRs2));
 
+    // t0 = mulh(src, M); optionally add/subtract src as correction
+    if(divisor > 0 && magic.multiplier < 0)
+      bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, src));
+    else if(divisor < 0 && magic.multiplier > 0)
+      bb.instructions.push_back(RV64I::SUB(kTmpRd, kTmpRd, src));
+
+    // Post-shift
+    if(magic.shift > 0)
+      bb.instructions.push_back(RV64I::SRAI(kTmpRd, kTmpRd, magic.shift));
+
+    // Correction for truncation towards zero:
+    //   result += (result < 0)
+    // LLVM: srli t = result, 63; result += t
+    bb.instructions.push_back(RV64I::SRLI(kTmpRs1, kTmpRd, 63));
+    bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, kTmpRs1));
+
     if(op == "srem") {
-      if(divisor > 0 && magic.multiplier < 0)
-        bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, src));
-      else if(divisor < 0 && magic.multiplier > 0)
-        bb.instructions.push_back(RV64I::SUB(kTmpRd, kTmpRd, src));
-      if(magic.shift > 0)
-        bb.instructions.push_back(RV64I::SRAI(kTmpRd, kTmpRd, magic.shift));
-      bb.instructions.push_back(RV64I::SRAI(kTmpRs1, kTmpRd, 63));
-      bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, kTmpRs1));
       // r = n - q * d
       bb.instructions.push_back(RV64I::LI(kTmpRs2, divisor));
       bb.instructions.push_back(RV64I::MUL(kTmpRs1, kTmpRd, kTmpRs2));
       bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRs1));
     } else {
-      // sdiv
-      if(divisor > 0 && magic.multiplier < 0)
-        bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, src));
-      else if(divisor < 0 && magic.multiplier > 0)
-        bb.instructions.push_back(RV64I::SUB(kTmpRd, kTmpRd, src));
-      if(magic.shift > 0) {
-        bb.instructions.push_back(RV64I::SRAI(dst, kTmpRd, magic.shift));
-      } else {
-        if(dst != kTmpRd) bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
-      }
-      bb.instructions.push_back(RV64I::SRAI(kTmpRs1, dst, 63));
-      bb.instructions.push_back(RV64I::ADD(dst, dst, kTmpRs1));
+      if(dst != kTmpRd) bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
     }
     return true;
   }
