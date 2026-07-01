@@ -447,9 +447,19 @@ void inline_func(IrPack& ir, FunctionPack&& cheap_func) {
           new_packs.push_back(std::move(right));
 
           // it_bb and &bb not used here. might become invalid
-          func.basic_block_packs.erase(func.basic_block_packs.begin() + idx_bb);
-          for(auto& pack: new_packs) {
-            func.basic_block_packs.insert(func.basic_block_packs.begin() + (idx_bb++), std::move(pack));
+          {
+            std::vector<BasicBlockPack> result;
+            result.reserve(func.basic_block_packs.size() - 1 + new_packs.size());
+            for(int i = 0; i < idx_bb; ++i) {
+              result.push_back(std::move(func.basic_block_packs[i]));
+            }
+            for(auto& pack: new_packs) {
+              result.push_back(std::move(pack));
+            }
+            for(int i = idx_bb + 1; i < func.basic_block_packs.size(); ++i) {
+              result.push_back(std::move(func.basic_block_packs[i]));
+            }
+            func.basic_block_packs = std::move(result);
           }
 
           // replace the phi incoming labels.
@@ -461,17 +471,19 @@ void inline_func(IrPack& ir, FunctionPack&& cheap_func) {
                   if(income.label == starting_label)
                     income.label = ending_label;
                 }
-              }
+              } else break; // phi only appears at the front
             }
           }
 
-          idx_bb -= 2; break; // go to the `right` bb defined above and start from the first instruction
+          // new_packs.size is still correct
+          idx_bb += new_packs.size() - 2; break; // go to the `right` bb defined above and start from the first instruction
         }
       }
     }
     if(hint_id >= 0) {
       func.cfg.valid = false;
-      Canonicalization::optimize(func);
+      func.update_block_ids();
+      func.reorder_reg_ids();
     }
   }
 }

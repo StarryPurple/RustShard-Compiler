@@ -244,10 +244,8 @@ namespace {
     return {0, 0};
   }
 
-  bool try_const_udiv_urem(const std::string& op, uint64_t divisor,
-                            PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
-    // discard
-    return false;
+   bool try_const_udiv_urem(const std::string& op, uint64_t divisor,
+                             PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
     if(divisor <= 1 || (divisor & (divisor - 1)) == 0) return false;
     auto [M, s] = compute_magic_u64(divisor);
     if(M == 0) return false;
@@ -256,8 +254,8 @@ namespace {
     if(op == "urem") {
       if(s > 0) bb.instructions.push_back(RV64I::SRLI(kTmpRd, kTmpRd, s));
       bb.instructions.push_back(RV64I::LI(kTmpRs2, static_cast<int64_t>(divisor)));
-      bb.instructions.push_back(RV64I::MUL(kTmpRs1, kTmpRd, kTmpRs2));
-      bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRs1));
+      bb.instructions.push_back(RV64I::MUL(kTmpRd, kTmpRd, kTmpRs2));
+      bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRd));
     } else {
       if(s > 0) bb.instructions.push_back(RV64I::SRLI(dst, kTmpRd, s));
       else if(dst != kTmpRd) bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
@@ -291,8 +289,6 @@ namespace {
 
   bool try_const_sdiv_srem(const std::string& op, int64_t divisor,
                              PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
-    // discard
-    return false;
     if(divisor == 0 || divisor == 1 || divisor == -1) return false;
     uint64_t d_abs = divisor < 0 ? -static_cast<uint64_t>(divisor) : static_cast<uint64_t>(divisor);
 
@@ -301,18 +297,18 @@ namespace {
       int n = __builtin_ctzll(d_abs);
       if(n == 0) return false;
       if(op == "sdiv") {
-        bb.instructions.push_back(RV64I::SRAI(kTmpRs1, src, 63));
-        if(n < 64) bb.instructions.push_back(RV64I::SRLI(kTmpRs1, kTmpRs1, 64 - n));
-        bb.instructions.push_back(RV64I::ADD(kTmpRd, src, kTmpRs1));
+        bb.instructions.push_back(RV64I::SRAI(kTmpRs2, src, 63));
+        if(n < 64) bb.instructions.push_back(RV64I::SRLI(kTmpRs2, kTmpRs2, 64 - n));
+        bb.instructions.push_back(RV64I::ADD(kTmpRd, src, kTmpRs2));
         bb.instructions.push_back(RV64I::SRAI(dst, kTmpRd, n));
         if(divisor < 0 && dst != PhysReg::zero)
           bb.instructions.push_back(RV64I::NEG(dst, dst));
         return true;
       }
       if(op == "srem") {
-        bb.instructions.push_back(RV64I::SRAI(kTmpRs1, src, 63));
-        if(n < 64) bb.instructions.push_back(RV64I::SRLI(kTmpRs1, kTmpRs1, 64 - n));
-        bb.instructions.push_back(RV64I::ADD(kTmpRd, src, kTmpRs1));
+        bb.instructions.push_back(RV64I::SRAI(kTmpRs2, src, 63));
+        if(n < 64) bb.instructions.push_back(RV64I::SRLI(kTmpRs2, kTmpRs2, 64 - n));
+        bb.instructions.push_back(RV64I::ADD(kTmpRd, src, kTmpRs2));
         bb.instructions.push_back(RV64I::SRAI(kTmpRd, kTmpRd, n));
         bb.instructions.push_back(RV64I::SLLI(kTmpRd, kTmpRd, n));
         bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRd));
@@ -340,15 +336,14 @@ namespace {
 
     // Correction for truncation towards zero:
     //   result += (result < 0)
-    // LLVM: srli t = result, 63; result += t
-    bb.instructions.push_back(RV64I::SRLI(kTmpRs1, kTmpRd, 63));
-    bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, kTmpRs1));
+    bb.instructions.push_back(RV64I::SRLI(kTmpRs2, kTmpRd, 63));
+    bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, kTmpRs2));
 
     if(op == "srem") {
       // r = n - q * d
       bb.instructions.push_back(RV64I::LI(kTmpRs2, divisor));
-      bb.instructions.push_back(RV64I::MUL(kTmpRs1, kTmpRd, kTmpRs2));
-      bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRs1));
+      bb.instructions.push_back(RV64I::MUL(kTmpRd, kTmpRd, kTmpRs2));
+      bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRd));
     } else {
       if(dst != kTmpRd) bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
     }
