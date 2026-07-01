@@ -229,6 +229,129 @@ namespace {
     }
   }
 
+  /************************************* Magic Number Div/Rem **********************************************/
+
+  struct MagicU64 { uint64_t magic; int shift; };
+  MagicU64 compute_magic_u64(uint64_t d) {
+    for(int p = 0; p < 64; ++p) {
+      __uint128_t pow = static_cast<__uint128_t>(1) << (64 + p);
+      __uint128_t M_128 = pow / d + 1;
+      if(M_128 >= static_cast<__uint128_t>(1) << 64) continue;
+      uint64_t M = static_cast<uint64_t>(M_128);
+      if(static_cast<uint64_t>(pow % d) <= (1ULL << p))
+        return {M, p};
+    }
+    return {0, 0};
+  }
+
+  bool try_const_udiv_urem(const std::string& op, uint64_t divisor,
+                            PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
+    if(divisor <= 1 || (divisor & (divisor - 1)) == 0) return false;
+    auto [M, s] = compute_magic_u64(divisor);
+    if(M == 0) return false;
+    bb.instructions.push_back(RV64I::LI(kTmpRs2, static_cast<int64_t>(M)));
+    bb.instructions.push_back(RV64I::MULHU(kTmpRd, src, kTmpRs2));
+    if(op == "urem") {
+      if(s > 0) bb.instructions.push_back(RV64I::SRLI(kTmpRd, kTmpRd, s));
+      bb.instructions.push_back(RV64I::LI(kTmpRs2, static_cast<int64_t>(divisor)));
+      bb.instructions.push_back(RV64I::MUL(kTmpRs1, kTmpRd, kTmpRs2));
+      bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRs1));
+    } else {
+      if(s > 0) bb.instructions.push_back(RV64I::SRLI(dst, kTmpRd, s));
+      else if(dst != kTmpRd) bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
+    }
+    return true;
+  }
+
+  // Signed magic number (Granlund-Montgomery, via Hacker's Delight / libdivide).
+  struct MagicS64 { int64_t multiplier; int shift; };
+  MagicS64 compute_magic_s64(int64_t d) {
+    uint64_t abs_d = d < 0 ? -static_cast<uint64_t>(d) : static_cast<uint64_t>(d);
+    uint64_t two_63 = (uint64_t)1 << 63;
+    uint64_t tmp = two_63 + (d < 0 ? 1 : 0);
+    uint64_t anc = tmp - 1 - tmp % abs_d;
+    uint64_t p = 63;
+    uint64_t q1 = two_63 / anc, r1 = two_63 % anc;
+    uint64_t q2 = two_63 / abs_d, r2 = two_63 % abs_d;
+    do {
+      p++;
+      q1 <<= 1; r1 <<= 1;
+      if(r1 >= anc) { q1++; r1 -= anc; }
+      q2 <<= 1; r2 <<= 1;
+      if(r2 >= abs_d) { q2++; r2 -= abs_d; }
+    } while(q1 < abs_d - r2 || (q1 == abs_d - r2 && r1 == 0));
+    MagicS64 res;
+    res.multiplier = static_cast<int64_t>(q2 + 1);
+    if(d < 0) res.multiplier = -res.multiplier;
+    res.shift = static_cast<int>(p - 64);
+    return res;
+  }
+
+  bool try_const_sdiv_srem(const std::string& op, int64_t divisor,
+                             PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
+    if(divisor == 0 || divisor == 1 || divisor == -1) return false;
+    uint64_t d_abs = divisor < 0 ? -static_cast<uint64_t>(divisor) : static_cast<uint64_t>(divisor);
+
+    // Signed division by power of 2: use srai + correction
+    if((d_abs & (d_abs - 1)) == 0) {
+      int n = __builtin_ctzll(d_abs);
+      if(n == 0) return false;
+      if(op == "sdiv") {
+        bb.instructions.push_back(RV64I::SRAI(kTmpRs1, src, 63));
+        if(n < 64) bb.instructions.push_back(RV64I::SRLI(kTmpRs1, kTmpRs1, 64 - n));
+        bb.instructions.push_back(RV64I::ADD(kTmpRd, src, kTmpRs1));
+        bb.instructions.push_back(RV64I::SRAI(dst, kTmpRd, n));
+        if(divisor < 0 && dst != PhysReg::zero)
+          bb.instructions.push_back(RV64I::NEG(dst, dst));
+        return true;
+      }
+      if(op == "srem") {
+        bb.instructions.push_back(RV64I::SRAI(kTmpRs1, src, 63));
+        if(n < 64) bb.instructions.push_back(RV64I::SRLI(kTmpRs1, kTmpRs1, 64 - n));
+        bb.instructions.push_back(RV64I::ADD(kTmpRd, src, kTmpRs1));
+        bb.instructions.push_back(RV64I::SRAI(kTmpRd, kTmpRd, n));
+        bb.instructions.push_back(RV64I::SLLI(kTmpRd, kTmpRd, n));
+        bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRd));
+        return true;
+      }
+      return false;
+    }
+
+    // General signed division by constant: magic number (Granlund-Montgomery)
+    auto magic = compute_magic_s64(divisor);
+    bb.instructions.push_back(RV64I::LI(kTmpRs2, magic.multiplier));
+    bb.instructions.push_back(RV64I::MULH(kTmpRd, src, kTmpRs2));
+
+    if(op == "srem") {
+      if(divisor > 0 && magic.multiplier < 0)
+        bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, src));
+      else if(divisor < 0 && magic.multiplier > 0)
+        bb.instructions.push_back(RV64I::SUB(kTmpRd, kTmpRd, src));
+      if(magic.shift > 0)
+        bb.instructions.push_back(RV64I::SRAI(kTmpRd, kTmpRd, magic.shift));
+      bb.instructions.push_back(RV64I::SRAI(kTmpRs1, kTmpRd, 63));
+      bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, kTmpRs1));
+      // r = n - q * d
+      bb.instructions.push_back(RV64I::LI(kTmpRs2, divisor));
+      bb.instructions.push_back(RV64I::MUL(kTmpRs1, kTmpRd, kTmpRs2));
+      bb.instructions.push_back(RV64I::SUB(dst, src, kTmpRs1));
+    } else {
+      // sdiv
+      if(divisor > 0 && magic.multiplier < 0)
+        bb.instructions.push_back(RV64I::ADD(kTmpRd, kTmpRd, src));
+      else if(divisor < 0 && magic.multiplier > 0)
+        bb.instructions.push_back(RV64I::SUB(kTmpRd, kTmpRd, src));
+      if(magic.shift > 0) {
+        bb.instructions.push_back(RV64I::SRAI(dst, kTmpRd, magic.shift));
+      } else {
+        if(dst != kTmpRd) bb.instructions.push_back(RV64I::MV(dst, kTmpRd));
+      }
+      bb.instructions.push_back(RV64I::SRAI(kTmpRs1, dst, 63));
+      bb.instructions.push_back(RV64I::ADD(dst, dst, kTmpRs1));
+    }
+    return true;
+  }
+
   /************************************* IrInstr -> AsmInstr **********************************************/
 
   void generate_binary_op(const ir::BinaryOpInst& bin, const AllocationResult& alloc,
@@ -270,14 +393,18 @@ namespace {
       } else {
         bb.instructions.push_back(RV64I::MUL(dst, lhs, rhs));
       }
-    } else if(op == "sdiv") {
-      bb.instructions.push_back(RV64I::DIV(dst, lhs, rhs));
     } else if(op == "udiv") {
-      bb.instructions.push_back(RV64I::DIVU(dst, lhs, rhs));
-    } else if(op == "srem") {
-      bb.instructions.push_back(RV64I::REM(dst, lhs, rhs));
+      if(!bin.rhs.is_imm() || !try_const_udiv_urem("udiv", bin.rhs.as_imm(), dst, lhs, bb))
+        bb.instructions.push_back(RV64I::DIVU(dst, lhs, rhs));
     } else if(op == "urem") {
-      bb.instructions.push_back(RV64I::REMU(dst, lhs, rhs));
+      if(!bin.rhs.is_imm() || !try_const_udiv_urem("urem", bin.rhs.as_imm(), dst, lhs, bb))
+        bb.instructions.push_back(RV64I::REMU(dst, lhs, rhs));
+    } else if(op == "sdiv") {
+      if(!bin.rhs.is_imm() || !try_const_sdiv_srem("sdiv", bin.rhs.as_imm(), dst, lhs, bb))
+        bb.instructions.push_back(RV64I::DIV(dst, lhs, rhs));
+    } else if(op == "srem") {
+      if(!bin.rhs.is_imm() || !try_const_sdiv_srem("srem", bin.rhs.as_imm(), dst, lhs, bb))
+        bb.instructions.push_back(RV64I::REM(dst, lhs, rhs));
     } else if(op == "and") {
       if(bin.lhs.is_imm() && !bin.rhs.is_imm() && is_i12(bin.lhs.as_imm())) {
         bb.instructions.back() = RV64I::ANDI(dst, rhs, bin.lhs.as_imm());

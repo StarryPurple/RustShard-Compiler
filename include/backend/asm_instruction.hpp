@@ -122,6 +122,14 @@ namespace RV64I {
     return AsmInstruction::R("mul", rd, rs1, rs2, c);
   }
 
+  inline AsmInstruction MULH(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
+    return AsmInstruction::R("mulh", rd, rs1, rs2, c);
+  }
+
+  inline AsmInstruction MULHU(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
+    return AsmInstruction::R("mulhu", rd, rs1, rs2, c);
+  }
+
   inline AsmInstruction DIV(PhysReg rd, PhysReg rs1, PhysReg rs2, std::string c = "") {
     return AsmInstruction::R("div", rd, rs1, rs2, c);
   }
