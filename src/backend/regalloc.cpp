@@ -4,6 +4,8 @@
 #include <format>
 #include <stack>
 
+#include "common/common.hpp"
+
 namespace rshard::backend {
 LivenessInfo compute_liveness(const ir::FunctionPack& func) {
   LivenessInfo info;
@@ -223,18 +225,17 @@ void graph_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval
   const int vregNum = intervals.size();
   const int vregSup = func.largest_reg_id() + 1;
 
-  std::vector<std::optional<std::unordered_set<ir::reg_id_t>>> adj;
-  adj.resize(vregSup, std::nullopt);
+  std::vector<std::optional<Bitmap>> adj(vregSup, std::nullopt);
   for(auto& iv: intervals) {
     if(iv.reg >= 8 && iv.reg < func.param_num()) continue;
-    adj[iv.reg] = std::unordered_set<ir::reg_id_t>{};
+    adj[iv.reg] = Bitmap(vregSup, false);
   }
 
   for(int i = 0; i < vregNum; ++i) {
     for(int j = i + 1; j < vregNum; ++j) {
       if(intervals[i].start <= intervals[j].end && intervals[j].start <= intervals[i].end) {
-        adj[intervals[i].reg]->emplace(intervals[j].reg);
-        adj[intervals[j].reg]->emplace(intervals[i].reg);
+        adj[intervals[i].reg]->set(intervals[j].reg, true);
+        adj[intervals[j].reg]->set(intervals[i].reg, true);
       }
     }
   }
@@ -245,25 +246,22 @@ void graph_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval
   }
 
   auto adj_rep = adj;
-  auto adj_backup = adj;
   int count = 0;
-  std::size_t spill_area_size = 0;
+  size_t spill_area_size = 0;
   while(true) {
     bool full = true;
     for(int i = 0; i < vregNum; ++i) {
       auto vi = intervals[i].reg;
-      if(adj_rep[vi] && adj_rep[vi]->size() < K) {
-        for(auto& a: adj_rep) if(a) a->erase(vi);
+      if(adj_rep[vi] && adj_rep[vi]->popcount() < K) {
+        for(auto& a: adj_rep) if(a) a->set(vi, false);
         adj_rep[vi] = std::nullopt;
         count++;
         full = false;
       }
     }
     if(full) {
-      if(count == vregNum) break; // alloc finished
-      // still something need to be evicted.
-      // choose the one with the minimum weight.
-      std::int32_t min_weight = INT32_MAX;
+      if(count == vregNum) break;
+      int32_t min_weight = INT32_MAX;
       int idx = -1;
       for(int i = 0; i < vregNum; ++i) {
         auto vi = intervals[i].reg;
@@ -275,9 +273,8 @@ void graph_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval
           }
         }
       }
-
-      for(auto& a: adj_rep) if(a) a->erase(idx);
-      for(auto& a: adj) if(a) a->erase(idx);
+      for(auto& a: adj_rep) if(a) a->set(idx, false);
+      for(auto& a: adj) if(a) a->set(idx, false);
       adj_rep[idx] = std::nullopt;
       adj[idx] = std::nullopt;
       result.mapping[idx] = Location::make_spill(spill_area_size);
@@ -287,21 +284,19 @@ void graph_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval
   }
   result.spill_area_size = spill_area_size;
 
-  std::vector<std::optional<PhysReg>> reg_map;
-  reg_map.resize(vregSup);
-  // coloring
+  std::vector<std::optional<PhysReg>> reg_map(vregSup);
   bool color[32];
   for(int i = 0; i < vregSup; ++i) {
     if(adj[i]) {
       memset(color, 0, sizeof(color));
-      for(auto j: *adj[i]) if(auto col = reg_map[j]) {
-        color[static_cast<int>(*col)] = true;
-      }
+      adj[i]->for_each([&](int j) {
+        if(auto col = reg_map[j]) color[static_cast<int>(*col)] = true;
+      });
       if(hints.contains(i) && !color[static_cast<int>(hints[i])]) {
-        reg_map[i] = std::optional{hints[i]};
+        reg_map[i] = hints[i];
       } else {
         for(auto& pr: kAllocatableRegs) if(!color[static_cast<int>(pr)]) {
-          reg_map[i] = std::optional{pr};
+          reg_map[i] = pr;
           break;
         }
       }
@@ -400,8 +395,8 @@ AllocationResult allocate_registers(const ir::FunctionPack& func) {
   AllocationResult result;
 
   auto intervals = build_intervals(func);
-  linear_coloring(func, intervals, result);
-  // graph_coloring(func, intervals, result);
+  // linear_coloring(func, intervals, result);
+  graph_coloring(func, intervals, result);
   auto local_var_mapping = local_var_alloc(func, result);
   calc_caller_callee_save(func, result, intervals);
 
