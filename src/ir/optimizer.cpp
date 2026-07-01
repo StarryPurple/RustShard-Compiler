@@ -268,16 +268,16 @@ void Canonicalization::optimize(FunctionPack& func) {
 std::optional<std::int32_t> instr_cost(const Instruction* inst, const StringT& func_name) {
   static constexpr std::int32_t COST_ALLOC = 1;
   static constexpr std::int32_t COST_BASIC_BINOP = 1;
-  static constexpr std::int32_t COST_MUL = 2;
-  static constexpr std::int32_t COST_DIV = 10;
-  static constexpr std::int32_t COST_REM = 10;
-  static constexpr std::int32_t COST_LOAD_STORE = 3;
+  static constexpr std::int32_t COST_MUL = 3;
+  static constexpr std::int32_t COST_DIV = 15;
+  static constexpr std::int32_t COST_REM = 15;
+  static constexpr std::int32_t COST_LOAD_STORE = 2;
   static constexpr std::int32_t COST_BRANCH = 1;
-  static constexpr std::int32_t COST_CALL = 20;
+  static constexpr std::int32_t COST_CALL = 15;
   static constexpr std::int32_t COST_INSERT_VALUE = 3;
   static constexpr std::int32_t COST_GEP = 3;
   static constexpr std::int32_t COST_CAST = 1;
-  static constexpr std::int32_t COST_PHI = 1;
+  static constexpr std::int32_t COST_PHI = 0;
   static constexpr std::int32_t COST_RETURN = 1;
   static constexpr std::int32_t COST_UNREACHABLE = 0;
 
@@ -329,6 +329,7 @@ std::optional<std::int32_t> instr_cost(const Instruction* inst, const StringT& f
 }
 
 std::optional<std::int32_t> func_cost(const FunctionPack& func) {
+  static constexpr std::int32_t SINGLE_BB_BONUS = 10;
   std::int32_t res = 0;
   for(const auto &block: func.basic_block_packs) {
     for(const auto &inst: block.instructions) {
@@ -337,15 +338,17 @@ std::optional<std::int32_t> func_cost(const FunctionPack& func) {
       res += *cost;
     }
   }
+  // Single basic block functions get a bonus (no control flow overhead)
+  if(func.basic_block_packs.size() == 1) res -= SINGLE_BB_BONUS;
   return {res};
 }
 
 std::optional<FunctionPack> extract_cheap_func(IrPack& ir) {
-  static constexpr std::int32_t THRESHOLD = 100;
+  static constexpr std::int32_t INLINE_THRESHOLD = 40;
   for(auto it = ir.function_packs.begin(); it != ir.function_packs.end(); ++it) {
     if(it->ident == "main") continue; // this shall not be inlined
     auto cost = func_cost(*it);
-    if(cost && *cost <= THRESHOLD) {
+    if(cost && *cost <= INLINE_THRESHOLD) {
       std::optional res = std::move(*it);
       ir.function_packs.erase(it);
       return res;
