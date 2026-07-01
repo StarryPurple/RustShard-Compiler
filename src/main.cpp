@@ -94,7 +94,7 @@ int main() {
     auto ir_pack = ir_generator.release();
 
     rshard::ir::PromoteAlloca::optimize(ir_pack);
-    rshard::ir::FunctionInline::optimize(ir_pack);
+    // rshard::ir::FunctionInline::optimize(ir_pack);
 
     rshard::backend::AsmGenerator asm_generator(ir_pack);
     auto asm_pack = asm_generator.generate();
