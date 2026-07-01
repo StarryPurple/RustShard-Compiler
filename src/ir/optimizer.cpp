@@ -344,7 +344,7 @@ std::optional<std::int32_t> func_cost(const FunctionPack& func) {
 }
 
 std::optional<FunctionPack> extract_cheap_func(IrPack& ir) {
-  static constexpr std::int32_t INLINE_THRESHOLD = 40;
+  static constexpr std::int32_t INLINE_THRESHOLD = 20;
   for(auto it = ir.function_packs.begin(); it != ir.function_packs.end(); ++it) {
     if(it->ident == "main") continue; // this shall not be inlined
     auto cost = func_cost(*it);
