@@ -226,17 +226,20 @@ void graph_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval
   const int vregSup = func.largest_reg_id() + 1;
 
   std::vector<std::optional<Bitmap>> adj(vregSup, std::nullopt);
+  std::vector<int> degree(vregSup, 0);
   for(auto& iv: intervals) {
     if(iv.reg >= 8 && iv.reg < func.param_num()) continue;
     adj[iv.reg] = Bitmap(vregSup, false);
   }
 
+  // Build graph with early break (intervals sorted by start)
   for(int i = 0; i < vregNum; ++i) {
     for(int j = i + 1; j < vregNum; ++j) {
-      if(intervals[i].start <= intervals[j].end && intervals[j].start <= intervals[i].end) {
-        adj[intervals[i].reg]->set(intervals[j].reg, true);
-        adj[intervals[j].reg]->set(intervals[i].reg, true);
-      }
+      if(intervals[j].start > intervals[i].end) break;
+      adj[intervals[i].reg]->set(intervals[j].reg, true);
+      adj[intervals[j].reg]->set(intervals[i].reg, true);
+      degree[intervals[i].reg]++;
+      degree[intervals[j].reg]++;
     }
   }
 
@@ -246,13 +249,17 @@ void graph_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval
   }
 
   auto adj_rep = adj;
+  auto deg_rep = degree;
   int count = 0;
   size_t spill_area_size = 0;
   while(true) {
     bool full = true;
     for(int i = 0; i < vregNum; ++i) {
       auto vi = intervals[i].reg;
-      if(adj_rep[vi] && adj_rep[vi]->popcount() < K) {
+      if(adj_rep[vi] && deg_rep[vi] < static_cast<int>(K)) {
+        adj[vi]->for_each([&](int nb) {
+          if(adj_rep[nb]) deg_rep[nb]--;
+        });
         for(auto& a: adj_rep) if(a) a->set(vi, false);
         adj_rep[vi] = std::nullopt;
         count++;
@@ -267,12 +274,12 @@ void graph_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval
         auto vi = intervals[i].reg;
         if(adj_rep[vi]) {
           auto weight = intervals[i].weight();
-          if(weight < min_weight) {
-            idx = vi;
-            min_weight = weight;
-          }
+          if(weight < min_weight) { idx = vi; min_weight = weight; }
         }
       }
+      adj[idx]->for_each([&](int nb) {
+        if(adj_rep[nb]) deg_rep[nb]--;
+      });
       for(auto& a: adj_rep) if(a) a->set(idx, false);
       for(auto& a: adj) if(a) a->set(idx, false);
       adj_rep[idx] = std::nullopt;
@@ -286,22 +293,22 @@ void graph_coloring(const ir::FunctionPack& func, const std::vector<LiveInterval
 
   std::vector<std::optional<PhysReg>> reg_map(vregSup);
   bool color[32];
-  for(int i = 0; i < vregSup; ++i) {
-    if(adj[i]) {
-      memset(color, 0, sizeof(color));
-      adj[i]->for_each([&](int j) {
-        if(auto col = reg_map[j]) color[static_cast<int>(*col)] = true;
-      });
-      if(hints.contains(i) && !color[static_cast<int>(hints[i])]) {
-        reg_map[i] = hints[i];
-      } else {
-        for(auto& pr: kAllocatableRegs) if(!color[static_cast<int>(pr)]) {
-          reg_map[i] = pr;
-          break;
-        }
+  for(const auto& iv: intervals) {
+    int i = iv.reg;
+    if(!adj[i]) continue;
+    memset(color, 0, sizeof(color));
+    adj[i]->for_each([&](int j) {
+      if(auto col = reg_map[j]) color[static_cast<int>(*col)] = true;
+    });
+    if(hints.contains(i) && !color[static_cast<int>(hints[i])]) {
+      reg_map[i] = hints[i];
+    } else {
+      for(auto& pr: kAllocatableRegs) if(!color[static_cast<int>(pr)]) {
+        reg_map[i] = pr;
+        break;
       }
-      result.mapping[i] = Location::make_reg(*reg_map[i]);
     }
+    result.mapping[i] = Location::make_reg(*reg_map[i]);
   }
 
   /*
