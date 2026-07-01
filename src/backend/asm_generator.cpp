@@ -246,6 +246,7 @@ namespace {
 
    bool try_const_udiv_urem(const std::string& op, uint64_t divisor,
                              PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
+    return false; // disable
     if(divisor <= 1 || (divisor & (divisor - 1)) == 0) return false;
     auto [M, s] = compute_magic_u64(divisor);
     if(M == 0) return false;
@@ -289,6 +290,7 @@ namespace {
 
   bool try_const_sdiv_srem(const std::string& op, int64_t divisor,
                              PhysReg dst, PhysReg src, AsmBasicBlock& bb) {
+    return false; // disable
     if(divisor == 0 || divisor == 1 || divisor == -1) return false;
     uint64_t d_abs = divisor < 0 ? -static_cast<uint64_t>(divisor) : static_cast<uint64_t>(divisor);
 
