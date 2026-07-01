@@ -703,16 +703,14 @@ void AsmGenerator::generate_prologue(const ir::FunctionPack& func, const Allocat
       // prologue.instructions.push_back(RV64I::SD(PhysReg::ra, PhysReg::sp, alloc.return_addr_offset()));
     }
 
-    // spill func param
+    // move func param
+    std::unordered_map<Location, Location, Location::Hash> dst_to_src;
     for(int i = 0; i < 8 && i < func.param_num(); ++i) {
       PhysReg pr = static_cast<PhysReg>(static_cast<uint8_t>(PhysReg::a0) + i);
       Location loc = alloc.mapping.at(i);
-      if(loc.is_spill()) {
-        try_sd(pr, PhysReg::sp, loc.as_spill(), prologue);
-      } else if(!loc.is_reg()) {
-        throw std::runtime_error("Invalid circumstance: func param (8-) not spill or reg");
-      }
+      dst_to_src.emplace(loc, Location::make_reg(pr));
     }
+    parallel_assignment(std::move(dst_to_src), prologue);
   }
 
   _asm_func.blocks.push_back(std::move(prologue));
